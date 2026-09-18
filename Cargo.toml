@@ -1,0 +1,127 @@
+[package]
+name = "stardrop"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "A calm, dreamy falling game about discovery."
+publish = false
+
+[features]
+default = []
+# Fast iteration while developing: `cargo run --features dev`.
+dev = [
+    "bevy/dynamic_linking", # Bevy is linked as a shared library, so relinking our code is much faster.
+    "bevy/file_watcher",    # Reload assets (level files, later) when they change on disk.
+]
+# Profiling with Tracy: `cargo run --release --features trace`. Costs nothing when off.
+trace = ["bevy/trace_tracy"]
+
+[dependencies]
+# Pinned exactly (`=`) so an update can never silently change engine behavior.
+# Default features are off; we opt in to only what a 2D game with HDR + bloom needs.
+bevy = { version = "=0.19.1", default-features = false, features = [
+    # --- App core ---
+    "std",                   # Use the standard library (we are a desktop game).
+    "multi_threaded",        # Run systems in parallel across CPU cores.
+    "async_executor",        # Task pools used by asset loading and the scheduler.
+    "bevy_asset",            # Loading assets (meshes, fonts, later levels and sounds).
+    "bevy_log",              # `info!`/`warn!` logging instead of `println!`.
+    "bevy_state",            # App states (MainMenu, Playing, ...) from Milestone 2 on.
+    "reflect_auto_register", # Registers reflected types automatically.
+    # --- Window & input ---
+    "bevy_window",           # Window abstraction.
+    "bevy_winit",            # Actual OS window + event loop.
+    "x11",                   # Linux X11 support.
+    # "wayland" is off: needs libwayland-dev; XWayland runs us fine (DECISIONS.md).
+    "keyboard",              # Keyboard input (F1 now; movement in Milestone 1).
+    # --- 2D rendering ---
+    "bevy_render",           # The renderer.
+    "bevy_core_pipeline",    # Core 2D render pass.
+    "bevy_camera",           # Camera components.
+    "bevy_color",            # Color types.
+    "bevy_image",            # Images/textures.
+    "bevy_mesh",             # Meshes (our shapes are generated meshes).
+    "bevy_shader",           # Shader handling.
+    "bevy_material",         # Materials.
+    "bevy_sprite",           # 2D API: `Mesh2d`, `ColorMaterial`, sprites.
+    "bevy_sprite_render",    # Rendering for the above.
+    "bevy_post_process",     # Bloom.
+    "tonemapping_luts",      # Lookup tables for the TonyMcMapface tonemapper (see DECISIONS.md).
+    "ktx2",                  # Needed to load the tonemapping lookup tables...
+    "zstd_rust",             # ...which are zstd-compressed (pure-Rust decoder, no C toolchain).
+    # --- UI & text (F1 overlay, later menus) ---
+    "bevy_ui",               # UI layout.
+    "bevy_ui_render",        # UI rendering.
+    "bevy_text",             # Text rendering.
+    "default_font",          # Built-in font so text works before we ship our own.
+] }
+
+[dev-dependencies]
+# Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.
+criterion = { version = "=0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "logic"
+harness = false
+
+# --- Build profiles -------------------------------------------------------
+
+# Our own code: light optimization so the game is playable in debug builds
+# while still compiling quickly.
+[profile.dev]
+opt-level = 1
+
+# Dependencies (Bevy etc.) rarely change, so optimize them fully once;
+# otherwise a debug build of Bevy is far too slow to play.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3       # Optimize for speed.
+lto = "fat"         # Link-time optimization across all crates: smaller, faster binary; slower link.
+codegen-units = 1   # One unit gives LLVM the whole picture: better code, slower compile.
+strip = true        # Drop debug symbols from the shipped binary.
+panic = "abort"     # No unwinding machinery: smaller and faster. A panic ends the game immediately,
+                    # which is acceptable because game logic must not panic (Section 7.4).
+
+# Release build with symbols, for profiling (`cargo build --profile profiling`).
+[profile.profiling]
+inherits = "release"
+strip = false
+debug = "line-tables-only"
+
+# --- Lints ---------------------------------------------------------------
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+# Curated pedantic lints (reasons in DECISIONS.md).
+cast_lossless = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_precision_loss = "warn"
+float_cmp = "warn"
+explicit_iter_loop = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+doc_markdown = "warn"
+# Panics in game logic (Section 7.4); tests are exempted in clippy.toml.
+unwrap_used = "warn"
+expect_used = "warn"
+# Stray output (use Bevy's logging macros instead).
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "warn"
+# Bevy systems legitimately take many parameters and complex query types.
+too_many_arguments = "allow"
+type_complexity = "allow"
