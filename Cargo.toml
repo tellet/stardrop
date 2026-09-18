@@ -76,17 +76,24 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
+# Everyday optimized build (quality checks, playtesting). Thin LTO keeps
+# rebuilds at ~30 s instead of ~3 min, for a slightly larger binary (DECISIONS.md M0-10).
 [profile.release]
 opt-level = 3       # Optimize for speed.
-lto = "fat"         # Link-time optimization across all crates: smaller, faster binary; slower link.
+lto = "thin"        # Cross-crate optimization, done in parallel: most of the benefit, far faster to build.
 codegen-units = 1   # One unit gives LLVM the whole picture: better code, slower compile.
 strip = true        # Drop debug symbols from the shipped binary.
 panic = "abort"     # No unwinding machinery: smaller and faster. A panic ends the game immediately,
                     # which is acceptable because game logic must not panic (Section 7.4).
 
-# Release build with symbols, for profiling (`cargo build --profile profiling`).
-[profile.profiling]
+# What we ship and measure budgets against: `cargo build --profile dist`.
+[profile.dist]
 inherits = "release"
+lto = "fat"         # Whole-program link-time optimization: smallest, fastest binary; slow to build.
+
+# Shipping build with symbols, for profiling (`cargo build --profile profiling`).
+[profile.profiling]
+inherits = "dist"
 strip = false
 debug = "line-tables-only"
 

@@ -51,11 +51,11 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 | `[profile.dev.package."*"] opt-level = 3` | Bevy is fully optimized once and then cached. A debug build of Bevy is unplayably slow. |
 | `--features dev` → `bevy/dynamic_linking` | Bevy becomes a shared library, so relinking after a change takes a fraction of the time. Development only; never ship it. |
 | Linker: clang + mold (user's `~/.cargo/config`) | Much faster linking than GNU ld. |
-| release `lto = "fat"` | Optimizes across crate boundaries: faster and smaller binary, but slower to build. |
+| release `lto = "thin"`, dist `lto = "fat"` | Optimizes across crate boundaries: faster and smaller binary, but slower to build. Fat LTO is reserved for `dist` (M0-10). |
 | release `codegen-units = 1` | LLVM sees the whole crate at once, so it optimizes better. Slower build. |
 | release `strip = true` | Removes debug symbols; much smaller binary. |
 | release `panic = "abort"` | No unwinding tables: smaller and slightly faster. A panic ends the process straight away. That's fine because game logic must not panic, and save files will be written atomically (M5). |
-| `profile.profiling` | Release plus line-level debug info, so profilers can show function names. |
+| `profile.profiling` | `dist` plus line-level debug info, so profilers can show function names. |
 
 ## M0-7 · Lints
 
@@ -82,6 +82,29 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **What:** a dev-dependency only, never shipped. `default-features = false` skips plotting and rayon.
 - **Why:** the brief asks for statistically sound before/after numbers for hot functions. The standard library's `#[bench]` is still unstable.
 
+## M0-10 · `release` uses thin LTO; `dist` uses fat LTO
+
+- **What:** `[profile.release]` uses `lto = "thin"`. A new `[profile.dist]` inherits it with `lto = "fat"`. `profiling` inherits from `dist`.
+- **Why:** with fat LTO, every release build took ~172 s even after a one-line change, and the quality check runs one each time. Thin LTO: 34 s, binary 43.0 MB instead of 39.7 MB. Bevy's official game template uses the same split.
+- **Rule:** performance budgets and anything we ship are measured with `cargo build --profile dist`.
+
+## M0-11 · Window resize "jumps": platform effect, accepted
+
+- **Symptom:** while the window is being resized, the circle jumps instead of staying smoothly centered.
+- **Investigation:** I measured the time from each resize step until our window shows a correctly centered frame, by reading only our own window's pixels over X11 (50 steps, 2 runs per configuration):
+
+  | Configuration | Median | p90 | Worst |
+  |---|---|---|---|
+  | Low-power + vsync (current) | 29 ms | 42–46 ms | 63–66 ms |
+  | `desired_maximum_frame_latency = 1` | 29 ms | 30–46 ms | 63 ms |
+  | Pipelined rendering disabled | 29 ms | 29 ms | 46 ms |
+  | Continuous (F1 open) + vsync | 21 ms | 24–34 ms | 41–52 ms |
+  | Continuous + pipelined rendering disabled | 46 ms | 46–48 ms | 63 ms |
+  | Vsync off (Immediate; Mailbox is unavailable on this NVIDIA/X11 setup) | **8 ms** | 10–12 ms | 12–20 ms, but **~220 % CPU** in continuous mode, and tearing |
+
+- **Root cause:** the window manager resizes the window immediately. With vsync, our correctly sized frame reaches the screen ~2 refreshes later, and meanwhile the old, wrong-size image is shown. Every rendered frame is already correct; only the presentation latency differs.
+- **Decision:** keep vsync. The only real fix is turning vsync off, which brings tearing and high power use, and both go against Section 7. Resizing mid-game is rare. We'll revisit when fullscreen and window settings arrive (M5).
+
 ---
 
 ## Baseline measurements (M0)
@@ -102,5 +125,5 @@ Measured 2026-09-18.
 | Clean build, release | 256 s | |
 | Incremental rebuild, dev (touch `lib.rs`) | 3.2 s | |
 | Incremental rebuild, dev with `--features dev` | **1.5 s** | Dynamic linking. |
-| Incremental rebuild, release (fat LTO) | 172 s | Thin LTO: 34 s. |
+| Incremental rebuild, release (fat LTO) | 172 s | Thin LTO: 34 s. `release` now uses thin LTO (M0-10). |
 | Benchmark `summarize 240 frame times` | 304 ns | criterion, release. |
