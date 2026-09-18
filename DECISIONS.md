@@ -42,6 +42,7 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **What:** `WinitSettings` uses `reactive_low_power(1 s)`: the app only wakes on window events or once a second. Opening the F1 overlay switches it to `continuous` (still capped by vsync).
 - **Why:** Section 7.1, idle efficiency. An empty screen should cost almost nothing. Frame-time numbers are only meaningful when the app renders continuously.
 - **Later:** once screens exist, the app state will choose the update mode (see TECH_DEBT.md).
+- **Update (M1):** the game now animates all the time, so it uses Bevy's `WinitSettings::game()` (continuous while focused) and the overlay no longer changes the mode. Low-power mode returns for menus in M5.
 
 ## M0-6 · Build profiles
 
@@ -105,6 +106,41 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Root cause:** the window manager resizes the window immediately. With vsync, our correctly sized frame reaches the screen ~2 refreshes later, and meanwhile the old, wrong-size image is shown. Every rendered frame is already correct; only the presentation latency differs.
 - **Decision:** keep vsync. The only real fix is turning vsync off, which brings tearing and high power use, and both go against Section 7. Resizing mid-game is rare. We'll revisit when fullscreen and window settings arrive (M5).
 
+## M1-1 · Pure logic may use `bevy::math`
+
+- **What:** the engine-free modules (`physics::movement`, later collision, effects and so on) import only `bevy::math` (`Vec2` and friends), never ECS types.
+- **Why:** `bevy::math` is a re-export of the plain `glam` vector library with no engine inside. Using it avoids converting between two `Vec2` types at every boundary, and the logic stays testable without an `App`.
+
+## M1-2 · Movement feel and timing
+
+- **Values** (in `config.rs`):
+  - gravity 450 u/s²
+  - terminal velocity 450 u/s
+  - max sideways speed 500 u/s
+  - sideways acceleration 2000 u/s²
+  - braking 1250 u/s²
+  - wall restitution 0.3
+  - stick dead zone 15 %
+- **Why:**
+  - About 1.6 s of preview below the astronaut at full fall speed, the usual reaction-time guideline for a calm game.
+  - About 0.25 s to reach full sideways speed.
+  - About 4 s to cross the screen.
+- **Physics at 120 Hz** (Bevy's default is 64): one circle is essentially free (3 ns per step). It makes input more responsive and reduces tunneling for fast objects later.
+- **Vertical speed eases toward terminal velocity at the rate of gravity** from either side. Objects that push the astronaut beyond terminal velocity (the comet stone) therefore wind down smoothly, with no special case.
+- **Semi-implicit Euler** integration: as cheap as plain Euler, and stable for orbits later.
+- **Interpolated drawing** between the last two physics positions, using `Time<Fixed>::overstep_fraction`.
+
+## M1-3 · Camera follow
+
+- **What:** vertical-only follow using exponential smoothing (`smooth_nudge`, rate 5/s, frame-rate independent). The target keeps the astronaut on the upper-third line plus a look-ahead of 0.25 s × fall speed. The view is clamped to the level. Jumps of more than one screen cut instead of panning.
+- **Note:** a smoothed follower trails a steadily moving target by speed ÷ rate (90 units at terminal velocity). That roughly cancels the look-ahead, so at full speed the astronaut sits almost exactly on the upper-third line. That is the intended result.
+
+## M1-4 · Parallax: two stacked tiles per layer, moved as one parent
+
+- **What:** each layer is one parent entity with two copies of a dot tile, each 3600 units tall. Scrolling moves only the 3 parents, and each layer shares one mesh and one material, so each layer is drawn in a single batch.
+- **Alternatives:** moving every dot each frame (hundreds of transform writes) or a custom shader (unnecessary for placeholders).
+- **Random placement:** a tiny built-in `SplitMix64` generator with a fixed seed instead of the `rand` crate. We only need deterministic decorative randomness.
+
 ---
 
 ## Baseline measurements (M0)
@@ -127,3 +163,17 @@ Measured 2026-09-18.
 | Incremental rebuild, dev with `--features dev` | **1.5 s** | Dynamic linking. |
 | Incremental rebuild, release (fat LTO) | 172 s | Thin LTO: 34 s. `release` now uses thin LTO (M0-10). |
 | Benchmark `summarize 240 frame times` | 304 ns | criterion, release. |
+
+## Measurements (M1)
+
+Release build, same machine as M0, 60 Hz with vsync.
+
+| Metric | Value | Notes |
+|---|---|---|
+| Our systems per frame | **~10–15 µs** | Chrome trace; each system averages 0.5–1.3 µs. Budget: 1 ms. |
+| Worst single system call | 28 µs | `scroll_parallax`, a rare outlier. |
+| One-time parallax spawn | 1.4 ms | Startup only; 480 dot entities. |
+| `movement step` benchmark | 3.0 ns | criterion |
+| CPU while falling | ~16–17 % of one core | Continuous rendering at 60 FPS. |
+| RSS | 341 MB at start → 343.2 MB after 5 min | Still creeping slightly; see TECH_DEBT.md. |
+| Frame time | 16.7 ms avg, worst ~18–21 ms | Vsync-bound. |

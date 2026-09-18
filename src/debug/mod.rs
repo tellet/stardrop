@@ -1,14 +1,12 @@
 //! Debug tools. F1 toggles a performance overlay (available in every build).
-//!
-//! The overlay also switches the app between low-power and continuous updates:
-//! frame-time numbers are meaningless while the app deliberately sleeps.
 
 use core::fmt::Write as _;
-use core::time::Duration;
 
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
-use bevy::winit::{UpdateMode, WinitSettings};
+
+use crate::astronaut::Astronaut;
+use crate::physics::Motion;
 
 pub mod stats;
 
@@ -17,9 +15,6 @@ const FRAME_HISTORY: usize = 240;
 
 /// How often the overlay text refreshes. Faster is unreadable and costs layout work.
 const REFRESH_SECONDS: f32 = 0.25;
-
-/// While nothing animates, wake up at most this often (or on input).
-const LOW_POWER_WAIT: Duration = Duration::from_secs(1);
 
 const OVERLAY_FONT_SIZE: f32 = 16.0;
 const OVERLAY_MARGIN: Val = Val::Px(8.0);
@@ -36,31 +31,19 @@ enum OverlayState {
 #[derive(Component)]
 struct OverlayText;
 
-/// Debug overlay and the power mode it controls.
+/// The F1 debug overlay.
 pub(crate) struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(FrameTimeDiagnosticsPlugin::new(FRAME_HISTORY))
-            .insert_resource(low_power_settings())
             .init_state::<OverlayState>()
             .add_systems(Update, toggle_overlay)
-            .add_systems(
-                OnEnter(OverlayState::Shown),
-                (spawn_overlay, use_continuous_updates),
-            )
-            .add_systems(OnExit(OverlayState::Shown), use_low_power_updates)
+            .add_systems(OnEnter(OverlayState::Shown), spawn_overlay)
             .add_systems(
                 Update,
                 refresh_overlay.run_if(in_state(OverlayState::Shown)),
             );
-    }
-}
-
-fn low_power_settings() -> WinitSettings {
-    WinitSettings {
-        focused_mode: UpdateMode::reactive_low_power(LOW_POWER_WAIT),
-        unfocused_mode: UpdateMode::reactive_low_power(LOW_POWER_WAIT),
     }
 }
 
@@ -75,14 +58,6 @@ fn toggle_overlay(
             OverlayState::Shown => OverlayState::Hidden,
         });
     }
-}
-
-fn use_continuous_updates(mut settings: ResMut<WinitSettings>) {
-    *settings = WinitSettings::continuous();
-}
-
-fn use_low_power_updates(mut settings: ResMut<WinitSettings>) {
-    *settings = low_power_settings();
 }
 
 fn spawn_overlay(mut commands: Commands) {
@@ -107,6 +82,7 @@ fn refresh_overlay(
     time: Res<Time>,
     mut timer: Local<Option<Timer>>,
     diagnostics: Res<DiagnosticsStore>,
+    astronaut: Query<&Motion, With<Astronaut>>,
     mut text: Single<&mut Text, With<OverlayText>>,
 ) {
     let timer =
@@ -131,6 +107,14 @@ fn refresh_overlay(
             buffer,
             "\nframe ms  now {:.2}  avg {:.2}  worst {:.2}",
             s.current_ms, s.average_ms, s.worst_ms
+        );
+    }
+    if let Some(motion) = astronaut.iter().next() {
+        let velocity = motion.body().velocity;
+        let _ = write!(
+            buffer,
+            "\nvelocity  x {:.0}  y {:.0}",
+            velocity.x, velocity.y
         );
     }
 }

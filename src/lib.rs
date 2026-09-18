@@ -7,10 +7,14 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
+mod astronaut;
 mod background;
 mod camera;
 mod config;
 pub mod debug;
+mod level;
+pub mod physics;
+mod rng;
 
 /// Window size on first launch, in physical pixels. 16:9, the aspect ratio the game is designed for.
 const INITIAL_WINDOW_SIZE: (u32, u32) = (1280, 720);
@@ -29,6 +33,9 @@ pub fn run() -> AppExit {
         }))
         .add_plugins((
             config::ConfigPlugin,
+            level::LevelPlugin,
+            physics::PhysicsPlugin,
+            astronaut::AstronautPlugin,
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,

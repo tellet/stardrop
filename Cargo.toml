@@ -33,7 +33,9 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "bevy_winit",            # Actual OS window + event loop.
     "x11",                   # Linux X11 support.
     # "wayland" is off: needs libwayland-dev; XWayland runs us fine (DECISIONS.md).
-    "keyboard",              # Keyboard input (F1 now; movement in Milestone 1).
+    "keyboard",              # Keyboard input.
+    "gamepad",               # Gamepad input types.
+    "bevy_gilrs",            # Gamepad backend (gilrs); needs libudev on Linux.
     # --- 2D rendering ---
     "bevy_render",           # The renderer.
     "bevy_core_pipeline",    # Core 2D render pass.
