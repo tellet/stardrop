@@ -69,10 +69,7 @@ fn restart_below_bottom(
 ) {
     for mut motion in &mut bodies {
         if motion.body().position.y < level.bottom() - config.astronaut_radius {
-            motion.teleport(Body {
-                position: level.start,
-                velocity: Vec2::ZERO,
-            });
+            motion.teleport(Body::at_rest(level.start));
         }
     }
 }

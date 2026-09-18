@@ -20,8 +20,14 @@ const MOVEMENT: MovementConfig = MovementConfig {
     air_acceleration: 2000.0,
     // Glides to a stop in ~0.4 s.
     air_braking: 1250.0,
-    // Walls give back 30 % of the speed: a small, soft bump.
-    wall_restitution: 0.3,
+    // Walls bounce you back at 60 % of your speed (we're in space)...
+    wall_restitution: 0.6,
+    // ...and steering fades back in over 0.5 s, so the rebound (~85–100
+    // units) stays visible even while pushing toward the wall.
+    wall_recovery_time: 0.5,
+    // After a bounce the astronaut coasts, slowing only gently: a full-speed
+    // bounce drifts ~450 units over ~3 s unless the player steers.
+    coast_drag: 100.0,
 };
 
 /// The astronaut's collision radius, in world units.

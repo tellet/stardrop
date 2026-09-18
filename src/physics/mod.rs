@@ -33,10 +33,7 @@ impl Motion {
     /// A body at rest at `position`.
     pub fn at_rest(position: Vec2) -> Self {
         Self {
-            body: Body {
-                position,
-                velocity: Vec2::ZERO,
-            },
+            body: Body::at_rest(position),
             previous_position: position,
         }
     }

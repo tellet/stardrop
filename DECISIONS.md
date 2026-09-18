@@ -141,6 +141,19 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Alternatives:** moving every dot each frame (hundreds of transform writes) or a custom shader (unnecessary for placeholders).
 - **Random placement:** a tiny built-in `SplitMix64` generator with a fixed seed instead of the `rand` crate. We only need deterministic decorative randomness.
 
+## M1-5 · Walls bounce, pushes coast (changes Section 3.1's "cushioned bump")
+
+- **What:** side walls bounce the astronaut back at 60 % of its speed. Steering and braking then fade back in over 0.5 s (smoothstep), so the rebound shows even while the key is held. Sideways motion has a `Drift` state:
+  - `Steered`: the player's own motion. Letting go brakes quickly (1250 u/s²).
+  - `Coasting`: set by a wall bounce, and later by object pushes. Only a gentle 100 u/s² drag applies, so the astronaut drifts about 450 units over about 3 s. Any steering switches back to `Steered`.
+- **Why:** player feedback. The brief's cushioned stop felt wrong "in space", and the first bounce version still stopped dead because braking ate the rebound in about 0.1 s. Keeping quick braking for the player's own steering preserves precise control.
+- **Consequences:**
+  - Object effects in M3–M4 (cloud puff, orbit slingshots) should set `Coasting`, so their pushes aren't braked away.
+  - Walls are now a small but real movement tool; level design (M6) should account for them.
+- **Alternatives:**
+  - Lower braking for everything: spacey, but imprecise when the player lets go.
+  - The brief's original cushion: felt wrong to the user.
+
 ---
 
 ## Baseline measurements (M0)

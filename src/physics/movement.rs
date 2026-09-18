@@ -21,8 +21,16 @@ pub struct MovementConfig {
     pub air_acceleration: f32,
     /// How quickly sideways speed fades with no input, in units/s².
     pub air_braking: f32,
-    /// Fraction of sideways speed kept (and reversed) when touching a side wall.
+    /// Fraction of sideways speed kept (and reversed) when bouncing off a side wall.
     pub wall_restitution: f32,
+    /// After a wall bounce, steering and braking fade back in over this many
+    /// seconds, so the rebound stays visible even while the player keeps
+    /// pushing toward the wall.
+    pub wall_recovery_time: f32,
+    /// Gentle slow-down while coasting (pushed by a wall or, later, an
+    /// object) with no input, in units/s². Much weaker than `air_braking`:
+    /// we're in space.
+    pub coast_drag: f32,
 }
 
 /// The player's sideways steering, from -1 (full left) to 1 (full right).
@@ -79,6 +87,17 @@ pub struct Walls {
     pub right: f32,
 }
 
+/// Why the astronaut is moving sideways, which decides how that motion fades
+/// when the player isn't steering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Drift {
+    /// The player's own steering: letting go brakes quickly, for precise control.
+    #[default]
+    Steered,
+    /// Pushed by something else: keeps drifting like in space until the player steers.
+    Coasting,
+}
+
 /// The astronaut's physical state.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Body {
@@ -86,6 +105,21 @@ pub struct Body {
     pub position: Vec2,
     /// Velocity, in units/s.
     pub velocity: Vec2,
+    /// Seconds left until air control is fully back after a wall bounce (0 = full control).
+    pub wall_recovery: f32,
+    /// Whether sideways motion is the player's own or a push from outside.
+    pub drift: Drift,
+}
+
+impl Body {
+    /// Motionless at `position`, with full control.
+    #[must_use]
+    pub fn at_rest(position: Vec2) -> Self {
+        Self {
+            position,
+            ..Self::default()
+        }
+    }
 }
 
 /// Advances the body by one fixed timestep of `dt` seconds.
@@ -102,31 +136,54 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
     // us faster (later milestones), we ease back instead of snapping.
     velocity.y = move_towards(velocity.y, -config.terminal_velocity, config.gravity * dt);
 
-    // Horizontal: accelerate toward the steered speed, or brake toward zero.
+    // Horizontal: accelerate toward the steered speed, or brake toward zero,
+    // weakened for a moment after a wall bounce.
     let target = input.value() * config.max_air_speed;
-    let rate = if input == AirInput::NONE {
-        config.air_braking
+    let control = control_after_bounce(body.wall_recovery, config.wall_recovery_time);
+    // Any steering puts the player back in charge.
+    let mut drift = if input == AirInput::NONE {
+        body.drift
     } else {
-        config.air_acceleration
+        Drift::Steered
+    };
+    let rate = match (input == AirInput::NONE, drift) {
+        (false, _) => config.air_acceleration * control,
+        (true, Drift::Steered) => config.air_braking * control,
+        // Coasting isn't the player's doing, so recovery doesn't weaken it.
+        (true, Drift::Coasting) => config.coast_drag,
     };
     velocity.x = move_towards(velocity.x, target, rate * dt);
+    let mut wall_recovery = (body.wall_recovery - dt).max(0.0);
 
     let mut position = body.position + velocity * dt;
 
-    // Side walls: clamp inside and bounce back gently if moving into the wall.
-    if position.x < walls.left {
-        position.x = walls.left;
-        if velocity.x < 0.0 {
-            velocity.x = -velocity.x * config.wall_restitution;
-        }
-    } else if position.x > walls.right {
-        position.x = walls.right;
-        if velocity.x > 0.0 {
-            velocity.x = -velocity.x * config.wall_restitution;
-        }
+    // Side walls: clamp inside and bounce back if moving into the wall.
+    let hit_left = position.x < walls.left && velocity.x < 0.0;
+    let hit_right = position.x > walls.right && velocity.x > 0.0;
+    position.x = position.x.clamp(walls.left, walls.right);
+    if hit_left || hit_right {
+        velocity.x = -velocity.x * config.wall_restitution;
+        wall_recovery = config.wall_recovery_time;
+        drift = Drift::Coasting;
     }
 
-    Body { position, velocity }
+    Body {
+        position,
+        velocity,
+        wall_recovery,
+        drift,
+    }
+}
+
+/// How much air control the player has (0..=1) with `remaining` seconds of
+/// wall recovery left out of `total`. Eases in smoothly (smoothstep), with no
+/// sudden jump back to full control.
+fn control_after_bounce(remaining: f32, total: f32) -> f32 {
+    if remaining <= 0.0 || total <= 0.0 {
+        return 1.0;
+    }
+    let progress = (1.0 - remaining / total).clamp(0.0, 1.0);
+    progress * progress * (3.0 - 2.0 * progress)
 }
 
 /// Moves `current` toward `target` by at most `max_delta`, never overshooting.
@@ -171,7 +228,9 @@ pub(crate) mod tests {
         max_air_speed: 500.0,
         air_acceleration: 2000.0,
         air_braking: 1250.0,
-        wall_restitution: 0.3,
+        wall_restitution: 0.6,
+        wall_recovery_time: 0.5,
+        coast_drag: 100.0,
     };
     const WALLS: Walls = Walls {
         left: -900.0,
@@ -249,19 +308,94 @@ pub(crate) mod tests {
         assert!(rested.velocity.x.abs() < f32::EPSILON);
     }
 
-    #[test]
-    fn walls_cushion_instead_of_stopping_dead() {
-        let near_wall = Body {
+    fn at_right_wall_moving_right() -> Body {
+        Body {
             position: Vec2::new(WALLS.right - 1.0, 0.0),
             velocity: Vec2::new(CONFIG.max_air_speed, 0.0),
-        };
-        let bumped = step(near_wall, AirInput::NONE, &CONFIG, WALLS, DT);
-        assert!(bumped.position.x <= WALLS.right);
-        assert!(bumped.velocity.x < 0.0, "bounces back");
-        assert!(
-            bumped.velocity.x.abs() < near_wall.velocity.x * 0.5,
-            "softly"
+            ..Body::default()
+        }
+    }
+
+    #[test]
+    fn walls_reverse_direction_with_part_of_the_speed() {
+        let before = at_right_wall_moving_right();
+        // Holding right keeps the speed at exactly max, so only the bounce changes it.
+        let bounced = step(before, AirInput::RIGHT, &CONFIG, WALLS, DT);
+        assert!(bounced.position.x <= WALLS.right);
+        let expected = -before.velocity.x * CONFIG.wall_restitution;
+        assert!((bounced.velocity.x - expected).abs() < 1e-3);
+        assert!((bounced.wall_recovery - CONFIG.wall_recovery_time).abs() < 1e-6);
+    }
+
+    /// Furthest distance from the right wall reached within `steps` after bouncing.
+    fn rebound_distance(input: AirInput, steps: usize) -> f32 {
+        let mut body = step(at_right_wall_moving_right(), input, &CONFIG, WALLS, DT);
+        let mut furthest: f32 = 0.0;
+        for _ in 0..steps {
+            body = step(body, input, &CONFIG, WALLS, DT);
+            furthest = furthest.max(WALLS.right - body.position.x);
+        }
+        furthest
+    }
+
+    #[test]
+    fn rebound_is_visible_even_while_pushing_into_the_wall() {
+        // More than an astronaut's width (56 units), so the player sees it.
+        // 1 s and 2 s at 120 steps per second.
+        assert!(rebound_distance(AirInput::RIGHT, 120) > 70.0);
+        assert!(rebound_distance(AirInput::NONE, 240) > 90.0);
+    }
+
+    #[test]
+    fn after_a_bounce_the_astronaut_keeps_drifting_like_in_space() {
+        let mut body = step(
+            at_right_wall_moving_right(),
+            AirInput::NONE,
+            &CONFIG,
+            WALLS,
+            DT,
         );
+        assert_eq!(body.drift, Drift::Coasting);
+        let bounce_x = body.position.x;
+        for _ in 0..120 {
+            body = step(body, AirInput::NONE, &CONFIG, WALLS, DT);
+        }
+        // One second later: still moving away, and well clear of the wall.
+        assert!(body.velocity.x < -100.0);
+        assert!(bounce_x - body.position.x > 200.0);
+    }
+
+    #[test]
+    fn steering_takes_back_control_from_coasting() {
+        let bounced = step(
+            at_right_wall_moving_right(),
+            AirInput::NONE,
+            &CONFIG,
+            WALLS,
+            DT,
+        );
+        let steered = step(bounced, AirInput::LEFT, &CONFIG, WALLS, DT);
+        assert_eq!(steered.drift, Drift::Steered);
+        // After letting go, the usual quick braking applies again.
+        let mut body = steered;
+        for _ in 0..240 {
+            body = step(body, AirInput::NONE, &CONFIG, WALLS, DT);
+        }
+        assert!(body.velocity.x.abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn control_returns_smoothly_after_a_bounce() {
+        let total = CONFIG.wall_recovery_time;
+        assert!(control_after_bounce(total, total).abs() < 1e-6);
+        assert!((control_after_bounce(0.0, total) - 1.0).abs() < 1e-6);
+        let mut previous = 0.0;
+        for i in 1..=10_u16 {
+            let remaining = total * (1.0 - f32::from(i) / 10.0);
+            let control = control_after_bounce(remaining, total);
+            assert!(control >= previous, "never drops while recovering");
+            previous = control;
+        }
     }
 
     #[test]

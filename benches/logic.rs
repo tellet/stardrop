@@ -22,7 +22,9 @@ fn movement_step(c: &mut Criterion) {
         max_air_speed: 500.0,
         air_acceleration: 2000.0,
         air_braking: 1250.0,
-        wall_restitution: 0.3,
+        wall_restitution: 0.6,
+        wall_recovery_time: 0.5,
+        coast_drag: 100.0,
     };
     let walls = Walls {
         left: -932.0,
@@ -31,6 +33,7 @@ fn movement_step(c: &mut Criterion) {
     let body = Body {
         position: Vec2::new(100.0, -2000.0),
         velocity: Vec2::new(250.0, -300.0),
+        ..Body::default()
     };
     c.bench_function("movement step", |b| {
         b.iter(|| {

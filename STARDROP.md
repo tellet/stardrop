@@ -45,7 +45,7 @@
 - The astronaut is always falling under constant gravity, up to a **terminal velocity** (a maximum fall speed), so the game stays readable and fair.
 - **Air control:** left/right input applies gentle horizontal acceleration, with a maximum horizontal speed and soft deceleration when no input is given. The player can position themselves, but can never slow their fall or rise on their own.
 - Only objects can make big changes to the astronaut's path.
-- **Level edges:** soft invisible walls on the left and right; the astronaut stops at them with a small cushioned bump.
+- **Level edges:** invisible walls on the left and right; the astronaut bounces off them gently and coasts away, like in space (see DECISIONS.md M1-5).
 - Physics runs at a fixed timestep and is fully deterministic: the same inputs always produce the same fall.
 
 ### 3.2 Goal, failure and checkpoints
