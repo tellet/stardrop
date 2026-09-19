@@ -40,6 +40,10 @@ pub(super) struct FileBeacon {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) enum FileObject {
+    /// `CloudPuff(center: (x, depth), radius: r)`.
+    CloudPuff { center: FilePoint, radius: f32 },
+    /// `Crystal(center: (x, depth), size: s)`.
+    Crystal { center: FilePoint, size: f32 },
     /// `StaticCloud(center: (x, depth), radius: r)`.
     StaticCloud { center: FilePoint, radius: f32 },
 }
@@ -193,6 +197,14 @@ impl FileObject {
     /// This object in world coordinates.
     pub(super) fn into_world(self) -> Placement {
         match self {
+            Self::CloudPuff { center, radius } => Placement::CloudPuff {
+                center: to_world(center),
+                radius,
+            },
+            Self::Crystal { center, size } => Placement::Crystal {
+                center: to_world(center),
+                size,
+            },
             Self::StaticCloud { center, radius } => Placement::StaticCloud {
                 center: to_world(center),
                 radius,
@@ -236,15 +248,30 @@ mod tests {
     fn objects_convert_to_world_coordinates() {
         let text = VALID.replace(
             "target_time: 8.0,",
-            "objects: [StaticCloud(center: (240, 900), radius: 80)], target_time: 8.0,",
+            "objects: [
+                CloudPuff(center: (240, 900), radius: 80),
+                Crystal(center: (700, 1200), size: 40),
+                StaticCloud(center: (800, 500), radius: 60),
+            ],
+            target_time: 8.0,",
         );
         let level = Level::parse(&text).unwrap();
         assert_eq!(
             level.objects,
-            vec![Placement::StaticCloud {
-                center: Vec2::new(-300.0, -900.0),
-                radius: 80.0
-            }]
+            vec![
+                Placement::CloudPuff {
+                    center: Vec2::new(-300.0, -900.0),
+                    radius: 80.0
+                },
+                Placement::Crystal {
+                    center: Vec2::new(160.0, -1200.0),
+                    size: 40.0
+                },
+                Placement::StaticCloud {
+                    center: Vec2::new(260.0, -500.0),
+                    radius: 60.0
+                },
+            ]
         );
     }
 

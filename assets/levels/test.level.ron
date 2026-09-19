@@ -11,8 +11,12 @@
         (360, 1500),
     ],
     objects: [
+        // Right under the start: every attempt meets it first.
+        CloudPuff(center: (580, 640), radius: 90),
         // Off the straight path: a plain drop misses it, drifting left doesn't.
         StaticCloud(center: (330, 1250), radius: 95),
+        // Near the right-hand mote: sends you back toward the middle.
+        Crystal(center: (900, 1350), size: 50),
     ],
     target_time: 8.0,
 )

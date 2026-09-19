@@ -59,10 +59,12 @@ For scale, the astronaut is a circle with a radius of 28 units, so the level is 
 
 ## Objects
 
-Each object is written as `Type(fields...)`. Objects have **placement fields only**: where they are and how big. How strongly an object acts is set once per type in `src/config.rs` and is the same in every level (the consistency rule). Sizes (radius) must be 20–300.
+Each object is written as `Type(fields...)`. An effect happens when the astronaut *starts* touching an object; staying inside doesn't repeat it. Objects have **placement fields only**: where they are and how big. How strongly an object acts is set once per type in `src/config.rs` and is the same in every level (the consistency rule). Sizes (radius) must be 20–300.
 
 | Object | Fields | What it does (designer notes; players are never told) |
 |---|---|---|
+| `CloudPuff` | `center: (x, depth)`, `radius` | Bounces the astronaut upward and away from its center, always at least 45° up, at the same speed however it's touched. The astronaut then coasts. |
+| `Crystal` | `center: (x, depth)`, `size` (center to tip) | Reverses sideways motion, with a minimum sideways speed so it's always noticeable. The fall speed is kept. Falling straight onto it pushes away from its center. |
 | `StaticCloud` | `center: (x, depth)`, `radius` | Hazard: touching it ends the attempt. Its hitbox is 80 % of its visible size, so near misses are safe. It can't cover the start, the beacon or any stardust. |
 
 More object types arrive in Milestones 3 and 4.

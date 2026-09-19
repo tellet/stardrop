@@ -13,7 +13,9 @@ mod kind;
 mod visuals;
 
 pub use behavior::{Outcome, on_enter};
-pub use kind::{ObjectKind, ObjectsConfig, Placement, StaticCloudConfig};
+pub use kind::{
+    CloudPuffConfig, CrystalConfig, ObjectKind, ObjectsConfig, Placement, StaticCloudConfig,
+};
 use visuals::ObjectAssets;
 
 use crate::astronaut::Astronaut;
@@ -103,14 +105,18 @@ fn spawn_objects(
 fn touch_objects(
     level: Res<ActiveLevel>,
     config: Res<GameConfig>,
-    astronaut: Single<&Motion, With<Astronaut>>,
+    // One mutable handle for reading *and* writing: asking Bevy for `&Motion`
+    // and `&mut Motion` of the same entity in one system is a conflict it
+    // refuses at startup (the same rule as Rust's borrowing).
+    mut astronaut: Single<&mut Motion, With<Astronaut>>,
     mut objects: Query<(Entity, &ObjectIndex, &mut Contact)>,
     mut touched: MessageWriter<ObjectTouched>,
     mut failed: MessageWriter<AttemptFailed>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
 ) {
-    let body = astronaut.body();
     for (entity, index, mut contact) in &mut objects {
+        // Re-read each time: an earlier object this step may have launched us.
+        let body = astronaut.body();
         // `get` instead of `[]`: after a level edit the list may be shorter.
         let Some(placement) = level.objects.get(index.0) else {
             continue;
@@ -126,7 +132,10 @@ fn touch_objects(
         }
         let kind = placement.kind();
         touched.write(ObjectTouched { kind, entity });
-        match on_enter(kind, &config.objects, body) {
+        match on_enter(kind, placement.center(), &config.objects, body) {
+            Outcome::Launch(velocity) => {
+                astronaut.set_body(body.launched(velocity, &config.movement));
+            }
             Outcome::FailAttempt => fail(&mut failed, &mut next_phase),
         }
     }
@@ -214,5 +223,52 @@ pub(crate) mod tests {
             LevelPhase::Falling,
             "visibly grazed the cloud but stayed safe"
         );
+    }
+
+    fn astronaut_velocity(app: &mut App) -> Vec2 {
+        let world = app.world_mut();
+        let body = world.query::<&Motion>().single(world).map(Motion::body);
+        body.unwrap_or_default().velocity
+    }
+
+    #[test]
+    fn falling_onto_a_cloud_puff_bounces_up_once() {
+        let mut level = Level::for_tests();
+        level.objects = vec![Placement::CloudPuff {
+            center: Vec2::new(0.0, -900.0),
+            radius: 80.0,
+        }];
+        let mut app = object_app(level, Vec2::new(0.0, -700.0));
+        app.init_resource::<Touches>().add_systems(Update, record);
+        let mut rose = false;
+        for _ in 0..60 {
+            app.update();
+            rose |= astronaut_velocity(&mut app).y > 0.0;
+        }
+        assert!(rose, "the cloud bounced the astronaut upward");
+        assert_eq!(
+            app.world().resource::<Touches>().0,
+            vec![ObjectKind::CloudPuff],
+            "one touch per contact"
+        );
+        assert_eq!(
+            *app.world().resource::<State<LevelPhase>>().get(),
+            LevelPhase::Falling
+        );
+    }
+
+    #[test]
+    fn a_crystal_reverses_sideways_motion() {
+        let mut level = Level::for_tests();
+        level.objects = vec![Placement::Crystal {
+            center: Vec2::new(0.0, -900.0),
+            size: 50.0,
+        }];
+        // Just left of the crystal, falling straight: it pushes us left.
+        let mut app = object_app(level, Vec2::new(-20.0, -800.0));
+        for _ in 0..30 {
+            app.update();
+        }
+        assert!(astronaut_velocity(&mut app).x < -300.0);
     }
 }

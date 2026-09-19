@@ -246,6 +246,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Assets:** unit-sized meshes shared per type (`ObjectAssets`), scaled per object; reloads create none.
 - **F2** needs Bevy's gizmo features, which are only in the `dev` cargo feature. `check.sh` runs Clippy a second time with `--features dev`, so that code is linted too.
 
+## M3-2 · Cloud puff and crystal
+
+- **Pushes use `Body::launched(velocity)`:** the astronaut takes the new velocity, **coasts** (so braking doesn't swallow the push; the user's "spacey" preference, M1-5) and gets the same brief control fade-in as a wall bounce. `wall_recovery` is renamed `control_recovery`, since walls no longer own it.
+- **Cloud puff:** fixed speed (650 u/s) directed away from the cloud's center, with the tilt clamped to at most 45° from vertical. It depends only on *where* it's touched, never on incoming speed, so it's the same every time.
+- **Crystal:** negates the sideways velocity, with at least 350 u/s, and keeps the fall speed. With zero sideways speed, it pushes away from the crystal's center (right if exactly centered).
+- **Hitboxes:** helpful and mixed objects use their full outline (generous). The crystal uses the circle through its tips.
+- **Caught before running:** `touch_objects` first asked for `&Motion` and `&mut Motion` on the astronaut. Bevy rejects that at startup (B0001, the same rule as Rust's borrowing), so it now uses a single `&mut` handle.
+
 ---
 
 ## Baseline measurements (M0)

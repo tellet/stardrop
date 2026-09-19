@@ -5,7 +5,9 @@
 
 use bevy::prelude::*;
 
-use crate::objects::{ObjectsConfig, StaticCloudConfig};
+use core::f32::consts::FRAC_PI_4;
+
+use crate::objects::{CloudPuffConfig, CrystalConfig, ObjectsConfig, StaticCloudConfig};
 use crate::physics::movement::MovementConfig;
 
 /// Falling and drifting feel (world units, seconds). See DECISIONS.md M1-2
@@ -25,7 +27,7 @@ const MOVEMENT: MovementConfig = MovementConfig {
     wall_restitution: 0.6,
     // ...and steering fades back in over 0.5 s, so the rebound (~85–100
     // units) stays visible even while pushing toward the wall.
-    wall_recovery_time: 0.5,
+    control_recovery_time: 0.5,
     // After a bounce the astronaut coasts, slowing only gently: a full-speed
     // bounce drifts ~450 units over ~3 s unless the player steers.
     coast_drag: 100.0,
@@ -37,6 +39,16 @@ pub(crate) const ASTRONAUT_RADIUS: f32 = 28.0;
 
 /// Object behavior, one set per type (Section 3.3: never per level or instance).
 const OBJECTS: ObjectsConfig = ObjectsConfig {
+    cloud_puff: CloudPuffConfig {
+        // Rises about a quarter of the screen (650² / 2g ≈ 470 units).
+        bounce_speed: 650.0,
+        // Always at least 45° upward: "up and away", never sideways.
+        max_tilt: FRAC_PI_4,
+    },
+    crystal: CrystalConfig {
+        // Clearly visible even when the astronaut was barely moving sideways.
+        min_sideways_speed: 350.0,
+    },
     static_cloud: StaticCloudConfig {
         // Hazards are more forgiving than they look: the hitbox is 80 % of
         // the visible cloud, so near misses feel fair, never cheap.

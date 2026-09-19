@@ -43,6 +43,12 @@ impl Motion {
         self.body
     }
 
+    /// Replaces the velocity-related state (after an object's push) while
+    /// keeping the position, so drawing stays smooth.
+    pub fn set_body(&mut self, body: Body) {
+        self.body = body;
+    }
+
     /// Jumps to a new state without drawing a smeared blend from the old position.
     pub fn teleport(&mut self, body: Body) {
         self.body = body;

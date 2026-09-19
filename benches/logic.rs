@@ -24,7 +24,7 @@ fn movement_step(c: &mut Criterion) {
         air_acceleration: 2000.0,
         air_braking: 1250.0,
         wall_restitution: 0.6,
-        wall_recovery_time: 0.5,
+        control_recovery_time: 0.5,
         coast_drag: 100.0,
     };
     let walls = Walls {

@@ -23,10 +23,10 @@ pub struct MovementConfig {
     pub air_braking: f32,
     /// Fraction of sideways speed kept (and reversed) when bouncing off a side wall.
     pub wall_restitution: f32,
-    /// After a wall bounce, steering and braking fade back in over this many
-    /// seconds, so the rebound stays visible even while the player keeps
-    /// pushing toward the wall.
-    pub wall_recovery_time: f32,
+    /// After a push (a wall bounce, or an object), steering and braking fade
+    /// back in over this many seconds, so the push stays visible even while
+    /// the player keeps steering against it.
+    pub control_recovery_time: f32,
     /// Gentle slow-down while coasting (pushed by a wall or, later, an
     /// object) with no input, in units/s². Much weaker than `air_braking`:
     /// we're in space.
@@ -105,8 +105,8 @@ pub struct Body {
     pub position: Vec2,
     /// Velocity, in units/s.
     pub velocity: Vec2,
-    /// Seconds left until air control is fully back after a wall bounce (0 = full control).
-    pub wall_recovery: f32,
+    /// Seconds left until air control is fully back after a push (0 = full control).
+    pub control_recovery: f32,
     /// Whether sideways motion is the player's own or a push from outside.
     pub drift: Drift,
 }
@@ -118,6 +118,19 @@ impl Body {
         Self {
             position,
             ..Self::default()
+        }
+    }
+
+    /// Pushed by something outside the player's control (an object): takes
+    /// on `velocity`, coasts (so braking doesn't swallow the push) and has
+    /// weakened steering for a moment, exactly like a wall bounce.
+    #[must_use]
+    pub fn launched(self, velocity: Vec2, config: &MovementConfig) -> Self {
+        Self {
+            velocity,
+            drift: Drift::Coasting,
+            control_recovery: config.control_recovery_time,
+            ..self
         }
     }
 }
@@ -139,7 +152,7 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
     // Horizontal: accelerate toward the steered speed, or brake toward zero,
     // weakened for a moment after a wall bounce.
     let target = input.value() * config.max_air_speed;
-    let control = control_after_bounce(body.wall_recovery, config.wall_recovery_time);
+    let control = control_after_bounce(body.control_recovery, config.control_recovery_time);
     // Any steering puts the player back in charge.
     let mut drift = if input == AirInput::NONE {
         body.drift
@@ -153,7 +166,7 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
         (true, Drift::Coasting) => config.coast_drag,
     };
     velocity.x = move_towards(velocity.x, target, rate * dt);
-    let mut wall_recovery = (body.wall_recovery - dt).max(0.0);
+    let mut control_recovery = (body.control_recovery - dt).max(0.0);
 
     let mut position = body.position + velocity * dt;
 
@@ -163,14 +176,14 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
     position.x = position.x.clamp(walls.left, walls.right);
     if hit_left || hit_right {
         velocity.x = -velocity.x * config.wall_restitution;
-        wall_recovery = config.wall_recovery_time;
+        control_recovery = config.control_recovery_time;
         drift = Drift::Coasting;
     }
 
     Body {
         position,
         velocity,
-        wall_recovery,
+        control_recovery,
         drift,
     }
 }
@@ -229,7 +242,7 @@ pub(crate) mod tests {
         air_acceleration: 2000.0,
         air_braking: 1250.0,
         wall_restitution: 0.6,
-        wall_recovery_time: 0.5,
+        control_recovery_time: 0.5,
         coast_drag: 100.0,
     };
     const WALLS: Walls = Walls {
@@ -324,7 +337,7 @@ pub(crate) mod tests {
         assert!(bounced.position.x <= WALLS.right);
         let expected = -before.velocity.x * CONFIG.wall_restitution;
         assert!((bounced.velocity.x - expected).abs() < 1e-3);
-        assert!((bounced.wall_recovery - CONFIG.wall_recovery_time).abs() < 1e-6);
+        assert!((bounced.control_recovery - CONFIG.control_recovery_time).abs() < 1e-6);
     }
 
     /// Furthest distance from the right wall reached within `steps` after bouncing.
@@ -386,7 +399,7 @@ pub(crate) mod tests {
 
     #[test]
     fn control_returns_smoothly_after_a_bounce() {
-        let total = CONFIG.wall_recovery_time;
+        let total = CONFIG.control_recovery_time;
         assert!(control_after_bounce(total, total).abs() < 1e-6);
         assert!((control_after_bounce(0.0, total) - 1.0).abs() < 1e-6);
         let mut previous = 0.0;

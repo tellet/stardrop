@@ -10,6 +10,16 @@ use bevy::prelude::*;
 
 use super::kind::Placement;
 
+/// Cloud puffs: three overlapping soft circles (offsets and sizes relative to
+/// the radius). Pastel, not glowing: clouds are soft, not light sources.
+const PUFF_LOBES: [(Vec2, f32); 3] = [
+    (Vec2::new(-0.35, -0.08), 0.62),
+    (Vec2::new(0.35, -0.08), 0.62),
+    (Vec2::new(0.0, 0.2), 0.72),
+];
+const PUFF_COLOR: Color = Color::srgb(0.96, 0.86, 0.95);
+/// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
+const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
 /// Spikes around a static cloud's outline.
 const STATIC_SPIKES: u16 = 14;
 /// Dark and brooding, with a faint violet crackle around it (no bloom).
@@ -23,7 +33,10 @@ const OBJECT_DEPTH: f32 = 6.0;
 #[derive(Resource)]
 pub(super) struct ObjectAssets {
     unit_circle: Handle<Mesh>,
+    diamond: Handle<Mesh>,
     spiky_star: Handle<Mesh>,
+    puff: Handle<ColorMaterial>,
+    crystal: Handle<ColorMaterial>,
     static_core: Handle<ColorMaterial>,
     static_crackle: Handle<ColorMaterial>,
 }
@@ -33,10 +46,15 @@ impl FromWorld for ObjectAssets {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let unit_circle = meshes.add(Circle::new(1.0));
         let spiky_star = meshes.add(star_mesh(STATIC_SPIKES, 0.82, 1.0));
+        // Narrower than tall, tips at distance 1 from the center.
+        let diamond = meshes.add(Rhombus::new(1.3, 2.0));
         let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
         Self {
             unit_circle,
+            diamond,
             spiky_star,
+            puff: materials.add(PUFF_COLOR),
+            crystal: materials.add(CRYSTAL_GLOW),
             static_core: materials.add(STATIC_CORE),
             static_crackle: materials.add(STATIC_CRACKLE),
         }
@@ -50,6 +68,23 @@ pub(super) fn spawn_look(
     placement: &Placement,
 ) {
     match placement {
+        Placement::CloudPuff { radius, .. } => {
+            for (offset, scale) in PUFF_LOBES {
+                parent.spawn((
+                    Mesh2d(assets.unit_circle.clone()),
+                    MeshMaterial2d(assets.puff.clone()),
+                    Transform::from_translation((offset * *radius).extend(0.0))
+                        .with_scale(Vec3::splat(radius * scale)),
+                ));
+            }
+        }
+        Placement::Crystal { size, .. } => {
+            parent.spawn((
+                Mesh2d(assets.diamond.clone()),
+                MeshMaterial2d(assets.crystal.clone()),
+                Transform::from_scale(Vec3::new(*size, *size, 1.0)),
+            ));
+        }
         Placement::StaticCloud { radius, .. } => {
             let size = Vec3::new(*radius, *radius, 1.0);
             parent.spawn((
