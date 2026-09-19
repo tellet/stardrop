@@ -18,6 +18,8 @@ pub enum ObjectKind {
     WindRibbon,
     /// Glassy diamond: reverses sideways motion.
     Crystal,
+    /// Gravity orb: pulls the astronaut toward its center within a field.
+    GravityOrb,
     /// Floating bubble: catches the astronaut and carries it upward.
     Bubble,
     /// Mischievous flower: swaps left and right for a few seconds.
@@ -35,6 +37,7 @@ impl ObjectKind {
     pub fn size_range(self) -> RangeInclusive<f32> {
         match self {
             Self::CloudPuff
+            | Self::GravityOrb
             | Self::Bubble
             | Self::Crystal
             | Self::SporeFlower
@@ -67,6 +70,13 @@ pub enum Placement {
         path: Vec<Vec2>,
         /// Full width of the ribbon.
         width: f32,
+    },
+    /// A gravity orb: a core circle, with a pull field around it.
+    GravityOrb {
+        /// Center of the orb.
+        center: Vec2,
+        /// Radius of the visible core.
+        radius: f32,
     },
     /// A bubble: a circle.
     Bubble {
@@ -130,6 +140,7 @@ impl Placement {
     pub fn kind(&self) -> ObjectKind {
         match self {
             Self::CloudPuff { .. } => ObjectKind::CloudPuff,
+            Self::GravityOrb { .. } => ObjectKind::GravityOrb,
             Self::Bubble { .. } => ObjectKind::Bubble,
             Self::SporeFlower { .. } => ObjectKind::SporeFlower,
             Self::CometStone { .. } => ObjectKind::CometStone,
@@ -145,6 +156,7 @@ impl Placement {
     pub fn center(&self) -> Vec2 {
         match self {
             Self::CloudPuff { center, .. }
+            | Self::GravityOrb { center, .. }
             | Self::Bubble { center, .. }
             | Self::Crystal { center, .. }
             | Self::SporeFlower { center, .. }
@@ -166,6 +178,7 @@ impl Placement {
     pub fn size(&self) -> f32 {
         match self {
             Self::CloudPuff { radius, .. }
+            | Self::GravityOrb { radius, .. }
             | Self::Bubble { radius, .. }
             | Self::SporeFlower { radius, .. }
             | Self::CometStone { radius, .. }
@@ -180,6 +193,7 @@ impl Placement {
     pub fn outline(&self) -> ObjectShape<'_> {
         match self {
             Self::CloudPuff { center, radius }
+            | Self::GravityOrb { center, radius }
             | Self::Bubble { center, radius }
             | Self::SporeFlower { center, radius }
             | Self::CometStone { center, radius }
@@ -208,6 +222,11 @@ impl Placement {
             | Self::SporeFlower { .. }
             | Self::CometStone { .. }
             | Self::WindRibbon { .. } => self.outline(),
+            // An orb acts throughout its field, which is larger than its core.
+            Self::GravityOrb { center, radius } => ObjectShape::Circle(CircleShape::new(
+                *center,
+                radius * config.gravity_orb.field_scale,
+            )),
             Self::StaticCloud { center, radius } => ObjectShape::Circle(CircleShape::new(
                 *center,
                 radius * config.static_cloud.hitbox_scale,
@@ -240,6 +259,22 @@ pub struct WindRibbonConfig {
     /// How strongly the wind pulls the astronaut's velocity toward the flow,
     /// in units/s². Stronger than gravity, so ribbons can carry you upward.
     pub pull: f32,
+}
+
+/// Gravity orb tuning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GravityOrbConfig {
+    /// The pull field's radius, as a multiple of the core radius.
+    pub field_scale: f32,
+    /// Pull strength: the acceleration toward the center is this divided by
+    /// the distance, so orbits at any radius feel similar.
+    pub pull: f32,
+    /// Largest pull acceleration, in units/s² (close to the core).
+    pub max_pull: f32,
+    /// Speed limit inside the field, in units/s: the brief forbids extreme speeds.
+    pub max_speed: f32,
+    /// Speed of the soft bounce when touching the core, in units/s.
+    pub core_bounce_speed: f32,
 }
 
 /// Bubble tuning.
@@ -293,6 +328,8 @@ pub struct ObjectsConfig {
     pub wind_ribbon: WindRibbonConfig,
     /// Crystal.
     pub crystal: CrystalConfig,
+    /// Gravity orb.
+    pub gravity_orb: GravityOrbConfig,
     /// Bubble.
     pub bubble: BubbleConfig,
     /// Spore flower.

@@ -11,7 +11,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
-use super::kind::Placement;
+use super::kind::{ObjectsConfig, Placement};
 
 /// Cloud puffs: three overlapping soft circles (offsets and sizes relative to
 /// the radius). Pastel, not glowing: clouds are soft, not light sources.
@@ -29,6 +29,13 @@ const CHEVRON_SPACING: f32 = 90.0;
 const CHEVRON_SIZE: f32 = 16.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
+/// Gravity orbs: a bright core with a faint ring showing how far the pull
+/// reaches (the player has to be able to judge it).
+const ORB_CORE: Color = Color::linear_rgb(1.9, 1.2, 2.8);
+const ORB_FIELD: Color = Color::linear_rgba(0.7, 0.5, 1.4, 0.13);
+const ORB_FIELD_EDGE: Color = Color::linear_rgba(1.2, 0.8, 2.0, 0.35);
+/// Field edge thickness as a fraction of the field radius.
+const ORB_EDGE: f32 = 0.02;
 /// Bubbles: a faint glassy shell with a soft sheen.
 const BUBBLE_SHELL: Color = Color::linear_rgba(0.9, 1.6, 2.0, 0.55);
 const BUBBLE_FILL: Color = Color::linear_rgba(0.5, 0.9, 1.3, 0.16);
@@ -56,6 +63,8 @@ pub(super) struct ObjectAssets {
     unit_circle: Handle<Mesh>,
     /// A ring of unit outer radius (the bubble's shell).
     unit_ring: Handle<Mesh>,
+    /// A thinner ring of unit outer radius (an orb's field edge).
+    thin_ring: Handle<Mesh>,
     /// A 1x1 triangle pointing down (the comet stone's flame).
     down_triangle: Handle<Mesh>,
     diamond: Handle<Mesh>,
@@ -64,6 +73,9 @@ pub(super) struct ObjectAssets {
     crystal: Handle<ColorMaterial>,
     ribbon: Handle<ColorMaterial>,
     chevron: Handle<ColorMaterial>,
+    orb_core: Handle<ColorMaterial>,
+    orb_field: Handle<ColorMaterial>,
+    orb_field_edge: Handle<ColorMaterial>,
     bubble_shell: Handle<ColorMaterial>,
     bubble_fill: Handle<ColorMaterial>,
     petal: Handle<ColorMaterial>,
@@ -79,6 +91,7 @@ impl FromWorld for ObjectAssets {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let unit_circle = meshes.add(Circle::new(1.0));
         let unit_ring = meshes.add(Annulus::new(1.0 - BUBBLE_RIM, 1.0));
+        let thin_ring = meshes.add(Annulus::new(1.0 - ORB_EDGE, 1.0));
         let spiky_star = meshes.add(star_mesh(STATIC_SPIKES, 0.82, 1.0));
         // Narrower than tall, tips at distance 1 from the center.
         let diamond = meshes.add(Rhombus::new(1.3, 2.0));
@@ -91,6 +104,7 @@ impl FromWorld for ObjectAssets {
         Self {
             unit_circle,
             unit_ring,
+            thin_ring,
             down_triangle,
             diamond,
             spiky_star,
@@ -98,6 +112,9 @@ impl FromWorld for ObjectAssets {
             crystal: materials.add(CRYSTAL_GLOW),
             ribbon: materials.add(RIBBON_GLOW),
             chevron: materials.add(CHEVRON_GLOW),
+            orb_core: materials.add(ORB_CORE),
+            orb_field: materials.add(ORB_FIELD),
+            orb_field_edge: materials.add(ORB_FIELD_EDGE),
             bubble_shell: materials.add(BUBBLE_SHELL),
             bubble_fill: materials.add(BUBBLE_FILL),
             petal: materials.add(PETAL_COLOR),
@@ -116,9 +133,28 @@ pub(super) fn spawn_look(
     parent: &mut ChildSpawnerCommands,
     assets: &ObjectAssets,
     meshes: &mut Assets<Mesh>,
+    config: &ObjectsConfig,
     placement: &Placement,
 ) {
     match placement {
+        Placement::GravityOrb { radius, .. } => {
+            let field = radius * config.gravity_orb.field_scale;
+            parent.spawn((
+                Mesh2d(assets.unit_circle.clone()),
+                MeshMaterial2d(assets.orb_field.clone()),
+                Transform::from_scale(Vec3::splat(field)),
+            ));
+            parent.spawn((
+                Mesh2d(assets.thin_ring.clone()),
+                MeshMaterial2d(assets.orb_field_edge.clone()),
+                Transform::from_xyz(0.0, 0.0, 0.1).with_scale(Vec3::splat(field)),
+            ));
+            parent.spawn((
+                Mesh2d(assets.unit_circle.clone()),
+                MeshMaterial2d(assets.orb_core.clone()),
+                Transform::from_xyz(0.0, 0.0, 0.2).with_scale(Vec3::splat(*radius)),
+            ));
+        }
         Placement::WindRibbon { path, width } => {
             // Mesh points are relative to the parent, which sits at the center.
             let center = placement.center();

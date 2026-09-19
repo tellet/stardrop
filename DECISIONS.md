@@ -294,6 +294,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **One use per attempt** (the user's choice): the bubble entity carries a `Used` flag and hides itself; a fresh attempt restores every one.
 - The astronaut is drawn inside a bubble while held, the same way spores show a shimmer.
 
+## M4-3 · Gravity orb
+
+- **Two radii:** the level sets the visible core; the pull field is 4× that (per-type tuning, so every orb of the same size has the same reach). The field is the hitbox; the core is the outline used for validation and drawing, and the field is drawn faintly so players can judge its reach.
+- **Pull = strength ÷ distance**, capped at 2000 u/s². That shape makes orbits at different radii feel similar, instead of the violent spike a true inverse-square law gives up close.
+- **Speed inside the field is clamped to 700 u/s** (Section 3.4: "clamped so orbits feel good and never produce extreme speeds"). A test runs the worst case, falling straight in for 5 seconds, and checks the cap holds.
+- **Touching the core** replaces the velocity with a soft 420 u/s push straight out, instead of letting the astronaut pass through the center.
+- Like the wind ribbon, the orb acts continuously (`while_inside`) and entering it does nothing by itself.
+
 ---
 
 ## Baseline measurements (M0)

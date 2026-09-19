@@ -14,8 +14,9 @@ mod visuals;
 
 pub use behavior::{Outcome, on_enter, while_inside};
 pub use kind::{
-    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind,
-    ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
+    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
+    MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig,
+    StaticCloudConfig, WindRibbonConfig,
 };
 use visuals::ObjectAssets;
 
@@ -85,6 +86,7 @@ impl Plugin for ObjectsPlugin {
 fn spawn_objects(
     mut commands: Commands,
     level: Res<ActiveLevel>,
+    config: Res<GameConfig>,
     assets: Res<ObjectAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     old: Query<Entity, With<ObjectIndex>>,
@@ -102,7 +104,9 @@ fn spawn_objects(
                 visuals::transform_for(placement),
                 Visibility::default(),
             ))
-            .with_children(|parent| visuals::spawn_look(parent, &assets, &mut meshes, placement));
+            .with_children(|parent| {
+                visuals::spawn_look(parent, &assets, &mut meshes, &config.objects, placement);
+            });
     }
 }
 

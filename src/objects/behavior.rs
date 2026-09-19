@@ -36,7 +36,8 @@ pub fn on_enter(
         ObjectKind::CloudPuff => {
             Outcome::Changed(body.launched(cloud_bounce(center, config, body), movement))
         }
-        ObjectKind::WindRibbon => Outcome::Nothing,
+        // These act continuously instead (see `while_inside`).
+        ObjectKind::WindRibbon | ObjectKind::GravityOrb => Outcome::Nothing,
         ObjectKind::Crystal => {
             Outcome::Changed(body.launched(crystal_reverse(center, config, body), movement))
         }
@@ -69,15 +70,39 @@ pub fn while_inside(
     body: Body,
     dt: f32,
 ) -> Option<Vec2> {
-    match placement.outline() {
-        ObjectShape::Path(path) if placement.kind() == ObjectKind::WindRibbon => {
+    match placement {
+        Placement::WindRibbon { .. } => {
+            let ObjectShape::Path(path) = placement.outline() else {
+                return None;
+            };
             let (segment, _) = path.closest_segment(body.position)?;
             let wind = config.wind_ribbon;
             let target = path.direction(segment) * wind.flow_speed;
             Some(body.velocity.move_towards(target, wind.pull * dt))
         }
+        Placement::GravityOrb { center, radius } => {
+            Some(orb_pull(*center, *radius, config, body, dt))
+        }
         _ => None,
     }
+}
+
+/// One step of an orb's pull: accelerate toward the center (strength divided
+/// by distance, capped), with a speed limit so nothing gets extreme. Touching
+/// the core gives a soft bounce outward instead.
+fn orb_pull(center: Vec2, radius: f32, config: &ObjectsConfig, body: Body, dt: f32) -> Vec2 {
+    let orb = config.gravity_orb;
+    let to_center = center - body.position;
+    let distance = to_center.length();
+    // Exactly at the center (never in practice): nothing to pull toward.
+    let Some(direction) = to_center.try_normalize() else {
+        return body.velocity;
+    };
+    if distance <= radius {
+        return -direction * orb.core_bounce_speed;
+    }
+    let pull = (orb.pull / distance).min(orb.max_pull);
+    (body.velocity + direction * pull * dt).clamp_length_max(orb.max_speed)
 }
 
 /// Upward and away from the cloud's center, at a fixed speed, tilted at most
@@ -114,8 +139,8 @@ mod tests {
 
     use super::*;
     use crate::objects::kind::{
-        BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, SporeFlowerConfig,
-        StaticCloudConfig, WindRibbonConfig,
+        BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
+        SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
     };
 
     const CONFIG: ObjectsConfig = ObjectsConfig {
@@ -134,6 +159,13 @@ mod tests {
             rise_speed: 90.0,
             seconds: 2.5,
             nudge_speed: 120.0,
+        },
+        gravity_orb: GravityOrbConfig {
+            field_scale: 4.0,
+            pull: 160_000.0,
+            max_pull: 2000.0,
+            max_speed: 700.0,
+            core_bounce_speed: 420.0,
         },
         spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
         comet_stone: CometStoneConfig {
@@ -408,5 +440,85 @@ mod tests {
         );
         let bounced = touched(ObjectKind::CloudPuff, Vec2::new(0.0, -400.0), diving);
         assert!(bounced.velocity.y > 0.0, "now going up");
+    }
+
+    fn orb(center: Vec2, radius: f32) -> Placement {
+        Placement::GravityOrb { center, radius }
+    }
+
+    #[test]
+    fn an_orb_pulls_the_astronaut_toward_its_center() {
+        let center = Vec2::new(0.0, -600.0);
+        let above = body(Vec2::new(0.0, -300.0), Vec2::ZERO);
+        let pulled = while_inside(&orb(center, 60.0), &CONFIG, above, 1.0 / 120.0).unwrap();
+        assert!(pulled.y < 0.0, "pulled downward toward the orb: {pulled}");
+        let beside = body(Vec2::new(-300.0, -600.0), Vec2::ZERO);
+        let sideways = while_inside(&orb(center, 60.0), &CONFIG, beside, 1.0 / 120.0).unwrap();
+        assert!(
+            sideways.x > 0.0,
+            "pulled rightward toward the orb: {sideways}"
+        );
+    }
+
+    #[test]
+    fn the_pull_is_stronger_closer_in() {
+        let center = Vec2::ZERO;
+        let near = while_inside(
+            &orb(center, 50.0),
+            &CONFIG,
+            body(Vec2::new(0.0, 100.0), Vec2::ZERO),
+            1.0 / 120.0,
+        );
+        let far = while_inside(
+            &orb(center, 50.0),
+            &CONFIG,
+            body(Vec2::new(0.0, 400.0), Vec2::ZERO),
+            1.0 / 120.0,
+        );
+        assert!(near.unwrap().length() > far.unwrap().length());
+    }
+
+    #[test]
+    fn an_orb_never_makes_the_astronaut_extremely_fast() {
+        let center = Vec2::ZERO;
+        let mut moving = body(Vec2::new(0.0, 120.0), Vec2::new(0.0, -600.0));
+        // Many steps of falling straight at the orb, the worst case.
+        for _ in 0..600 {
+            if let Some(velocity) = while_inside(&orb(center, 50.0), &CONFIG, moving, 1.0 / 120.0) {
+                moving.velocity = velocity;
+            }
+            moving.position += moving.velocity / 120.0;
+        }
+        assert!(
+            moving.velocity.length() <= CONFIG.gravity_orb.max_speed + 1e-3,
+            "{moving:?}"
+        );
+    }
+
+    #[test]
+    fn touching_the_core_bounces_softly_outward() {
+        let center = Vec2::ZERO;
+        let inside_core = body(Vec2::new(0.0, 30.0), Vec2::new(0.0, -500.0));
+        let bounced = while_inside(&orb(center, 50.0), &CONFIG, inside_core, 1.0 / 120.0).unwrap();
+        assert!(bounced.y > 0.0, "pushed back out: {bounced}");
+        assert!((bounced.length() - CONFIG.gravity_orb.core_bounce_speed).abs() < 1e-3);
+    }
+
+    #[test]
+    fn every_orb_pulls_the_same_way() {
+        let offset = Vec2::new(90.0, 140.0);
+        let a = while_inside(
+            &orb(Vec2::new(-300.0, -400.0), 60.0),
+            &CONFIG,
+            body(Vec2::new(-300.0, -400.0) + offset, Vec2::ZERO),
+            1.0 / 120.0,
+        );
+        let b = while_inside(
+            &orb(Vec2::new(250.0, -1500.0), 60.0),
+            &CONFIG,
+            body(Vec2::new(250.0, -1500.0) + offset, Vec2::ZERO),
+            1.0 / 120.0,
+        );
+        assert_eq!(a, b);
     }
 }

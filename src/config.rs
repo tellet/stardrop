@@ -8,8 +8,8 @@ use bevy::prelude::*;
 use core::f32::consts::FRAC_PI_4;
 
 use crate::objects::{
-    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectsConfig,
-    SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
+    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
+    ObjectsConfig, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
 };
 use crate::physics::movement::MovementConfig;
 
@@ -59,6 +59,18 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
         // Clearly visible even when the astronaut was barely moving sideways.
         min_sideways_speed: 350.0,
     },
+    gravity_orb: GravityOrbConfig {
+        // The pull reaches four core radii out, and the field is drawn.
+        field_scale: 4.0,
+        // Acceleration = pull / distance: 1600 u/s² a core away, 400 at the
+        // field's edge, so orbits at different radii feel similar.
+        pull: 160_000.0,
+        max_pull: 2000.0,
+        // "Never produce extreme speeds" (Section 3.4).
+        max_speed: 700.0,
+        // A soft push back out when touching the core.
+        core_bounce_speed: 420.0,
+    },
     bubble: BubbleConfig {
         // A slow, cozy float upward...
         rise_speed: 90.0,
@@ -84,9 +96,10 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     },
 };
 
-/// Global gameplay tuning.
+/// Global gameplay tuning. Public so benchmarks measure the real values
+/// instead of a copy that could drift out of step.
 #[derive(Resource, Debug, Clone)]
-pub(crate) struct GameConfig {
+pub struct GameConfig {
     /// Gravity, terminal velocity and air control.
     pub movement: MovementConfig,
     /// The astronaut is a circle of this radius.

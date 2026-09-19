@@ -13,7 +13,7 @@ mod background;
 mod camera;
 mod collectibles;
 pub mod collision;
-mod config;
+pub mod config;
 pub mod debug;
 mod effects;
 pub mod level;

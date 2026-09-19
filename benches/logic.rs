@@ -1,16 +1,15 @@
 //! Benchmarks for hot, engine-free logic. Run with `cargo bench`.
 
 use std::hint::black_box;
+use std::sync::LazyLock;
 
 use bevy::math::Vec2;
 use criterion::{Criterion, criterion_group, criterion_main};
+use stardrop::config::GameConfig;
 use stardrop::debug::stats::summarize;
 use stardrop::level::Level;
-use stardrop::objects::{
-    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectKind, ObjectsConfig,
-    Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig, on_enter, while_inside,
-};
-use stardrop::physics::movement::{AirInput, Body, MovementConfig, Walls, step};
+use stardrop::objects::{ObjectKind, Placement, on_enter, while_inside};
+use stardrop::physics::movement::{AirInput, Body, Walls, step};
 
 fn frame_summary(c: &mut Criterion) {
     // A full overlay window: 240 frames of ~60 FPS with some jitter.
@@ -20,20 +19,8 @@ fn frame_summary(c: &mut Criterion) {
     });
 }
 
-/// The game's movement tuning (kept in step with `src/config.rs`).
-const MOVEMENT: MovementConfig = MovementConfig {
-    gravity: 450.0,
-    terminal_velocity: 450.0,
-    max_air_speed: 500.0,
-    air_acceleration: 2000.0,
-    air_braking: 1250.0,
-    wall_restitution: 0.6,
-    control_recovery_time: 0.5,
-    coast_drag: 100.0,
-};
-
 fn movement_step(c: &mut Criterion) {
-    let config = MOVEMENT;
+    let config = &CONFIG.movement;
     let walls = Walls {
         left: -932.0,
         right: 932.0,
@@ -48,7 +35,7 @@ fn movement_step(c: &mut Criterion) {
             step(
                 black_box(body),
                 black_box(AirInput::new(0.6)),
-                &config,
+                config,
                 walls,
                 1.0 / 120.0,
             )
@@ -63,30 +50,8 @@ fn level_parse(c: &mut Criterion) {
     });
 }
 
-const OBJECTS: ObjectsConfig = ObjectsConfig {
-    cloud_puff: CloudPuffConfig {
-        bounce_speed: 650.0,
-        max_tilt: core::f32::consts::FRAC_PI_4,
-    },
-    wind_ribbon: WindRibbonConfig {
-        flow_speed: 500.0,
-        pull: 1800.0,
-    },
-    crystal: CrystalConfig {
-        min_sideways_speed: 350.0,
-    },
-    bubble: BubbleConfig {
-        rise_speed: 90.0,
-        seconds: 2.5,
-        nudge_speed: 120.0,
-    },
-    spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
-    comet_stone: CometStoneConfig {
-        dive_speed: 1100.0,
-        dive_seconds: 0.6,
-    },
-    static_cloud: StaticCloudConfig { hitbox_scale: 0.8 },
-};
+/// The game's real tuning, so these numbers measure what the game runs.
+static CONFIG: LazyLock<GameConfig> = LazyLock::new(GameConfig::default);
 
 /// A busy one-screen level: `count` objects of mixed types spread over the
 /// 1080 × 1920 playfield, including a few long ribbons.
@@ -132,8 +97,8 @@ fn object_effects(c: &mut Criterion) {
             on_enter(
                 ObjectKind::CloudPuff,
                 black_box(Vec2::new(0.0, -500.0)),
-                &OBJECTS,
-                &MOVEMENT,
+                &CONFIG.objects,
+                &CONFIG.movement,
                 black_box(body),
             )
         });
@@ -143,8 +108,8 @@ fn object_effects(c: &mut Criterion) {
             on_enter(
                 ObjectKind::Crystal,
                 black_box(Vec2::new(0.0, -500.0)),
-                &OBJECTS,
-                &MOVEMENT,
+                &CONFIG.objects,
+                &CONFIG.movement,
                 black_box(body),
             )
         });
@@ -160,7 +125,14 @@ fn object_effects(c: &mut Criterion) {
         width: 90.0,
     };
     c.bench_function("wind ribbon while_inside (16 points)", |b| {
-        b.iter(|| while_inside(black_box(&ribbon), &OBJECTS, black_box(body), 1.0 / 120.0));
+        b.iter(|| {
+            while_inside(
+                black_box(&ribbon),
+                &CONFIG.objects,
+                black_box(body),
+                1.0 / 120.0,
+            )
+        });
     });
 }
 
@@ -176,7 +148,7 @@ fn broad_phase(c: &mut Criterion) {
             b.iter(|| {
                 black_box(&objects)
                     .iter()
-                    .filter(|object| object.touches(&OBJECTS, black_box(astronaut), 28.0))
+                    .filter(|object| object.touches(&CONFIG.objects, black_box(astronaut), 28.0))
                     .count()
             });
         });
@@ -226,7 +198,7 @@ fn broad_phase(c: &mut Criterion) {
                 };
                 grid[cell]
                     .iter()
-                    .filter(|&&i| objects[i].touches(&OBJECTS, astronaut, 28.0))
+                    .filter(|&&i| objects[i].touches(&CONFIG.objects, astronaut, 28.0))
                     .count()
             });
         });
