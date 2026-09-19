@@ -12,8 +12,8 @@ use super::data::Level;
 /// Checkpoint ring size, in world units.
 const RING_RADIUS: f32 = 70.0;
 const RING_THICKNESS: f32 = 6.0;
-/// Stardust mote radius, in world units.
-const MOTE_RADIUS: f32 = 10.0;
+/// Stardust mote radius, in world units (also its pickup radius).
+pub(crate) const MOTE_RADIUS: f32 = 10.0;
 
 /// HDR colors (channels above 1.0 glow through bloom).
 const BEACON_GLOW: Color = Color::linear_rgb(0.6, 2.4, 2.0);
@@ -28,6 +28,10 @@ const SCENERY_DEPTH: f32 = 5.0;
 /// Everything spawned for the current level; despawned when it reloads.
 #[derive(Component)]
 pub(crate) struct LevelEntity;
+
+/// A stardust mote, by its index in the level's stardust list.
+#[derive(Component, Debug, Clone, Copy)]
+pub(crate) struct StardustMote(pub usize);
 
 /// A checkpoint ring, by its index in the level's checkpoint list.
 #[derive(Component, Debug, Clone, Copy)]
@@ -95,9 +99,10 @@ pub(super) fn spawn(commands: &mut Commands, assets: &SceneryAssets, level: &Lev
             Transform::from_translation(center.extend(SCENERY_DEPTH)),
         ));
     }
-    for &position in &level.stardust {
+    for (index, &position) in level.stardust.iter().enumerate() {
         commands.spawn((
             LevelEntity,
+            StardustMote(index),
             Mesh2d(assets.mote.clone()),
             MeshMaterial2d(assets.mote_material.clone()),
             Transform::from_translation(position.extend(SCENERY_DEPTH)),

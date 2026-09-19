@@ -13,11 +13,12 @@ mod loader;
 mod scenery;
 mod validate;
 
-pub(crate) use data::{LEVEL_WIDTH, Level};
+pub use data::{LEVEL_WIDTH, Level};
 pub(crate) use goal::LevelCompleted;
 use loader::{LevelAsset, LevelLoader};
 use scenery::LevelEntity;
-pub(crate) use scenery::{CheckpointRing, SceneryAssets};
+pub(crate) use scenery::{CheckpointRing, MOTE_RADIUS, SceneryAssets, StardustMote};
+pub use validate::LevelError;
 
 use crate::physics::movement::Body;
 use crate::physics::{Motion, PhysicsSystems};
@@ -202,6 +203,27 @@ pub(crate) mod tests {
         app.world_mut()
             .spawn((Astronaut, Motion::at_rest(start), Transform::default()));
         app
+    }
+
+    /// Spawns the level's scenery the same way a (re)load does: remove the
+    /// old scenery, spawn fresh from shared assets.
+    pub(crate) fn reload_scenery(world: &mut World) {
+        let old: Vec<Entity> = world
+            .query_filtered::<Entity, With<LevelEntity>>()
+            .iter(world)
+            .collect();
+        for entity in old {
+            world.despawn(entity);
+        }
+        if !world.contains_resource::<SceneryAssets>() {
+            world.init_resource::<SceneryAssets>();
+        }
+        world.resource_scope(|world, scenery: Mut<SceneryAssets>| {
+            let level = world.resource::<ActiveLevel>().0.clone();
+            let mut commands = world.commands();
+            scenery::spawn(&mut commands, &scenery, &level);
+        });
+        world.flush();
     }
 
     #[derive(Resource, Default)]

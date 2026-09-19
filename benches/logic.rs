@@ -5,6 +5,7 @@ use std::hint::black_box;
 use bevy::math::Vec2;
 use criterion::{Criterion, criterion_group, criterion_main};
 use stardrop::debug::stats::summarize;
+use stardrop::level::Level;
 use stardrop::physics::movement::{AirInput, Body, MovementConfig, Walls, step};
 
 fn frame_summary(c: &mut Criterion) {
@@ -48,5 +49,12 @@ fn movement_step(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, frame_summary, movement_step);
+fn level_parse(c: &mut Criterion) {
+    let text = include_str!("../assets/levels/test.level.ron");
+    c.bench_function("parse + validate test level", |b| {
+        b.iter(|| Level::parse(black_box(text)));
+    });
+}
+
+criterion_group!(benches, frame_summary, movement_step, level_parse);
 criterion_main!(benches);

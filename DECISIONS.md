@@ -190,6 +190,21 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **The astronaut spawns on `OnExit(Loading)`, not `OnEnter(Falling)`:** respawns and retries also re-enter Falling and would have spawned extra astronauts.
 - **F3** (debug builds) jumps to and activates the next checkpoint.
 
+## M2-5 · Stardust and run tracking
+
+- **`StardustSet`:** a `u64` bitset, one bit per mote. Collecting, copying, clearing and counting never allocate. Validation caps levels at 64 motes, far above the 3–6 the brief asks for.
+- **Collection:** the astronaut is checked against each mote's position from the level data, not entity transforms. For at most 64 motes, a straight loop beats any lookup structure. `bypass_change_detection` for the "already collected?" read means `CurrentRun` is only marked changed on a real pickup, so mote visibility only updates then.
+- **Stardust persistence:** motes stay collected through respawns, and come back on a retry (`RunRestarted`) or a level reload.
+- **Run time** counts in `FixedUpdate` during `Falling` and `Respawning`, so it is always a whole number of 1/120 s physics steps and identical at any frame rate. That also makes it suitable for replays later.
+- **Leak test** (`soak_tests.rs`): 20 retries, respawns and scenery reloads leave the entity, mesh and material counts unchanged. Sabotaging the reload makes it fail (58 → 118 entities).
+
+## M2-6 · A startup crash, and the `--smoke` check
+
+- **Bug:** the run condition `resource_changed::<ActiveLevel>` needs the resource to exist, so the game crashed in its first frames, before the level had loaded. Unit tests missed it because their apps always insert a level first.
+- **Fix:** `resource_exists_and_changed`. A regression test (`runs_before_any_level_has_loaded`) starts the plugins with no level.
+- **Process:** `./scripts/check.sh --smoke` also runs the real release game for 6 s and fails on any panic or error. I verified it fails on the crashing build. It opens a window, so it's opt-in, but it's used before every commit.
+- **Rule for later:** conditions and systems that read resources created at runtime (`ActiveLevel`, and more in M5) use `resource_exists…`, `Option<Res<T>>` or state gating.
+
 ---
 
 ## Baseline measurements (M0)
@@ -226,3 +241,13 @@ Release build, same machine as M0, 60 Hz with vsync.
 | CPU while falling | ~16–17 % of one core | Continuous rendering at 60 FPS. |
 | RSS | 341 MB at start → 343.2 MB after 5 min | Still creeping slightly; see TECH_DEBT.md. |
 | Frame time | 16.7 ms avg, worst ~18–21 ms | Vsync-bound. |
+
+## Measurements (M2)
+
+| Metric | Value | Notes |
+|---|---|---|
+| Parse + validate test level | 3.7 µs | criterion. Budget for load + retry: 200 ms. |
+| Retry | Moves one entity, no loading or spawning | Constant time; effectively instant. |
+| Movement step | 6.7 ns | Was 3.0 ns before the wall bounce and drift logic. |
+| Respawn soak, 5 min, about 30 respawns | RSS 429 → 440 MB (peak at 1 min) → 433.8 → 434.1 MB (min 2–4.5) | Settles after warm-up. No warnings or errors. |
+| CPU while falling | ~15–16 % of one core | Release build, 60 FPS. |

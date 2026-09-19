@@ -3,7 +3,8 @@
 
 use bevy::prelude::*;
 
-use crate::level::{LevelPhase, LevelProblem};
+use crate::collectibles::CurrentRun;
+use crate::level::{ActiveLevel, LevelPhase, LevelProblem};
 
 /// Soft coral: clearly a problem, but calm, like everything else.
 const PROBLEM_COLOR: Color = Color::srgb(1.0, 0.72, 0.62);
@@ -65,10 +66,17 @@ fn show_problem(
 
 /// Placeholder until the level-complete screen (Milestone 5). Removed
 /// automatically when the level phase changes (retry arrives in step 2d).
-fn spawn_complete_text(mut commands: Commands) {
+fn spawn_complete_text(mut commands: Commands, run: Res<CurrentRun>, level: Res<ActiveLevel>) {
+    // Built once per landing, so the formatting allocation doesn't matter.
+    let summary = format!(
+        "Level complete\ntime {:.1} s  ·  stardust {}/{}",
+        run.elapsed,
+        run.stardust.count(),
+        level.stardust.len()
+    );
     commands.spawn((
         DespawnOnExit(LevelPhase::Landed),
-        Text::new("Level complete"),
+        Text::new(summary),
         TextFont::from_font_size(COMPLETE_FONT_SIZE),
         TextColor(COMPLETE_COLOR),
         TextLayout::justify(Justify::Center),

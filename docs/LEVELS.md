@@ -50,7 +50,8 @@ For scale, one screen is 1920 × 1080 units. The astronaut is a circle with a ra
     ],
 
     // Stardust motes to collect. Place them on risky or clever routes.
-    // 3–6 per level (Milestone 6). Optional.
+    // 3–6 per level (Milestone 6), at most 64. Collected motes stay collected
+    // through checkpoint respawns and come back on a retry (R). Optional.
     stardust: [
         (400, 1800),
         (1500, 4200),
@@ -73,5 +74,6 @@ A level that breaks any of these rules is rejected, and the message says what's 
 - The start, the whole beacon pad, every checkpoint and every stardust mote are inside the level.
 - The beacon is below the start, and its width and height are positive.
 - Checkpoints are between the start and the beacon, listed top to bottom.
+- There are at most 64 stardust motes.
 
 Objects (clouds, crystals, ...) get their own fields in Milestones 3–4, and this document will be extended then.

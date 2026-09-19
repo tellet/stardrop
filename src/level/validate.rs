@@ -7,6 +7,7 @@
 use core::fmt;
 
 use super::data::{FilePoint, LEVEL_WIDTH, LevelFile};
+use crate::scoring::MAX_STARDUST;
 
 /// A level must be at least one screen tall: shorter levels can't fill the
 /// view (the camera would have nowhere valid to be).
@@ -72,6 +73,8 @@ pub enum LevelError {
     CheckpointsOutOfOrder(usize),
     /// The target time isn't positive.
     BadTargetTime,
+    /// More stardust than a run can track.
+    TooMuchStardust(usize),
 }
 
 impl fmt::Display for LevelError {
@@ -106,6 +109,10 @@ impl fmt::Display for LevelError {
                 Item::Checkpoint(*i)
             ),
             Self::BadTargetTime => write!(f, "target_time must be more than 0 seconds"),
+            Self::TooMuchStardust(count) => write!(
+                f,
+                "{count} stardust motes; a level can have at most {MAX_STARDUST}"
+            ),
         }
     }
 }
@@ -147,6 +154,9 @@ pub(super) fn check(file: &LevelFile) -> Result<(), LevelError> {
     inside(file, file.start, Item::Start)?;
     check_beacon(file)?;
     check_checkpoints(file)?;
+    if file.stardust.len() > MAX_STARDUST {
+        return Err(LevelError::TooMuchStardust(file.stardust.len()));
+    }
     for (i, &mote) in file.stardust.iter().enumerate() {
         inside(file, mote, Item::Stardust(i))?;
     }
@@ -346,6 +356,16 @@ mod tests {
             error_after("target_time: 20.0", "target_time: 0.0"),
             LevelError::BadTargetTime
         );
+    }
+
+    #[test]
+    fn too_much_stardust_is_rejected() {
+        let motes = vec!["(100, 1000)"; MAX_STARDUST + 1].join(", ");
+        let error = error_after(
+            "stardust: [(200, 1000), (1700, 3000)]",
+            &format!("stardust: [{motes}]"),
+        );
+        assert_eq!(error, LevelError::TooMuchStardust(MAX_STARDUST + 1));
     }
 
     #[test]

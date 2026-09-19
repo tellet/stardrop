@@ -6,6 +6,7 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 
 use crate::astronaut::Astronaut;
+use crate::collectibles::CurrentRun;
 use crate::physics::Motion;
 
 pub mod stats;
@@ -83,6 +84,7 @@ fn refresh_overlay(
     mut timer: Local<Option<Timer>>,
     diagnostics: Res<DiagnosticsStore>,
     astronaut: Query<&Motion, With<Astronaut>>,
+    run: Res<CurrentRun>,
     mut text: Single<&mut Text, With<OverlayText>>,
 ) {
     let timer =
@@ -117,4 +119,10 @@ fn refresh_overlay(
             velocity.x, velocity.y
         );
     }
+    let _ = write!(
+        buffer,
+        "\nrun  {:.1} s  stardust {}",
+        run.elapsed,
+        run.stardust.count()
+    );
 }

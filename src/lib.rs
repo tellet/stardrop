@@ -11,12 +11,16 @@ mod astronaut;
 mod background;
 mod camera;
 mod checkpoint;
+mod collectibles;
 pub mod collision;
 mod config;
 pub mod debug;
-mod level;
+pub mod level;
 pub mod physics;
 mod rng;
+pub mod scoring;
+#[cfg(test)]
+mod soak_tests;
 mod ui;
 
 /// Window size on first launch, in physical pixels. 16:9, the aspect ratio the game is designed for.
@@ -40,6 +44,7 @@ pub fn run() -> AppExit {
             physics::PhysicsPlugin,
             astronaut::AstronautPlugin,
             checkpoint::CheckpointPlugin,
+            collectibles::CollectiblesPlugin,
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,
