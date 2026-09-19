@@ -2,7 +2,7 @@
 //! when the file changes (with the `dev` feature), and spawning its scenery.
 //!
 //! World coordinates: x = 0 is the center, the top edge is y = 0 and the
-//! level extends downward to y = -height.
+//! level extends downward to y = -[`LEVEL_HEIGHT`].
 
 use bevy::asset::AssetLoadFailedEvent;
 use bevy::prelude::*;
@@ -13,35 +13,39 @@ mod loader;
 mod scenery;
 mod validate;
 
-pub use data::{LEVEL_WIDTH, Level};
+pub use data::{LEVEL_HEIGHT, LEVEL_WIDTH, Level};
 pub(crate) use goal::LevelCompleted;
 use loader::{LevelAsset, LevelLoader};
 use scenery::LevelEntity;
-pub(crate) use scenery::{CheckpointRing, MOTE_RADIUS, SceneryAssets, StardustMote};
+use scenery::SceneryAssets;
+pub(crate) use scenery::{MOTE_RADIUS, StardustMote};
 pub use validate::LevelError;
 
-use crate::physics::movement::Body;
-use crate::physics::{Motion, PhysicsSystems};
+use crate::physics::PhysicsSystems;
 
 /// The level loaded at startup, relative to `assets/`. Level selection arrives in Milestone 5.
 const LEVEL_PATH: &str = "levels/test.level.ron";
 
-/// Where the current level is in its lifecycle.
+/// Where the current attempt is. Physics only runs while `Falling`.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) enum LevelPhase {
     /// Waiting for the level file (or for a broken one to be fixed).
     #[default]
     Loading,
+    /// Floating at the start while the player studies the level. The first
+    /// left/right press starts the fall.
+    Ready,
     /// Playing.
     Falling,
-    /// Missed the beacon: fading back to the last checkpoint. Physics is paused.
-    Respawning,
-    /// Reached the beacon; physics is paused.
+    /// The attempt failed: fading back to the start.
+    Restarting,
+    /// Reached the beacon.
     Landed,
 }
 
 /// The validated level currently being played. Only exists once a valid
-/// level has loaded, so systems that need it run in [`LevelPhase::Falling`].
+/// level has loaded: systems that need it are gated by phase or by
+/// `resource_exists`.
 #[derive(Resource, Debug, Deref)]
 pub(crate) struct ActiveLevel(pub(crate) Level);
 
@@ -92,7 +96,7 @@ fn add_play_rules(app: &mut App) {
 /// Ordering label for rules that react to where physics moved the astronaut.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum LevelSystems {
-    /// Landing, checkpoints, falling out (in `FixedUpdate`, after physics).
+    /// Landing, stardust, falling out (in `FixedUpdate`, after physics).
     Rules,
 }
 
@@ -121,7 +125,6 @@ fn apply_level_changes(
     levels: Res<Assets<LevelAsset>>,
     scenery: Res<SceneryAssets>,
     old_scenery: Query<Entity, With<LevelEntity>>,
-    mut bodies: Query<&mut Motion>,
     mut problem: ResMut<LevelProblem>,
     phase: Res<State<LevelPhase>>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
@@ -148,15 +151,11 @@ fn apply_level_changes(
                 commands.entity(entity).despawn();
             }
             scenery::spawn(&mut commands, &scenery, level);
-            // Keep the astronaut where it is, unless the edit left it outside the level.
-            for mut motion in &mut bodies {
-                if !level.contains(motion.body().position) {
-                    motion.teleport(Body::at_rest(level.start));
-                }
-            }
+            // Replacing the level also restarts the attempt (see `attempt.rs`):
+            // with the whole level on screen, a fresh start shows the edit best.
             commands.insert_resource(ActiveLevel(level.clone()));
             if *phase.get() == LevelPhase::Loading {
-                next_phase.set(LevelPhase::Falling);
+                next_phase.set(LevelPhase::Ready);
             }
             info!("Loaded level \"{}\"", level.name);
         }
@@ -187,17 +186,23 @@ pub(crate) mod tests {
     use super::*;
     use crate::astronaut::Astronaut;
     use crate::config::GameConfig;
-    use crate::physics::PhysicsPlugin;
+    use crate::physics::{Motion, PhysicsPlugin};
 
     /// A minimal app running the real level rules and physics on
     /// [`Level::for_tests`], already falling, with the astronaut at `start`.
+    /// (It skips `Ready`, so tests don't need to press a key to drop.)
     /// Each `update()` advances `frame` seconds of game time.
     pub(crate) fn play_app(start: Vec2, frame: Duration) -> App {
+        play_app_with(Level::for_tests(), start, frame)
+    }
+
+    /// Like [`play_app`], on a level of the test's choosing.
+    pub(crate) fn play_app_with(level: Level, start: Vec2, frame: Duration) -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, StatesPlugin))
             .add_plugins((crate::config::ConfigPlugin, PhysicsPlugin))
             .insert_resource(TimeUpdateStrategy::ManualDuration(frame))
-            .insert_resource(ActiveLevel(Level::for_tests()));
+            .insert_resource(ActiveLevel(level));
         add_play_rules(&mut app);
         app.insert_state(LevelPhase::Falling);
         app.world_mut()

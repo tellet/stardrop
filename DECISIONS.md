@@ -218,6 +218,19 @@ What we decided, why, and what we considered instead. Newest at the bottom.
   - the level format loses `height` and `checkpoints`
   - `STARDROP.md` is updated, with a new Milestone 2.5
 
+## M2.5-2 · Implementing portrait puzzle levels
+
+- **Camera:** fixed at the playfield's center with `ScalingMode::AutoMin { 1080, 1920 }`, so the whole playfield is always visible. Dimmed veils and faint edge lines mark the walls beside it.
+- **Background:** dot layers drift upward on their own (300 u/s × layer depth factor). There's no camera to follow, so only 3 layer transforms change per frame.
+- **`LevelPhase`:** `Loading → Ready → Falling → Restarting | Landed`.
+  - In `Ready`, the physics body itself bobs (a sine wave, 6 units, 2.4 s period), so the fall starts exactly where the astronaut is drawn.
+  - The first non-zero `AirControl` switches to `Falling`.
+  - The bob's clock lives in a resource, reset on entering `Ready` and on every restart. Messages last only about two frames, too short to carry the reset through a 0.7 s fade.
+- **Attempts:** failure, R and a level reload all end in `restart()`, which moves the astronaut to the start and sends `AttemptRestarted`. Collectibles reset on that one message.
+  - Reload restarts skip the first load (`is_added`): inserting the level must not count as a reload. Tests caught this.
+- **Run time** counts only while falling (`still_falling`), so studying the level is free.
+- **Text:** plain words (no arrows or "·"), because Bevy's built-in font is a small subset. Real fonts come in M7.
+
 ---
 
 ## Baseline measurements (M0)

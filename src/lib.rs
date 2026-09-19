@@ -8,9 +8,9 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
 mod astronaut;
+mod attempt;
 mod background;
 mod camera;
-mod checkpoint;
 mod collectibles;
 pub mod collision;
 mod config;
@@ -43,7 +43,7 @@ pub fn run() -> AppExit {
             level::LevelPlugin,
             physics::PhysicsPlugin,
             astronaut::AstronautPlugin,
-            checkpoint::CheckpointPlugin,
+            attempt::AttemptPlugin,
             collectibles::CollectiblesPlugin,
             camera::CameraPlugin,
             background::BackgroundPlugin,

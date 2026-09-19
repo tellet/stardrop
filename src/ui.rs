@@ -11,6 +11,8 @@ const PROBLEM_COLOR: Color = Color::srgb(1.0, 0.72, 0.62);
 const PROBLEM_FONT_SIZE: f32 = 22.0;
 
 const COMPLETE_COLOR: Color = Color::srgb(0.85, 0.97, 1.0);
+const HINT_COLOR: Color = Color::srgba(0.85, 0.85, 1.0, 0.7);
+const HINT_FONT_SIZE: f32 = 26.0;
 const COMPLETE_FONT_SIZE: f32 = 40.0;
 
 /// The text node that shows level problems.
@@ -28,6 +30,7 @@ impl Plugin for UiPlugin {
                 // Only when the problem changes, never every frame.
                 show_problem.run_if(resource_changed::<LevelProblem>),
             )
+            .add_systems(OnEnter(LevelPhase::Ready), spawn_drop_hint)
             .add_systems(OnEnter(LevelPhase::Landed), spawn_complete_text);
     }
 }
@@ -69,7 +72,7 @@ fn show_problem(
 fn spawn_complete_text(mut commands: Commands, run: Res<CurrentRun>, level: Res<ActiveLevel>) {
     // Built once per landing, so the formatting allocation doesn't matter.
     let summary = format!(
-        "Level complete\ntime {:.1} s  ·  stardust {}/{}",
+        "Level complete\ntime {:.1} s  -  stardust {}/{}",
         run.elapsed,
         run.stardust.count(),
         level.stardust.len()
@@ -83,6 +86,25 @@ fn spawn_complete_text(mut commands: Commands, run: Res<CurrentRun>, level: Res<
         Node {
             position_type: PositionType::Absolute,
             top: Val::Percent(30.0),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+    ));
+}
+
+/// "How to start" hint while the astronaut waits at the start. Removed as soon
+/// as the fall begins. Plain words: Bevy's built-in font has no arrow symbols.
+fn spawn_drop_hint(mut commands: Commands) {
+    commands.spawn((
+        DespawnOnExit(LevelPhase::Ready),
+        Text::new("press left or right to drop"),
+        TextFont::from_font_size(HINT_FONT_SIZE),
+        TextColor(HINT_COLOR),
+        TextLayout::justify(Justify::Center),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Percent(12.0),
             width: Val::Percent(100.0),
             justify_content: JustifyContent::Center,
             ..default()

@@ -16,6 +16,13 @@ const ASTRONAUT_DEPTH: f32 = 10.0;
 /// common default: worn sticks rarely rest exactly at center.
 const STICK_DEAD_ZONE: f32 = 0.15;
 
+/// Ordering labels for systems that depend on this frame's input.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum AstronautSystems {
+    /// Reads keyboard and gamepad into `AirControl`.
+    Input,
+}
+
 /// Marks the player's astronaut.
 #[derive(Component)]
 pub(crate) struct Astronaut;
@@ -31,7 +38,9 @@ impl Plugin for AstronautPlugin {
         app.add_systems(OnExit(LevelPhase::Loading), spawn_astronaut)
             .add_systems(
                 Update,
-                (configure_stick_dead_zone, read_air_control).chain(),
+                (configure_stick_dead_zone, read_air_control)
+                    .chain()
+                    .in_set(AstronautSystems::Input),
             );
     }
 }

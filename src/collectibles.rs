@@ -1,22 +1,21 @@
 //! Stardust pickup and run tracking.
 //!
-//! Collected stardust stays collected through checkpoint respawns and comes
-//! back on a retry (R) or when the level file changes. The run time counts in
-//! fixed physics steps, so it's exact and the same at any frame rate.
+//! Everything here belongs to one attempt: a fresh attempt (after a failure,
+//! a retry or a level reload) brings the stardust back and resets the time.
+//! The time only counts while falling, in fixed physics steps, so it's exact
+//! and the same at any frame rate.
 
 use bevy::prelude::*;
 
 use crate::astronaut::Astronaut;
-use crate::checkpoint::RunRestarted;
+use crate::attempt::AttemptRestarted;
 use crate::collision::circles_overlap;
 use crate::config::GameConfig;
-use crate::level::{
-    ActiveLevel, LevelPhase, LevelSystems, MOTE_RADIUS, StardustMote, still_falling,
-};
+use crate::level::{ActiveLevel, LevelSystems, MOTE_RADIUS, StardustMote, still_falling};
 use crate::physics::Motion;
 use crate::scoring::RunStats;
 
-/// The current run's time and stardust.
+/// The current attempt's time and stardust.
 #[derive(Resource, Debug, Default, Clone, Copy, Deref, DerefMut)]
 pub(crate) struct CurrentRun(pub RunStats);
 
@@ -41,9 +40,7 @@ impl Plugin for CollectiblesPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    count_run_time.run_if(
-                        in_state(LevelPhase::Falling).or_else(in_state(LevelPhase::Respawning)),
-                    ),
+                    count_run_time.run_if(still_falling),
                     collect_stardust
                         .in_set(LevelSystems::Rules)
                         .run_if(still_falling),
@@ -52,10 +49,7 @@ impl Plugin for CollectiblesPlugin {
             .add_systems(
                 Update,
                 (
-                    start_new_run.run_if(
-                        on_message::<RunRestarted>
-                            .or_else(resource_exists_and_changed::<ActiveLevel>),
-                    ),
+                    start_new_run.run_if(on_message::<AttemptRestarted>),
                     show_motes,
                 )
                     .chain(),
@@ -88,7 +82,7 @@ fn collect_stardust(
     }
 }
 
-/// A retry, or a new version of the level file, starts a fresh run.
+/// A fresh attempt starts a fresh run.
 fn start_new_run(mut run: ResMut<CurrentRun>) {
     *run = CurrentRun::default();
 }
@@ -113,18 +107,17 @@ mod tests {
     use core::time::Duration;
 
     use super::*;
-    use crate::checkpoint::CheckpointPlugin;
-    use crate::level::Level;
-    use crate::level::tests::play_app;
+    use crate::attempt::AttemptPlugin;
+    use crate::level::tests::play_app_with;
+    use crate::level::{Level, LevelPhase};
 
     fn app_with_stardust(start: Vec2, frame: Duration) -> App {
-        let mut app = play_app(start, frame);
-        app.init_resource::<ButtonInput<KeyCode>>()
-            .add_plugins((CheckpointPlugin, CollectiblesPlugin));
         // A mote straight below the start, on the astronaut's path.
         let mut level = Level::for_tests();
-        level.stardust = vec![start - Vec2::new(0.0, 400.0), Vec2::new(900.0, -9000.0)];
-        app.insert_resource(ActiveLevel(level));
+        level.stardust = vec![start - Vec2::new(0.0, 400.0), Vec2::new(400.0, -1500.0)];
+        let mut app = play_app_with(level, start, frame);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .add_plugins((AttemptPlugin, CollectiblesPlugin));
         app
     }
 
@@ -140,7 +133,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin))
             .init_state::<LevelPhase>()
             .init_resource::<ButtonInput<KeyCode>>()
-            .add_plugins((CheckpointPlugin, CollectiblesPlugin));
+            .add_plugins((AttemptPlugin, CollectiblesPlugin));
         for _ in 0..3 {
             app.update();
         }
@@ -148,7 +141,7 @@ mod tests {
 
     #[test]
     fn falling_through_a_mote_collects_it_once() {
-        let mut app = app_with_stardust(Vec2::new(0.0, -300.0), Duration::from_millis(16));
+        let mut app = app_with_stardust(Vec2::new(0.0, -200.0), Duration::from_millis(16));
         for _ in 0..120 {
             app.update();
         }
@@ -159,7 +152,7 @@ mod tests {
 
     #[test]
     fn run_time_is_exact_in_physics_steps() {
-        let mut app = app_with_stardust(Vec2::new(0.0, -300.0), Duration::from_millis(50));
+        let mut app = app_with_stardust(Vec2::new(0.0, -200.0), Duration::from_millis(50));
         for _ in 0..20 {
             app.update();
         }
@@ -178,7 +171,7 @@ mod tests {
 
     #[test]
     fn retry_starts_a_new_run() {
-        let mut app = app_with_stardust(Vec2::new(0.0, -300.0), Duration::from_millis(16));
+        let mut app = app_with_stardust(Vec2::new(0.0, -200.0), Duration::from_millis(16));
         for _ in 0..120 {
             app.update();
         }

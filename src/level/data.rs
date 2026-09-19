@@ -4,10 +4,10 @@
 //! with deliberately broken level text, and `cargo test` checks every shipped
 //! level. See `docs/LEVELS.md` for the format with an annotated example.
 //!
-//! File coordinates are designer-friendly: `x` from the level's left edge
-//! (0 to [`LEVEL_WIDTH`]) and `depth` downward from the top. [`Level`] converts
-//! them to world coordinates: x = 0 at the center, y = 0 at the top, y
-//! negative going down.
+//! Every level is one portrait screen, [`LEVEL_WIDTH`] × [`LEVEL_HEIGHT`].
+//! File coordinates are designer-friendly: `x` from the left edge and `depth`
+//! downward from the top. [`Level`] converts them to world coordinates: x = 0
+//! at the center, y = 0 at the top, y negative going down.
 
 use bevy::math::Vec2;
 use serde::Deserialize;
@@ -15,8 +15,10 @@ use serde::Deserialize;
 use super::validate::{self, LevelError};
 use crate::physics::movement::Walls;
 
-/// Every level is exactly this wide, in world units, and always fully visible.
-pub const LEVEL_WIDTH: f32 = 1920.0;
+/// Every level is exactly this wide, in world units.
+pub const LEVEL_WIDTH: f32 = 1080.0;
+/// Every level is exactly this tall: one portrait screen, always fully visible.
+pub const LEVEL_HEIGHT: f32 = 1920.0;
 
 /// A position in a level file: `(x, depth)`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
@@ -41,12 +43,9 @@ pub(super) struct FileBeacon {
 #[serde(deny_unknown_fields)]
 pub(super) struct LevelFile {
     pub name: String,
-    pub height: f32,
     pub theme: Theme,
     pub start: FilePoint,
     pub beacon: FileBeacon,
-    #[serde(default)]
-    pub checkpoints: Vec<FilePoint>,
     #[serde(default)]
     pub stardust: Vec<FilePoint>,
     pub target_time: f32,
@@ -93,16 +92,12 @@ pub struct Beacon {
 pub struct Level {
     /// Shown when the level starts.
     pub name: String,
-    /// World units from the top (y = 0) to the bottom (y = -height).
-    pub height: f32,
     /// Palette and scenery.
     pub theme: Theme,
     /// Where the astronaut starts, at rest.
     pub start: Vec2,
     /// The goal at the bottom.
     pub beacon: Beacon,
-    /// Checkpoint ring centers, top to bottom. Passing a ring's height activates it.
-    pub checkpoints: Vec<Vec2>,
     /// Stardust mote positions.
     pub stardust: Vec<Vec2>,
     /// Seconds for the "fast run" star.
@@ -124,10 +119,10 @@ impl Level {
         Ok(Self::from_file(file))
     }
 
-    /// Lowest y of the level.
+    /// Lowest y of the level (the same for every level).
     #[must_use]
     pub fn bottom(&self) -> f32 {
-        -self.height
+        -LEVEL_HEIGHT
     }
 
     /// Sideways limits for the center of a circle of `radius`.
@@ -140,12 +135,6 @@ impl Level {
         }
     }
 
-    /// Whether `point` (world coordinates) is within the level's edges.
-    #[must_use]
-    pub fn contains(&self, point: Vec2) -> bool {
-        point.x.abs() <= LEVEL_WIDTH / 2.0 && (self.bottom()..=0.0).contains(&point.y)
-    }
-
     /// Converts already-validated file data to world coordinates.
     fn from_file(file: LevelFile) -> Self {
         Self {
@@ -154,10 +143,8 @@ impl Level {
                 center: to_world(file.beacon.center),
                 size: Vec2::new(file.beacon.size.0, file.beacon.size.1),
             },
-            checkpoints: file.checkpoints.into_iter().map(to_world).collect(),
             stardust: file.stardust.into_iter().map(to_world).collect(),
             name: file.name,
-            height: file.height,
             theme: file.theme,
             target_time: file.target_time,
         }
@@ -166,16 +153,15 @@ impl Level {
 
 #[cfg(test)]
 impl Level {
-    /// A plain ten-screen level for tests elsewhere in the crate.
+    /// A plain level for tests elsewhere in the crate: start at the top
+    /// center, beacon straight below at the bottom.
     pub(crate) fn for_tests() -> Self {
         let text = r#"(
             name: "Tests",
-            height: 10800,
             theme: DeepSpace,
-            start: (960, 300),
-            beacon: (center: (960, 10770), size: (360, 40)),
-            checkpoints: [(960, 3600), (700, 7200)],
-            target_time: 30.0,
+            start: (540, 200),
+            beacon: (center: (540, 1880), size: (300, 40)),
+            target_time: 8.0,
         )"#;
         match Self::parse(text) {
             Ok(level) => level,
@@ -195,13 +181,11 @@ mod tests {
 
     const VALID: &str = r#"(
         name: "Test",
-        height: 5400,
         theme: DeepSpace,
-        start: (960, 300),
-        beacon: (center: (960, 5380), size: (320, 40)),
-        checkpoints: [(960, 2000), (500, 4000)],
+        start: (540, 200),
+        beacon: (center: (540, 1880), size: (300, 40)),
         stardust: [(200, 1000)],
-        target_time: 20.0,
+        target_time: 8.0,
     )"#;
 
     #[test]
@@ -211,19 +195,17 @@ mod tests {
     )]
     fn converts_file_coordinates_to_world() {
         let level = Level::parse(VALID).unwrap();
-        assert_eq!(level.start, Vec2::new(0.0, -300.0));
-        assert_eq!(level.checkpoints[1], Vec2::new(-460.0, -4000.0));
-        assert_eq!(level.beacon.center, Vec2::new(0.0, -5380.0));
-        assert_eq!(level.bottom(), -5400.0);
+        assert_eq!(level.start, Vec2::new(0.0, -200.0));
+        assert_eq!(level.stardust[0], Vec2::new(-340.0, -1000.0));
+        assert_eq!(level.beacon.center, Vec2::new(0.0, -1880.0));
+        assert_eq!(level.bottom(), -1920.0);
     }
 
     #[test]
-    fn optional_lists_may_be_left_out() {
-        let text = VALID
-            .replace("checkpoints: [(960, 2000), (500, 4000)],", "")
-            .replace("stardust: [(200, 1000)],", "");
+    fn stardust_may_be_left_out() {
+        let text = VALID.replace("stardust: [(200, 1000)],", "");
         let level = Level::parse(&text).unwrap();
-        assert!(level.checkpoints.is_empty() && level.stardust.is_empty());
+        assert!(level.stardust.is_empty());
     }
 
     /// `cargo test` loads and validates every shipped level (Section 4).

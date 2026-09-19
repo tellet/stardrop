@@ -1,61 +1,36 @@
-//! The game camera: 2D, HDR with bloom, following the fall.
+//! The game camera: 2D, HDR with bloom, fixed on the portrait playfield.
 //!
-//! The camera only moves vertically. It keeps the astronaut in the upper
-//! third of the screen (plus a little extra look-ahead at speed) so the player
-//! sees what's coming, and the full level width is always visible.
+//! Every level is one screen, so the camera never moves. It always shows the
+//! whole playfield, centered; windows of other shapes show more scenery
+//! around it and never cut gameplay off.
 
 use bevy::camera::{Hdr, ScalingMode};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
-use crate::astronaut::Astronaut;
-use crate::checkpoint::{Respawn, RunRestarted};
-use crate::level::{ActiveLevel, LEVEL_WIDTH, Level};
-use crate::physics::Motion;
+use crate::level::{LEVEL_HEIGHT, LEVEL_WIDTH};
 
-/// Size of the playfield in world units. The camera always shows at least this
-/// much, so gameplay is never cut off; other aspect ratios reveal extra background.
-pub(crate) const DESIGN_SIZE: Vec2 = Vec2::new(LEVEL_WIDTH, 1080.0);
+/// The playfield, in world units: what must always be visible.
+pub(crate) const PLAYFIELD: Vec2 = Vec2::new(LEVEL_WIDTH, LEVEL_HEIGHT);
+
+/// The playfield's center in world coordinates (the top edge is y = 0).
+pub(crate) const PLAYFIELD_CENTER: Vec2 = Vec2::new(0.0, -LEVEL_HEIGHT / 2.0);
 
 /// Bloom strength. Bevy's `NATURAL` preset (0.15) is too subtle for our glowing
 /// look; tuned per level from Milestone 7.
 const BLOOM_INTENSITY: f32 = 0.3;
 
-/// The astronaut sits this far above the screen center: center minus one
-/// sixth of the height puts them on the upper-third line.
-const UPPER_THIRD_OFFSET: f32 = DESIGN_SIZE.y / 6.0;
-/// Extra look-ahead per unit of fall speed, in seconds: at terminal velocity
-/// (450 units/s) the view reaches ~110 units further down.
-const LOOK_AHEAD_SECONDS: f32 = 0.25;
-/// How quickly the camera catches up (exponential decay rate, 1/s). Higher is
-/// snappier; ~5 feels calm without ever losing the astronaut.
-const FOLLOW_RATE: f32 = 5.0;
-/// Jumps larger than this cut instead of pan (e.g. after a level edit).
-const SNAP_DISTANCE: f32 = DESIGN_SIZE.y;
-
 /// Marks the one gameplay camera.
 #[derive(Component)]
 pub(crate) struct MainCamera;
 
-/// Ordering labels for systems that depend on the camera's position.
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) enum CameraSystems {
-    /// Moves the camera for this frame.
-    Follow,
-}
-
-/// Spawns the main camera and makes it follow the astronaut.
+/// Spawns the fixed main camera.
 pub(crate) struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera).add_systems(
-            Update,
-            follow_astronaut
-                .in_set(CameraSystems::Follow)
-                .run_if(resource_exists::<ActiveLevel>),
-        );
+        app.add_systems(Startup, spawn_camera);
     }
 }
 
@@ -63,8 +38,7 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         MainCamera,
         Camera2d,
-        // Looking at the top screen of the level; every level starts there.
-        Transform::from_xyz(0.0, -DESIGN_SIZE.y / 2.0, 0.0),
+        Transform::from_translation(PLAYFIELD_CENTER.extend(0.0)),
         // Render into a high-dynamic-range texture so colors can be brighter
         // than "white"; bloom turns that extra brightness into a soft glow.
         Hdr,
@@ -76,83 +50,13 @@ fn spawn_camera(mut commands: Commands) {
             ..Bloom::NATURAL
         },
         Projection::Orthographic(OrthographicProjection {
+            // Always show at least the whole playfield; extra space on the
+            // longer side becomes scenery.
             scaling_mode: ScalingMode::AutoMin {
-                min_width: DESIGN_SIZE.x,
-                min_height: DESIGN_SIZE.y,
+                min_width: PLAYFIELD.x,
+                min_height: PLAYFIELD.y,
             },
             ..OrthographicProjection::default_2d()
         }),
     ));
-}
-
-/// Where the camera center should be for an astronaut at `astronaut_y` falling
-/// at `fall_speed` (positive = downward), kept inside the level.
-fn camera_target(astronaut_y: f32, fall_speed: f32, level: &Level) -> f32 {
-    let look_ahead = fall_speed.max(0.0) * LOOK_AHEAD_SECONDS;
-    let target = astronaut_y - UPPER_THIRD_OFFSET - look_ahead;
-    let half_view = DESIGN_SIZE.y / 2.0;
-    // Don't show sky above the top edge or below the bottom edge. Validation
-    // guarantees levels are at least one screen tall, so min <= max here
-    // (`clamp` would panic otherwise).
-    target.clamp(level.bottom() + half_view, -half_view)
-}
-
-/// Runs every frame (after physics interpolation), using the *drawn* astronaut
-/// position so the camera moves as smoothly as the astronaut does. Cuts
-/// straight to the astronaut after a respawn or retry.
-fn follow_astronaut(
-    time: Res<Time>,
-    level: Res<ActiveLevel>,
-    mut respawns: MessageReader<Respawn>,
-    mut restarts: MessageReader<RunRestarted>,
-    astronaut: Single<(&Transform, &Motion), (With<Astronaut>, Without<MainCamera>)>,
-    mut camera: Single<&mut Transform, With<MainCamera>>,
-) {
-    // Read both readers in full (`count` consumes them), not `||`, which
-    // would skip the second one and leave its messages for later frames.
-    let teleported = respawns.read().count() + restarts.read().count() > 0;
-    let (astronaut_transform, motion) = *astronaut;
-    let target = camera_target(
-        astronaut_transform.translation.y,
-        -motion.body().velocity.y,
-        &level,
-    );
-    let y = &mut camera.translation.y;
-    if teleported || (target - *y).abs() > SNAP_DISTANCE {
-        *y = target;
-    } else {
-        // Frame-rate independent smoothing: the same feel at 60 or 144 Hz.
-        y.smooth_nudge(&target, FOLLOW_RATE, time.delta_secs());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn astronaut_sits_on_the_upper_third_line_at_rest() {
-        let level = Level::for_tests();
-        let astronaut_y = -5000.0;
-        let center = camera_target(astronaut_y, 0.0, &level);
-        let screen_top = center + DESIGN_SIZE.y / 2.0;
-        let from_top = screen_top - astronaut_y;
-        assert!((from_top - DESIGN_SIZE.y / 3.0).abs() < 1e-3);
-    }
-
-    #[test]
-    fn falling_faster_shows_more_below() {
-        let level = Level::for_tests();
-        let slow = camera_target(-5000.0, 0.0, &level);
-        let fast = camera_target(-5000.0, 450.0, &level);
-        assert!(fast < slow);
-    }
-
-    #[test]
-    fn view_stays_inside_the_level() {
-        let level = Level::for_tests();
-        let half = DESIGN_SIZE.y / 2.0;
-        assert!(camera_target(0.0, 0.0, &level) <= -half);
-        assert!(camera_target(level.bottom() - 500.0, 450.0, &level) >= level.bottom() + half);
-    }
 }
