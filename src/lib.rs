@@ -15,6 +15,7 @@ pub mod debug;
 mod level;
 pub mod physics;
 mod rng;
+mod ui;
 
 /// Window size on first launch, in physical pixels. 16:9, the aspect ratio the game is designed for.
 const INITIAL_WINDOW_SIZE: (u32, u32) = (1280, 720);
@@ -39,6 +40,7 @@ pub fn run() -> AppExit {
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,
+            ui::UiPlugin,
         ))
         .run()
 }

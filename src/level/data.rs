@@ -13,6 +13,7 @@ use bevy::math::Vec2;
 use serde::Deserialize;
 
 use super::validate::{self, LevelError};
+use crate::physics::movement::Walls;
 
 /// Every level is exactly this wide, in world units, and always fully visible.
 pub const LEVEL_WIDTH: f32 = 1920.0;
@@ -129,6 +130,22 @@ impl Level {
         -self.height
     }
 
+    /// Sideways limits for the center of a circle of `radius`.
+    #[must_use]
+    pub fn walls(&self, radius: f32) -> Walls {
+        let half = LEVEL_WIDTH / 2.0 - radius;
+        Walls {
+            left: -half,
+            right: half,
+        }
+    }
+
+    /// Whether `point` (world coordinates) is within the level's edges.
+    #[must_use]
+    pub fn contains(&self, point: Vec2) -> bool {
+        point.x.abs() <= LEVEL_WIDTH / 2.0 && (self.bottom()..=0.0).contains(&point.y)
+    }
+
     /// Converts already-validated file data to world coordinates.
     fn from_file(file: LevelFile) -> Self {
         Self {
@@ -143,6 +160,25 @@ impl Level {
             height: file.height,
             theme: file.theme,
             target_time: file.target_time,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Level {
+    /// A plain ten-screen level for tests elsewhere in the crate.
+    pub(crate) fn for_tests() -> Self {
+        let text = r#"(
+            name: "Tests",
+            height: 10800,
+            theme: DeepSpace,
+            start: (960, 300),
+            beacon: (center: (960, 10770), size: (360, 40)),
+            target_time: 30.0,
+        )"#;
+        match Self::parse(text) {
+            Ok(level) => level,
+            Err(error) => panic!("test level is invalid: {error}"),
         }
     }
 }

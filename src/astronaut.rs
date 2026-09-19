@@ -4,7 +4,7 @@ use bevy::input::gamepad::{AxisSettings, GamepadSettings};
 use bevy::prelude::*;
 
 use crate::config::GameConfig;
-use crate::level::LevelBounds;
+use crate::level::{ActiveLevel, LevelPhase};
 use crate::physics::movement::AirInput;
 use crate::physics::{AirControl, Motion};
 
@@ -25,10 +25,12 @@ pub(crate) struct AstronautPlugin;
 
 impl Plugin for AstronautPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_astronaut).add_systems(
-            Update,
-            (configure_stick_dead_zone, read_air_control).chain(),
-        );
+        // The astronaut appears once the level has loaded (it needs the start point).
+        app.add_systems(OnEnter(LevelPhase::Falling), spawn_astronaut)
+            .add_systems(
+                Update,
+                (configure_stick_dead_zone, read_air_control).chain(),
+            );
     }
 }
 
@@ -37,7 +39,7 @@ fn spawn_astronaut(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     config: Res<GameConfig>,
-    level: Res<LevelBounds>,
+    level: Res<ActiveLevel>,
 ) {
     commands.spawn((
         Astronaut,

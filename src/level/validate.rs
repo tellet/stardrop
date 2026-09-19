@@ -49,6 +49,8 @@ pub enum LevelError {
         /// What the parser expected or found.
         message: String,
     },
+    /// The file isn't UTF-8 text.
+    NotText,
     /// The level has no name.
     EmptyName,
     /// A number is `NaN` or infinite.
@@ -80,6 +82,7 @@ impl fmt::Display for LevelError {
                 column,
                 message,
             } => write!(f, "line {line}, column {column}: {message}"),
+            Self::NotText => write!(f, "the file isn't plain text (UTF-8)"),
             Self::EmptyName => write!(f, "the level needs a name"),
             Self::NotANumber(field) => write!(f, "{field} must be a normal number"),
             Self::TooShort { height } => write!(

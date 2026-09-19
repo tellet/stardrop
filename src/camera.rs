@@ -10,12 +10,12 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
 use crate::astronaut::Astronaut;
-use crate::level::LevelBounds;
+use crate::level::{ActiveLevel, LEVEL_WIDTH, Level};
 use crate::physics::Motion;
 
 /// Size of the playfield in world units. The camera always shows at least this
 /// much, so gameplay is never cut off; other aspect ratios reveal extra background.
-pub(crate) const DESIGN_SIZE: Vec2 = Vec2::new(1920.0, 1080.0);
+pub(crate) const DESIGN_SIZE: Vec2 = Vec2::new(LEVEL_WIDTH, 1080.0);
 
 /// Bloom strength. Bevy's `NATURAL` preset (0.15) is too subtle for our glowing
 /// look; tuned per level from Milestone 7.
@@ -49,17 +49,21 @@ pub(crate) struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera)
-            .add_systems(Update, follow_astronaut.in_set(CameraSystems::Follow));
+        app.add_systems(Startup, spawn_camera).add_systems(
+            Update,
+            follow_astronaut
+                .in_set(CameraSystems::Follow)
+                .run_if(resource_exists::<ActiveLevel>),
+        );
     }
 }
 
-fn spawn_camera(mut commands: Commands, level: Res<LevelBounds>) {
-    let start_y = camera_target(level.start.y, 0.0, &level);
+fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         MainCamera,
         Camera2d,
-        Transform::from_xyz(0.0, start_y, 0.0),
+        // Looking at the top screen of the level; every level starts there.
+        Transform::from_xyz(0.0, -DESIGN_SIZE.y / 2.0, 0.0),
         // Render into a high-dynamic-range texture so colors can be brighter
         // than "white"; bloom turns that extra brightness into a soft glow.
         Hdr,
@@ -82,11 +86,13 @@ fn spawn_camera(mut commands: Commands, level: Res<LevelBounds>) {
 
 /// Where the camera center should be for an astronaut at `astronaut_y` falling
 /// at `fall_speed` (positive = downward), kept inside the level.
-fn camera_target(astronaut_y: f32, fall_speed: f32, level: &LevelBounds) -> f32 {
+fn camera_target(astronaut_y: f32, fall_speed: f32, level: &Level) -> f32 {
     let look_ahead = fall_speed.max(0.0) * LOOK_AHEAD_SECONDS;
     let target = astronaut_y - UPPER_THIRD_OFFSET - look_ahead;
     let half_view = DESIGN_SIZE.y / 2.0;
-    // Don't show sky above the top edge or below the bottom edge.
+    // Don't show sky above the top edge or below the bottom edge. Validation
+    // guarantees levels are at least one screen tall, so min <= max here
+    // (`clamp` would panic otherwise).
     target.clamp(level.bottom() + half_view, -half_view)
 }
 
@@ -94,7 +100,7 @@ fn camera_target(astronaut_y: f32, fall_speed: f32, level: &LevelBounds) -> f32 
 /// position so the camera moves as smoothly as the astronaut does.
 fn follow_astronaut(
     time: Res<Time>,
-    level: Res<LevelBounds>,
+    level: Res<ActiveLevel>,
     astronaut: Single<(&Transform, &Motion), (With<Astronaut>, Without<MainCamera>)>,
     mut camera: Single<&mut Transform, With<MainCamera>>,
 ) {
@@ -117,16 +123,11 @@ fn follow_astronaut(
 mod tests {
     use super::*;
 
-    const LEVEL: LevelBounds = LevelBounds {
-        width: DESIGN_SIZE.x,
-        height: DESIGN_SIZE.y * 10.0,
-        start: Vec2::ZERO,
-    };
-
     #[test]
     fn astronaut_sits_on_the_upper_third_line_at_rest() {
+        let level = Level::for_tests();
         let astronaut_y = -5000.0;
-        let center = camera_target(astronaut_y, 0.0, &LEVEL);
+        let center = camera_target(astronaut_y, 0.0, &level);
         let screen_top = center + DESIGN_SIZE.y / 2.0;
         let from_top = screen_top - astronaut_y;
         assert!((from_top - DESIGN_SIZE.y / 3.0).abs() < 1e-3);
@@ -134,15 +135,17 @@ mod tests {
 
     #[test]
     fn falling_faster_shows_more_below() {
-        let slow = camera_target(-5000.0, 0.0, &LEVEL);
-        let fast = camera_target(-5000.0, 450.0, &LEVEL);
+        let level = Level::for_tests();
+        let slow = camera_target(-5000.0, 0.0, &level);
+        let fast = camera_target(-5000.0, 450.0, &level);
         assert!(fast < slow);
     }
 
     #[test]
     fn view_stays_inside_the_level() {
+        let level = Level::for_tests();
         let half = DESIGN_SIZE.y / 2.0;
-        assert!(camera_target(0.0, 0.0, &LEVEL) <= -half);
-        assert!(camera_target(LEVEL.bottom() - 500.0, 450.0, &LEVEL) >= LEVEL.bottom() + half);
+        assert!(camera_target(0.0, 0.0, &level) <= -half);
+        assert!(camera_target(level.bottom() - 500.0, 450.0, &level) >= level.bottom() + half);
     }
 }

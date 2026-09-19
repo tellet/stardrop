@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 
 use crate::config::GameConfig;
-use crate::level::LevelBounds;
+use crate::level::ActiveLevel;
 
 pub mod movement;
 
@@ -76,7 +76,7 @@ impl Plugin for PhysicsPlugin {
 fn step_bodies(
     time: Res<Time>,
     config: Res<GameConfig>,
-    level: Res<LevelBounds>,
+    level: Res<ActiveLevel>,
     control: Res<AirControl>,
     mut bodies: Query<&mut Motion>,
 ) {
@@ -105,7 +105,7 @@ mod tests {
     use bevy::time::TimeUpdateStrategy;
 
     use super::*;
-    use crate::level::LevelPlugin;
+    use crate::level::Level;
     use movement::Walls;
 
     /// Feeds the recorded inputs to physics, one per fixed step.
@@ -135,20 +135,16 @@ mod tests {
     /// Runs the real plugin at a given render frame rate for `seconds`.
     fn simulate_at_fps(fps: f64, seconds: f64) -> Outcome {
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            crate::config::ConfigPlugin,
-            LevelPlugin,
-            PhysicsPlugin,
-        ))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
-            1.0 / fps,
-        )))
-        .insert_resource(Script {
-            inputs: movement::tests::recorded_inputs(),
-            ticks: 0,
-        })
-        .add_systems(FixedUpdate, play_script.before(PhysicsSystems::Step));
+        app.add_plugins((MinimalPlugins, crate::config::ConfigPlugin, PhysicsPlugin))
+            .insert_resource(ActiveLevel(Level::for_tests()))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / fps,
+            )))
+            .insert_resource(Script {
+                inputs: movement::tests::recorded_inputs(),
+                ticks: 0,
+            })
+            .add_systems(FixedUpdate, play_script.before(PhysicsSystems::Step));
         app.world_mut()
             .spawn((Motion::at_rest(Vec2::ZERO), Transform::default()));
         // `seconds * fps` is a small positive frame count.
@@ -163,7 +159,7 @@ mod tests {
             body: body.unwrap_or_default(),
             ticks: world.resource::<Script>().ticks,
             walls: world
-                .resource::<LevelBounds>()
+                .resource::<ActiveLevel>()
                 .walls(GameConfig::default().astronaut_radius),
             dt: world.resource::<Time<Fixed>>().timestep().as_secs_f32(),
         }

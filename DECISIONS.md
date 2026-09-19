@@ -165,6 +165,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Minimum height of one screen (1080):** the camera clamps between the level's top and bottom, and `f32::clamp` panics if the minimum is larger than the maximum. Validation rules this out.
 - Validation reports the **first** error. That's simple, and the author fixes one problem at a time with hot reload.
 
+## M2-2 · Level loading: a Bevy asset that holds a `Result`
+
+- **What:** `LevelLoader` always produces `LevelAsset(Result<Level, LevelError>)`. Only I/O errors (missing or unreadable file) fail the load itself.
+- **Why:** a broken level becomes plain data. The game shows the message on screen, and during hot reload the previous version keeps playing. Bevy's own load-failure path would drop the asset and wrap our message in generic text.
+- **Hot reload** (with `--features dev`): scenery is despawned and respawned. The astronaut keeps its position unless the edit left it outside the level. Some editors write a file in two steps, so a save can reload twice; that's harmless.
+- **Scenery shares one set of meshes and materials** (`SceneryAssets`), so reloading never creates new assets.
+- **`LevelPhase` state** (`Loading` → `Falling`): gameplay systems run only once a valid level exists, using run conditions. A missing resource would otherwise stop Bevy with an error.
+
 ---
 
 ## Baseline measurements (M0)
