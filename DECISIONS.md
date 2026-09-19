@@ -205,6 +205,19 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Process:** `./scripts/check.sh --smoke` also runs the real release game for 6 s and fails on any panic or error. I verified it fails on the crashing build. It opens a window, so it's opt-in, but it's used before every commit.
 - **Rule for later:** conditions and systems that read resources created at runtime (`ActiveLevel`, and more in M5) use `resource_exists…`, `Option<Res<T>>` or state gating.
 
+## M2.5-1 · Design change: portrait one-screen puzzle levels
+
+- **What:** every level is one fully visible 1080 × 1920 portrait screen. Attempts start floating at the start (the fall begins on the first ←/→), and a failed attempt fades back to the start with stardust and time reset. There are no checkpoints, and the camera is fixed.
+- **Why:** after playing Milestones 1–2, the user wanted players to see the whole path from the start, "more like a quiz". Seeing the level turns object discovery into forming and testing guesses, and short attempts make retrying cheap. This is the Peggle / Cut the Rope family of puzzle-arcade games. The user chose "puzzle + stars for mastery".
+- **Alternatives:**
+  - landscape one-screen levels: short falls; routes would have to be mostly sideways
+  - a zoomed-out overview, then follow as before: planning relies on memory
+- **Consequences:**
+  - camera follow, look-ahead and scrolling parallax are removed (M1-3 and M1-4 superseded)
+  - checkpoints are removed (M2-4 partly superseded; the fade and retry stay)
+  - the level format loses `height` and `checkpoints`
+  - `STARDROP.md` is updated, with a new Milestone 2.5
+
 ---
 
 ## Baseline measurements (M0)

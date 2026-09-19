@@ -1,4 +1,4 @@
-# Stardrop — Project Brief & Roadmap
+- A long test level with simple placeholder background layers (parallax) to feel the speed of the fall. *(Superseded by Milestone 2.5: one-screen levels.)*# Stardrop — Project Brief & Roadmap
 
 > This file is the single source of truth for this project. Read it fully before writing any code, and re-read the relevant milestone before starting work on it.
 
@@ -29,12 +29,12 @@
 
 **Stardrop** is a calm, beautiful single-player falling game. A small astronaut drifts down from the edge of space toward home, a glowing landing beacon on the planet's surface. The astronaut is always falling and can't slow down or go up; the only way to change course is by touching the objects floating in the sky.
 
-**The heart of the game is discovery.** Every type of object always behaves the same way, but different types behave very differently, and not all of them are helpful. The game never explains what an object does. The player learns by touching things, failing gently, and trying again, and each new discovery is recorded in an illustrated field journal.
+**The heart of the game is discovery, played like a quiz.** The whole level is visible before the fall, so every attempt is a guess about what the objects will do. Every type of object always behaves the same way, but different types behave very differently, and not all of them are helpful. The game never explains what an object does. The player learns by touching things, failing gently, and trying again, and each new discovery is recorded in an illustrated field journal.
 
 - **Players:** single player.
-- **Length:** 10 hand-made levels, each a few minutes at most. Each level is a stage of the descent, so the scenery changes from deep space to the planet's surface over the course of the game.
-- **Controls:** left/right (A/D or arrow keys, or a gamepad stick) for gentle sideways drift. R to retry, Esc to pause, J to open the journal. Nothing else.
-- **Tone:** peaceful, wondering, a little playful. Failure is soft and instant, never punishing. No violence, no death: when things go wrong, the astronaut simply fades back to the last checkpoint.
+- **Length:** 10 hand-made levels. Each level is **one portrait screen, fully visible from the start**: a small puzzle to read, plan and try, where one attempt lasts only seconds. Each level is a stage of the descent, so the scenery changes from deep space to the planet's surface over the course of the game.
+- **Controls:** left/right (A/D or arrow keys, or a gamepad stick) for gentle sideways drift. R to retry, Esc to pause, J to open the journal. Nothing else. The first left/right press of an attempt starts the fall.
+- **Tone:** peaceful, wondering, a little playful. Failure is soft and instant, never punishing. No violence, no death: when things go wrong, the astronaut simply fades back to the start for a fresh attempt.
 - **Feel:** looks like a dreamy illustrated sky; sounds like calm ambient music that the player composes by falling.
 
 ---
@@ -45,15 +45,15 @@
 - The astronaut is always falling under constant gravity, up to a **terminal velocity** (a maximum fall speed), so the game stays readable and fair.
 - **Air control:** left/right input applies gentle horizontal acceleration, with a maximum horizontal speed and soft deceleration when no input is given. The player can position themselves, but can never slow their fall or rise on their own.
 - Only objects can make big changes to the astronaut's path.
+- **Before the fall:** each attempt starts with the astronaut floating at the start with a gentle bob, for as long as the player wants to study the level. The first left/right press starts the fall, and the attempt's timer.
 - **Level edges:** invisible walls on the left and right; the astronaut bounces off them gently and coasts away, like in space (see DECISIONS.md M1-5).
 - Physics runs at a fixed timestep and is fully deterministic: the same inputs always produce the same fall.
 
-### 3.2 Goal, failure and checkpoints
-- **Goal:** land on the glowing **beacon** at the bottom of the level.
-- **Missing the beacon** (falling past the bottom of the level) or touching a hazard sends the astronaut back to the last **checkpoint**: a soft fade out and fade in, under one second, with the fall resuming from rest.
-- **Checkpoints** are gentle glowing rings placed through the level; passing through one activates it with a soft chime. Every level starts at an implicit checkpoint at the top.
-- **Retry (R)** restarts the whole level instantly.
-- There are no lives and no game over. The player can always keep trying.
+### 3.2 Goal and failure
+- **Goal:** land on the glowing **beacon** at the bottom of the screen.
+- **Missing the beacon** (falling out of the bottom of the screen) or touching a hazard ends the attempt: a soft fade out and in, under one second, back to the start for a fresh attempt (stardust and time reset).
+- **Retry (R)** restarts the attempt instantly.
+- There are no checkpoints (an attempt lasts only seconds), no lives and no game over. The player can always keep trying.
 
 ### 3.3 The consistency rule
 **Every object of the same type behaves identically, in every level.** This is what makes discovery fair and learnable, and it's enforced in code:
@@ -74,14 +74,14 @@ Nine object types. The descriptions below are for us; the player is never told a
 | **Comet stone** | Launches the astronaut downward far beyond normal terminal velocity for a short time. | Mixed: fast shortcuts, dangerous near hazards |
 | **Spore flower** | Releases a puff of spores that swaps left/right controls for a few seconds. A visible shimmer around the astronaut shows the effect is active. | Mischievous |
 | **Twin portals** | Entering one portal exits from its paired portal, keeping speed and direction. Brief cooldown so you can't bounce between them. | Mixed, level-dependent |
-| **Static cloud** | A dark, softly crackling cloud. Touching it sends the astronaut back to the last checkpoint. | Hazard |
+| **Static cloud** | A dark, softly crackling cloud. Touching it ends the attempt (soft fade back to the start). | Hazard |
 
 - Each object type has a **distinct silhouette, color and idle animation**, so types are recognizable at a glance once learned, and all instances of a type look alike.
 - Every contact triggers a visual reaction on the object (squish, ripple, flash) so the player always sees *what* they touched.
 
 ### 3.5 Collectibles & scoring
 - Each level has a few **stardust motes** to collect, placed along risky or clever routes.
-- Up to **3 stars** per level: 1 for reaching the beacon, 1 for collecting all stardust in one run, 1 for beating the level's target time.
+- Up to **3 stars** per level: 1 for reaching the beacon, 1 for collecting all stardust in one attempt, 1 for beating the level's target time.
 - Completing a level unlocks the next. Best time, stars and stardust are saved.
 
 ### 3.6 The field journal
@@ -102,7 +102,7 @@ Each level is a stage of the descent, and its scenery reflects the altitude.
 
 | # | Name | New object | Setting |
 |---|---|---|---|
-| 1 | **First Light** | — (learn drifting, checkpoints, stardust, the beacon) | Deep space, starfield and distant nebula |
+| 1 | **First Light** | — (learn drifting, stardust, the beacon) | Deep space, starfield and distant nebula |
 | 2 | **Soft Landing** | Cloud puff | Deep space, glowing space clouds |
 | 3 | **Solar Breeze** | Wind ribbon | Upper atmosphere, aurora curtains |
 | 4 | **Glass Garden** | Crystal | Aurora, floating crystal fields |
@@ -113,14 +113,14 @@ Each level is a stage of the descent, and its scenery reflects the altitude.
 | 9 | **Orbit** | Gravity orb | Twilight, first stars reappearing, planet lights below |
 | 10 | **Homecoming** | Twin portals (+ everything) | Night-to-dawn over the landscape, the home beacon |
 
-- Levels are about 5–12 screen-heights tall, becoming longer as the game progresses.
+- Every level is exactly **one portrait screen (1080 × 1920 units)**, fully visible from the start. Later levels become denser and more intricate, not longer.
 - Level 1 has no objects at all, just the fall, the controls and the beacon, so the player understands the goal before the first discovery.
 - A static cloud must never be the first object type the player sees in a level where it's new; it's introduced alongside a clear safe path around it.
 
 ### Level format — levels are data, not code
-- Each level is a **RON** file in `assets/levels/` describing: name, height, background theme, astronaut start, beacon position and size, checkpoints, stardust, object instances (type plus allowed per-instance fields only, see Section 3.3), target time, music layer set.
+- Each level is a **RON** file in `assets/levels/` describing: name, background theme, astronaut start, beacon position and size, stardust, object instances (type plus allowed per-instance fields only, see Section 3.3), target time, music layer set.
 - Adding or editing a level never requires recompiling. In debug builds, editing a level file **hot-reloads** it while the game runs.
-- Level loading **validates** the data and returns clear errors (a custom error type): e.g. overlapping objects that shouldn't overlap, an unpaired portal, a beacon outside the level, a checkpoint inside a static cloud. An invalid level shows an error message in-game, never a crash.
+- Level loading **validates** the data and returns clear errors (a custom error type): e.g. overlapping objects that shouldn't overlap, an unpaired portal, a beacon outside the level, stardust inside a static cloud. An invalid level shows an error message in-game, never a crash.
 - `cargo test` loads and validates every shipped level.
 - The format is documented with an annotated example in `docs/LEVELS.md`.
 
@@ -131,14 +131,14 @@ Each level is a stage of the descent, and its scenery reflects the altitude.
 The game should look like a calm illustrated storybook sky that happens to be interactive.
 
 - **Smooth, not pixel art:** soft rounded shapes, clean silhouettes, gentle gradients. Rendered at the window's native resolution.
-- **Layered depth:** 3–5 parallax background layers per level (distant stars or sky gradient, far clouds or nebula, mid-distance features, near drifting particles), plus an optional foreground layer of soft out-of-focus shapes.
-- **Glow and light:** HDR rendering with **bloom** for glowing things (the beacon, stardust, wind ribbons, orbs, checkpoints), with bloom strength tuned per level. Colored soft light on the astronaut as they pass near glowing objects, if affordable.
+- **Layered depth:** 3–5 background layers per level (distant stars or sky gradient, far clouds or nebula, mid-distance features, near drifting particles) that drift gently on their own (the camera doesn't move), plus an optional foreground layer of soft out-of-focus shapes. The scenery also fills the areas beside the portrait playfield.
+- **Glow and light:** HDR rendering with **bloom** for glowing things (the beacon, stardust, wind ribbons, orbs), with bloom strength tuned per level. Colored soft light on the astronaut as they pass near glowing objects, if affordable.
 - **Palette per altitude:** each level has a small defined palette (defined in code as constants per theme) so the game moves through a deliberate color journey: indigo and violet in space, green and teal auroras, pastel dawn, warm gold and coral sunset, deep blue twilight, a soft dawn at home.
 - **Motion everywhere, but calm:** objects breathe, bob and sway; clouds drift; stars twinkle; nothing is ever completely still, but nothing is jittery either. All animation uses easing curves, never linear snaps.
 - **Astronaut:** small, round, readable; a slight tumble that follows sideways movement; a little flash of the visor when touching objects; a trail of faint sparkles showing the recent path.
 - **Feedback:** every object contact gets a visual reaction (squish, ripple, flash, particle burst in the object's color).
-- **Camera:** smooth vertical follow with **look-ahead**: the astronaut sits in the upper third of the screen so the player can see what's coming below. The full level width is always visible; the camera only scrolls vertically.
-- **Aspect ratio:** designed for 16:9; other ratios show extra background at the sides, never cut off gameplay.
+- **Camera:** fixed. The whole portrait playfield is always visible and centered on the screen.
+- **Aspect ratio:** the playfield is 9:16 portrait, centered on screen. Wider (or taller) windows show more scenery around it and never cut off gameplay.
 - **Art assets:** start with simple shapes and gradients drawn in code as placeholders. Final art can be sprites (drawn by me, or from free CC0 sources) or shapes and shaders generated in code. Keep a `CREDITS.md` listing every asset and its license.
 - **Accessibility:** a "reduce motion" setting that calms background animation and screen effects; every object type must be distinguishable by shape, not color alone.
 
@@ -164,13 +164,13 @@ The sound should be comforting, smooth and warm at all times, and it also quietl
 - Consecutive object touches step up the scale, so a good run literally sounds like a rising melody.
 - Optionally, notes are gently aligned to the pad's pulse (a tiny delay of at most a few tens of milliseconds) so they always feel musical. Evaluate whether this feels good; skip it if it feels laggy.
 - Reaching the beacon plays a warm resolving chord that completes the melody.
-- The music gains subtle layers as the player descends through a level (e.g. soft strings joining halfway), and each level's music reflects its setting.
+- The music gains subtle layers as the player descends through a level (e.g. soft strings joining as the astronaut passes the middle of the screen), and each level's music reflects its setting.
 
 ### 6.2 Sound design rules
 - **Nothing sharp or piercing.** Soft attacks (a few milliseconds of fade-in on every sound), natural fade-outs, high frequencies gently rolled off.
 - **Pitch variation** on repeated non-melodic sounds (about ±5%) so nothing sounds mechanical.
 - **Ambience** per altitude: faint cosmic hum in space, soft wind at altitude, distant birds and breeze near the surface.
-- **Checkpoint:** a soft chime. **Stardust:** tiny twinkles, each one a step higher. **Return to checkpoint:** a gentle reverse swell, never a "failure" buzz.
+- **Stardust:** tiny twinkles, each one a step higher. **Failed attempt:** a gentle reverse swell, never a "failure" buzz.
 - **UI:** soft tuned notes in the menu's key; the journal pages turn with a gentle paper whisper.
 - **Mixing:** everything is balanced so nothing ever clips; the pad ducks slightly under object notes; music always crossfades (1–2 s), never cuts.
 - **While paused:** music and ambience are softly low-pass filtered and lowered.
@@ -190,10 +190,10 @@ The sound should be comforting, smooth and warm at all times, and it also quietl
 ### 7.1 Performance budgets
 - **Frame rate:** a stable 60 FPS on modest hardware (a laptop with integrated graphics) with bloom and all effects on, including the busiest levels. Support higher refresh rates smoothly where the display allows.
 - **Frame time:** our own game logic (all our systems combined) stays under **1 ms** per frame in release builds.
-- **No hitches:** respawning at a checkpoint, retrying, loading a level and discovering a new object must not cause visible stutters.
+- **No hitches:** restarting an attempt, retrying, loading a level and discovering a new object must not cause visible stutters.
 - **Level load and retry:** under **200 ms**.
 - **Idle efficiency:** in menus, the journal, while paused and on the level-complete screen, the game must not burn CPU/GPU at full speed. Use Bevy's reactive/low-power update modes where little is animating, and vsync/frame limiting in-game. Laptop fans should stay quiet.
-- **Memory:** measure a baseline in Milestone 0 and track it at each milestone. Memory must stay flat over a long session: no growth across retries, checkpoints and level changes (no leaked entities, asset handles, textures or audio instances).
+- **Memory:** measure a baseline in Milestone 0 and track it at each milestone. Memory must stay flat over a long session: no growth across retries, attemptsints and level changes (no leaked entities, asset handles, textures or audio instances).
 - **Startup:** reach the main menu within a couple of seconds on the target hardware.
 - **Budgets are measured, not guessed.** Numbers get reported at the end of any milestone that touches hot paths.
 
@@ -206,8 +206,7 @@ The sound should be comforting, smooth and warm at all times, and it also quietl
   - **Change detection** (`Changed<T>`, `Added<T>`, `resource_changed`) instead of rechecking everything every frame.
   - Query filters (`With`, `Without`) so queries touch only relevant entities.
   - Event-driven effects: audio, visuals and the journal react to events, never poll.
-- **Cheap collision:** objects use simple shapes (circles, capsules, rectangles, and path segments for wind ribbons). Only objects within a band around the astronaut's current height are checked (objects stored sorted by height, or a simple spatial grid; benchmark and choose).
-- **Off-screen work is skipped:** objects far outside the camera view don't animate or emit particles.
+- **Cheap collision:** objects use simple shapes (circles, capsules, rectangles, and path segments for wind ribbons). A level is one screen with a limited number of objects: benchmark a plain loop against a simple spatial grid, and pick the grid only if it measurably wins.
 - **Fixed timestep for physics:** gameplay physics runs in `FixedUpdate`, independent of frame rate; rendering interpolates the astronaut's position so motion stays perfectly smooth on any refresh rate.
 - **Pooled, capped effects:** particles, trails and short-lived effects come from pools with hard maximum counts.
 - **Bloom and effects are budgeted:** measure their GPU cost; provide a "graphics quality" setting (e.g. bloom and particle density) for weaker machines.
@@ -218,7 +217,6 @@ The sound should be comforting, smooth and warm at all times, and it also quietl
 ### 7.3 Measuring
 - **F1 debug overlay:** FPS, frame time (current / average / worst over the last few seconds), entity count, particle count, active sound count, memory usage where available, the astronaut's velocity, and active effects (e.g. inverted controls timer).
 - **F2 (debug builds only):** show collision shapes and wind ribbon paths.
-- **F3 (debug builds only):** jump to the next checkpoint.
 - **Profiling support** set up early (Bevy's tracing integration with a profiler such as Tracy, behind a cargo feature so it costs nothing when off), and show me how to use it.
 - **Benchmarks** (e.g. with `criterion`) for the hottest pure functions: collision checks, object effect functions, the broad-phase lookup. Report before/after numbers when that code changes.
 - **Profile before optimizing.** Don't trade readability for speed without a measurement showing it matters; comment what was measured.
@@ -229,7 +227,7 @@ The sound should be comforting, smooth and warm at all times, and it also quietl
 - **Separate logic from the engine:** movement physics, object effects, collision math, scoring, scale/note selection, level validation and save logic live in **plain Rust with no Bevy dependency**. Bevy systems stay thin: read components, call the logic, write results back.
 - **Objects as an enum with data:** object types are one enum (`ObjectKind`), and the effect of touching an object is one exhaustive `match`. Adding a new object type makes the compiler point to every place that must handle it.
 - **Tests:**
-  - Unit tests for every object effect (e.g. "a crystal always reverses horizontal velocity and enforces the minimum speed"), movement limits, checkpoint logic, star scoring, note selection and level validation (with deliberately broken level files).
+  - Unit tests for every object effect (e.g. "a crystal always reverses horizontal velocity and enforces the minimum speed"), movement limits, attempt logic, star scoring, note selection and level validation (with deliberately broken level files).
   - A **determinism test**: replaying a recorded input sequence on a level always produces the same final position.
   - A test that loads and validates every shipped level.
   - A few integration tests with a minimal Bevy `App` for key flows (touching a new object adds a journal entry exactly once).
@@ -262,11 +260,11 @@ Fix what's cheap to fix right away; list the rest for me to decide.
 
 ### Code structure
 - One Bevy **plugin per feature area**, each in its own module:
-  `astronaut`, `physics`, `objects`, `collision`, `level`, `checkpoint`, `collectibles`, `scoring`, `journal`, `camera`, `background`, `effects`, `music`, `audio`, `ui`, `menu`, `settings`, `save`, `config`, `debug`.
+  `astronaut`, `physics`, `objects`, `collision`, `level`, `attempt`, `collectibles`, `scoring`, `journal`, `camera`, `background`, `effects`, `music`, `audio`, `ui`, `menu`, `settings`, `save`, `config`, `debug`.
 - **Top-level app state** as an enum: `MainMenu`, `LevelSelect`, `Journal`, `Playing`, `Paused`, `LevelComplete`.
-- **In-level sub-state** as an enum: `Intro` (short fly-in of the level name), `Falling`, `Respawning`, `Landed`.
+- **In-level sub-state** as an enum: `Ready` (floating at the start while the player studies the level; the level name fades in), `Falling`, `Restarting` (the soft fade after a failed attempt), `Landed`.
 - **All tuning numbers in one place:** a `GameConfig` resource in `config.rs` holding gravity, terminal velocity, air control, and every object type's behavior parameters. This is also where the consistency rule (Section 3.3) lives.
-- **Events** for everything that happens between systems: `ObjectTouched { kind, entity }`, `ObjectDiscovered(kind)`, `CheckpointReached`, `Respawn`, `StardustCollected`, `LevelCompleted`. Music, sound, visual effects and the journal react to these events rather than being called from gameplay code.
+- **Events** for everything that happens between systems: `ObjectTouched { kind, entity }`, `ObjectDiscovered(kind)`, `AttemptFailed`, `AttemptRestarted`, `StardustCollected`, `LevelCompleted`. Music, sound, visual effects and the journal react to these events rather than being called from gameplay code.
 
 ---
 
@@ -292,12 +290,12 @@ Milestones 0–4 produce a **playable prototype** with placeholder visuals. Mile
 - Soft invisible side walls.
 - Camera follows vertically with look-ahead; full level width always visible; correct behavior at other aspect ratios.
 - A long test level with simple placeholder background layers (parallax) to feel the speed of the fall.
-- Unit tests for movement: terminal velocity is never exceeded, horizontal speed is capped, no input means gradual slow-down.
+- Camera follows vertically with look-ahead; full level width always visible; correct behavior at other aspect ratios. *(Superseded by Milestone 2.5: fixed portrait camera.)*
 
 **Done when:** falling and drifting feels smooth, calm and responsive at 60 Hz and at higher refresh rates, and the determinism test (replaying recorded inputs gives the same result) passes.
 **Rust concepts:** components, systems, queries, `Res` vs `ResMut`, `Query<&T>` vs `Query<&mut T>`, `Vec2` math, fixed timestep.
 
-### Milestone 2 — Levels, goal and checkpoints
+### Milestone 2 — Levels, goal and checkpoints *(checkpoints removed in Milestone 2.5)*
 - Level RON format (Section 4), loading, validation with a custom error type, hot-reload in debug builds.
 - Beacon at the bottom: landing on it completes the level (placeholder "Level complete" text).
 - Checkpoints: activate when passed; missing the beacon returns the astronaut to the last active checkpoint with a fade (under one second).
@@ -307,6 +305,16 @@ Milestones 0–4 produce a **playable prototype** with placeholder visuals. Mile
 
 **Done when:** a test level can be completed or failed, checkpoints work, retry is instant, editing the level file updates the running game, and broken level files show a clear error instead of crashing.
 **Rust concepts:** `serde` deserialization, custom error types, the `?` operator, `Result` flowing through functions, `Option` for "no checkpoint yet".
+
+### Milestone 2.5 — Portrait puzzle levels
+Design change after playtesting Milestones 1–2 (see `DECISIONS.md`): the whole path is visible from the start.
+- Fixed portrait camera: 1080 × 1920 playfield centered on screen, scenery beside it, background layers drifting gently.
+- Level format without `height` and `checkpoints`; positions are x 0–1080, depth 0–1920. Test level and `docs/LEVELS.md` updated.
+- `Ready` phase: the astronaut floats at the start until the first left/right press; the timer starts with the fall.
+- A failed attempt fades back to the start with stardust and time reset; checkpoints are removed.
+
+**Done when:** the test level is fully visible in a portrait playfield at any window shape, the fall starts on the first left/right press, failing and retrying restart the attempt, and all checks (including `--smoke`) pass.
+**Rust concepts:** deleting code safely with the compiler's help, state machines with enums.
 
 ### Milestone 3 — Objects, part 1
 - The object system: `ObjectKind` enum, per-type behavior config, collision shapes, broad-phase lookup by height, `ObjectTouched` events, visual reaction on contact (placeholder squish/flash).
@@ -340,7 +348,7 @@ Milestones 0–4 produce a **playable prototype** with placeholder visuals. Mile
 
 ### Milestone 6 — The ten levels
 - Build all 10 levels from Section 4, following **introduce → test → twist** for each new object.
-- Each level has 3–6 stardust motes, sensible checkpoint spacing and a target time based on a good (not perfect) run.
+- Each level has 3–6 stardust motes and a target time based on a good (not perfect) run.
 - Difficulty rises gradually; later levels are longer and combine more object types.
 - Playtest each level and adjust placement (not object behavior, see Section 3.3).
 
@@ -349,8 +357,8 @@ Milestones 0–4 produce a **playable prototype** with placeholder visuals. Mile
 ### Milestone 7 — Visual polish
 - Final astronaut: tumble following sideways motion, visor flash on contact, sparkle trail.
 - Final look for all nine object types: distinct silhouettes, idle animations, contact reactions, particle bursts in each object's color.
-- Backgrounds for every altitude theme (Section 5): 3–5 parallax layers, per-level palettes, bloom tuning, ambient particles.
-- Beacon, checkpoints and stardust with glow and gentle animation; a landing celebration (soft light burst, drifting sparks).
+- Backgrounds for every altitude theme (Section 5): 3–5 gently drifting layers, per-level palettes, bloom tuning, ambient particles.
+- Beacon and stardust with glow and gentle animation; a landing celebration (soft light burst, drifting sparks).
 - Smooth transitions between screens (fades, eased motion); journal illustrations.
 - Graphics quality and reduce-motion settings take effect everywhere.
 
@@ -361,7 +369,7 @@ Implement everything from Section 6:
 - Audio crate integrated with separate channels for music, instruments (object notes), SFX, ambience and UI.
 - Ambient pad and per-level music with layers joining as the player descends; crossfades between screens and levels.
 - Object instruments with scale-based note selection, rising sequences on consecutive touches, helpful-vs-tricky tonal differences.
-- Beacon resolution chord, checkpoint chime, stardust twinkles, gentle respawn swell.
+- Beacon resolution chord, stardust twinkles, gentle failed-attempt swell.
 - Ambience per altitude; UI sounds; pause filtering; volume settings respected.
 
 **Done when:** a good run through any level sounds like a small piece of music, nothing ever sounds harsh or clips, and the game is pleasant to listen to for a whole playthrough.
@@ -377,7 +385,7 @@ Implement everything from Section 6:
 ### Milestone 10 — Stretch goals (optional, in any order)
 - **Ghost replay:** race a translucent recording of your best run (the deterministic physics makes this cheap: record inputs, not positions).
 - **Time-trial leaderboard** per level (local).
-- **Level editor:** place objects, checkpoints and the beacon in-game, test-play, save.
+- **Level editor:** place objects, stardust and the beacon in-game, test-play, save.
 - **Bonus levels** unlocked by collecting all stardust.
 - **Alternate characters** (the ninja, the frog) with their own visual themes; identical physics.
 - **Web (WASM) build** so friends can play in a browser.
