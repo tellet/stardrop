@@ -4,7 +4,7 @@
 
 use bevy::math::Vec2;
 
-use super::kind::{ObjectKind, ObjectShape, ObjectsConfig, Placement};
+use super::kind::{ObjectShape, ObjectsConfig, Placement};
 use crate::physics::movement::{Body, Capture, MovementConfig};
 
 /// The result of touching an object.
@@ -15,46 +15,68 @@ pub enum Outcome {
     Nothing,
     /// The astronaut's new state.
     Changed(Body),
+    /// The astronaut jumped elsewhere (a portal): like [`Self::Changed`], but
+    /// drawn as a jump instead of a smooth move.
+    Teleported(Body),
     /// The attempt ends (hazard).
     FailAttempt,
 }
 
-/// What entering contact with an object of `kind` centered at `center` does
-/// to `body`.
+/// What entering contact with `placement` does to `body`.
 ///
 /// One exhaustive `match`: adding an object type makes the compiler point
-/// here until its behavior is written.
+/// here until its behavior is written. It takes the placed object (not just
+/// its type) because portals need to know which end was touched.
 #[must_use]
 pub fn on_enter(
-    kind: ObjectKind,
-    center: Vec2,
+    placement: &Placement,
     config: &ObjectsConfig,
     movement: &MovementConfig,
     body: Body,
 ) -> Outcome {
-    match kind {
-        ObjectKind::CloudPuff => {
-            Outcome::Changed(body.launched(cloud_bounce(center, config, body), movement))
+    match placement {
+        Placement::CloudPuff { center, .. } => {
+            Outcome::Changed(body.launched(cloud_bounce(*center, config, body), movement))
         }
         // These act continuously instead (see `while_inside`).
-        ObjectKind::WindRibbon | ObjectKind::GravityOrb => Outcome::Nothing,
-        ObjectKind::Crystal => {
-            Outcome::Changed(body.launched(crystal_reverse(center, config, body), movement))
+        Placement::WindRibbon { .. } | Placement::GravityOrb { .. } => Outcome::Nothing,
+        Placement::Crystal { center, .. } => {
+            Outcome::Changed(body.launched(crystal_reverse(*center, config, body), movement))
         }
-        ObjectKind::Bubble => Outcome::Changed(body.captured(Capture {
+        Placement::Bubble { .. } => Outcome::Changed(body.captured(Capture {
             seconds_left: config.bubble.seconds,
             rise_speed: config.bubble.rise_speed,
             nudge_speed: config.bubble.nudge_speed,
         })),
-        ObjectKind::SporeFlower => {
+        Placement::SporeFlower { .. } => {
             Outcome::Changed(body.with_swapped_controls(config.spore_flower.swap_seconds))
         }
-        ObjectKind::CometStone => Outcome::Changed(body.diving(
+        Placement::CometStone { .. } => Outcome::Changed(body.diving(
             config.comet_stone.dive_speed,
             config.comet_stone.dive_seconds,
         )),
-        ObjectKind::StaticCloud => Outcome::FailAttempt,
+        Placement::TwinPortals { a, b, radius } => portal_jump(*a, *b, *radius, config, body),
+        Placement::StaticCloud { .. } => Outcome::FailAttempt,
     }
+}
+
+/// Out of the far end, keeping speed, direction and every other effect.
+/// Ignored while the cooldown from the last jump is still running.
+fn portal_jump(a: Vec2, b: Vec2, radius: f32, config: &ObjectsConfig, body: Body) -> Outcome {
+    if body.effects.portals_on_cooldown() {
+        return Outcome::Nothing;
+    }
+    let portals = config.twin_portals;
+    // Whichever end is nearer is the one we entered; we leave by the other.
+    let exit = if body.position.distance_squared(a) <= body.position.distance_squared(b) {
+        b
+    } else {
+        a
+    };
+    // Leave travelling the same way; straight down if somehow motionless.
+    let direction = body.velocity.try_normalize().unwrap_or(-Vec2::Y);
+    let clearance = radius + portals.exit_clearance;
+    Outcome::Teleported(body.teleported(exit + direction * clearance, portals.cooldown))
 }
 
 /// The astronaut's new velocity after one fixed step of `dt` seconds inside
@@ -140,7 +162,7 @@ mod tests {
     use super::*;
     use crate::objects::kind::{
         BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
-        SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
+        ObjectKind, SporeFlowerConfig, StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
     };
 
     const CONFIG: ObjectsConfig = ObjectsConfig {
@@ -159,6 +181,10 @@ mod tests {
             rise_speed: 90.0,
             seconds: 2.5,
             nudge_speed: 120.0,
+        },
+        twin_portals: TwinPortalsConfig {
+            exit_clearance: 40.0,
+            cooldown: 0.5,
         },
         gravity_orb: GravityOrbConfig {
             field_scale: 4.0,
@@ -195,10 +221,50 @@ mod tests {
         }
     }
 
-    /// The astronaut's new state after touching `kind`.
+    /// One object of `kind` at `center`, with a typical size.
+    fn placed(kind: ObjectKind, center: Vec2) -> Placement {
+        match kind {
+            ObjectKind::CloudPuff => Placement::CloudPuff {
+                center,
+                radius: 80.0,
+            },
+            ObjectKind::Crystal => Placement::Crystal { center, size: 50.0 },
+            ObjectKind::SporeFlower => Placement::SporeFlower {
+                center,
+                radius: 55.0,
+            },
+            ObjectKind::CometStone => Placement::CometStone {
+                center,
+                radius: 55.0,
+            },
+            ObjectKind::Bubble => Placement::Bubble {
+                center,
+                radius: 70.0,
+            },
+            ObjectKind::GravityOrb => Placement::GravityOrb {
+                center,
+                radius: 60.0,
+            },
+            ObjectKind::StaticCloud => Placement::StaticCloud {
+                center,
+                radius: 90.0,
+            },
+            ObjectKind::WindRibbon => Placement::WindRibbon {
+                path: vec![center, center + Vec2::X * 200.0],
+                width: 80.0,
+            },
+            ObjectKind::TwinPortals => Placement::TwinPortals {
+                a: center,
+                b: center + Vec2::new(300.0, -300.0),
+                radius: 60.0,
+            },
+        }
+    }
+
+    /// The astronaut's new state after touching an object of `kind` at `center`.
     fn touched(kind: ObjectKind, center: Vec2, body: Body) -> Body {
-        match on_enter(kind, center, &CONFIG, &MOVEMENT, body) {
-            Outcome::Changed(changed) => changed,
+        match on_enter(&placed(kind, center), &CONFIG, &MOVEMENT, body) {
+            Outcome::Changed(changed) | Outcome::Teleported(changed) => changed,
             other => panic!("{kind:?} should change the astronaut, got {other:?}"),
         }
     }
@@ -215,8 +281,7 @@ mod tests {
             Vec2::new(-300.0, 200.0),
         ] {
             let outcome = on_enter(
-                ObjectKind::StaticCloud,
-                Vec2::ZERO,
+                &placed(ObjectKind::StaticCloud, Vec2::ZERO),
                 &CONFIG,
                 &MOVEMENT,
                 body(Vec2::Y, velocity),
@@ -377,8 +442,7 @@ mod tests {
             None
         );
         let entering = on_enter(
-            ObjectKind::WindRibbon,
-            Vec2::ZERO,
+            &placed(ObjectKind::WindRibbon, Vec2::ZERO),
             &CONFIG,
             &MOVEMENT,
             body(Vec2::ZERO, Vec2::ZERO),
@@ -520,5 +584,71 @@ mod tests {
             1.0 / 120.0,
         );
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn a_portal_sends_the_astronaut_out_of_the_other_end() {
+        let (a, b) = (Vec2::new(-200.0, -400.0), Vec2::new(300.0, -1200.0));
+        let portals = Placement::TwinPortals { a, b, radius: 60.0 };
+        let falling = body(a, Vec2::new(0.0, -450.0));
+        let Outcome::Teleported(out) = on_enter(&portals, &CONFIG, &MOVEMENT, falling) else {
+            panic!("a portal should teleport");
+        };
+        assert_eq!(
+            out.velocity, falling.velocity,
+            "speed and direction are kept"
+        );
+        // Just outside the far end, in the direction of travel (downward).
+        assert!((out.position.x - b.x).abs() < 1e-3);
+        assert!(
+            out.position.y < b.y,
+            "left below the exit: {}",
+            out.position
+        );
+        assert!(out.effects.portals_on_cooldown());
+    }
+
+    #[test]
+    fn the_nearer_end_is_the_one_entered() {
+        let (a, b) = (Vec2::new(-200.0, -400.0), Vec2::new(300.0, -1200.0));
+        let portals = Placement::TwinPortals { a, b, radius: 60.0 };
+        let at_b = body(b, Vec2::new(0.0, -450.0));
+        let Outcome::Teleported(out) = on_enter(&portals, &CONFIG, &MOVEMENT, at_b) else {
+            panic!("a portal should teleport");
+        };
+        assert!((out.position.x - a.x).abs() < 1e-3, "came out of end A");
+    }
+
+    #[test]
+    fn a_portal_ignores_the_astronaut_during_its_cooldown() {
+        let (a, b) = (Vec2::new(-200.0, -400.0), Vec2::new(300.0, -1200.0));
+        let portals = Placement::TwinPortals { a, b, radius: 60.0 };
+        let just_arrived =
+            body(b, Vec2::new(0.0, -450.0)).teleported(b, CONFIG.twin_portals.cooldown);
+        assert_eq!(
+            on_enter(&portals, &CONFIG, &MOVEMENT, just_arrived),
+            Outcome::Nothing,
+            "no instant bounce back"
+        );
+        // Once the cooldown is over, portals work again.
+        let later = Body {
+            effects: just_arrived.effects.after(CONFIG.twin_portals.cooldown),
+            ..just_arrived
+        };
+        assert!(matches!(
+            on_enter(&portals, &CONFIG, &MOVEMENT, later),
+            Outcome::Teleported(_)
+        ));
+    }
+
+    #[test]
+    fn a_portal_keeps_other_effects_running() {
+        let (a, b) = (Vec2::new(0.0, -400.0), Vec2::new(300.0, -1200.0));
+        let portals = Placement::TwinPortals { a, b, radius: 60.0 };
+        let spored = body(a, Vec2::new(0.0, -450.0)).with_swapped_controls(2.0);
+        let Outcome::Teleported(out) = on_enter(&portals, &CONFIG, &MOVEMENT, spored) else {
+            panic!("a portal should teleport");
+        };
+        assert!((out.effects.swapped_controls - 2.0).abs() < 1e-6);
     }
 }

@@ -77,6 +77,8 @@ pub enum LevelError {
     },
     /// A wind ribbon's path needs 2 to `MAX_RIBBON_POINTS` points.
     BadRibbonPath(usize),
+    /// A pair of portals is too close together (they would overlap).
+    PortalsTooClose(usize),
     /// An object covers something it must not (e.g. the start, or a hazard
     /// on the beacon).
     Overlaps {
@@ -109,6 +111,11 @@ impl fmt::Display for LevelError {
                 f,
                 "{}'s size must be between {min} and {max}",
                 Item::Object(*object)
+            ),
+            Self::PortalsTooClose(i) => write!(
+                f,
+                "{}'s two ends are too close together; leave at least three radii between them",
+                Item::Object(*i)
             ),
             Self::BadRibbonPath(i) => write!(
                 f,
@@ -211,6 +218,16 @@ fn check_object_shape(placed: &Placement, index: usize) -> Result<(), LevelError
             min: *range.start(),
             max: *range.end(),
         });
+    }
+    if let Placement::TwinPortals { a, b, radius } = placed {
+        // Overlapping ends would send the astronaut straight back in.
+        if a.distance(*b) < radius * 3.0 {
+            return Err(LevelError::PortalsTooClose(index));
+        }
+        for end in [*a, *b] {
+            inside(to_file(end), Item::Object(index))?;
+        }
+        return Ok(());
     }
     if let Placement::WindRibbon { path, .. } = placed {
         if !(2..=MAX_RIBBON_POINTS).contains(&path.len()) {
@@ -492,6 +509,33 @@ mod tests {
             ),
             (
                 "WindRibbon(path: [(400, 150), (700, 250)], width: 80)",
+                LevelError::Overlaps {
+                    object: 0,
+                    item: Item::Start,
+                },
+            ),
+        ];
+        for (objects, expected) in cases {
+            let error = Level::parse(&with_objects(objects)).unwrap_err();
+            assert_eq!(error, expected, "for {objects}");
+        }
+    }
+
+    #[test]
+    fn portal_rules_are_enforced() {
+        let ok = "TwinPortals(a: (200, 700), b: (800, 1400), radius: 60)";
+        assert!(Level::parse(&with_objects(ok)).is_ok());
+        let cases = [
+            (
+                "TwinPortals(a: (200, 700), b: (300, 760), radius: 60)",
+                LevelError::PortalsTooClose(0),
+            ),
+            (
+                "TwinPortals(a: (200, 700), b: (800, 2200), radius: 60)",
+                LevelError::Outside(Item::Object(0)),
+            ),
+            (
+                "TwinPortals(a: (540, 230), b: (800, 1400), radius: 60)",
                 LevelError::Overlaps {
                     object: 0,
                     item: Item::Start,

@@ -18,6 +18,8 @@ pub enum ObjectKind {
     WindRibbon,
     /// Glassy diamond: reverses sideways motion.
     Crystal,
+    /// Twin portals: entering one end sends the astronaut out of the other.
+    TwinPortals,
     /// Gravity orb: pulls the astronaut toward its center within a field.
     GravityOrb,
     /// Floating bubble: catches the astronaut and carries it upward.
@@ -37,6 +39,7 @@ impl ObjectKind {
     pub fn size_range(self) -> RangeInclusive<f32> {
         match self {
             Self::CloudPuff
+            | Self::TwinPortals
             | Self::GravityOrb
             | Self::Bubble
             | Self::Crystal
@@ -70,6 +73,16 @@ pub enum Placement {
         path: Vec<Vec2>,
         /// Full width of the ribbon.
         width: f32,
+    },
+    /// A pair of portals: two circles of the same size, always paired by
+    /// construction (a level file can't write an unpaired portal).
+    TwinPortals {
+        /// One end.
+        a: Vec2,
+        /// The other end.
+        b: Vec2,
+        /// Radius of both ends.
+        radius: f32,
     },
     /// A gravity orb: a core circle, with a pull field around it.
     GravityOrb {
@@ -123,6 +136,8 @@ pub enum ObjectShape<'a> {
     Circle(CircleShape),
     /// Wind ribbons.
     Path(PathShape<'a>),
+    /// Twin portals: either end counts.
+    Pair([CircleShape; 2]),
 }
 
 impl Shape for ObjectShape<'_> {
@@ -130,6 +145,7 @@ impl Shape for ObjectShape<'_> {
         match self {
             Self::Circle(circle) => circle.overlaps_circle(center, radius),
             Self::Path(path) => path.overlaps_circle(center, radius),
+            Self::Pair(ends) => ends.iter().any(|end| end.overlaps_circle(center, radius)),
         }
     }
 }
@@ -140,6 +156,7 @@ impl Placement {
     pub fn kind(&self) -> ObjectKind {
         match self {
             Self::CloudPuff { .. } => ObjectKind::CloudPuff,
+            Self::TwinPortals { .. } => ObjectKind::TwinPortals,
             Self::GravityOrb { .. } => ObjectKind::GravityOrb,
             Self::Bubble { .. } => ObjectKind::Bubble,
             Self::SporeFlower { .. } => ObjectKind::SporeFlower,
@@ -162,6 +179,8 @@ impl Placement {
             | Self::SporeFlower { center, .. }
             | Self::CometStone { center, .. }
             | Self::StaticCloud { center, .. } => *center,
+            // Halfway between the ends: what the pair's squish centers on.
+            Self::TwinPortals { a, b, .. } => a.midpoint(*b),
             Self::WindRibbon { path, .. } => {
                 // A ribbon has at most MAX_RIBBON_POINTS points, so this
                 // conversion is exact; `max(1)` avoids dividing by zero.
@@ -182,7 +201,8 @@ impl Placement {
             | Self::Bubble { radius, .. }
             | Self::SporeFlower { radius, .. }
             | Self::CometStone { radius, .. }
-            | Self::StaticCloud { radius, .. } => *radius,
+            | Self::StaticCloud { radius, .. }
+            | Self::TwinPortals { radius, .. } => *radius,
             Self::Crystal { size, .. } => *size,
             Self::WindRibbon { width, .. } => *width,
         }
@@ -203,6 +223,9 @@ impl Placement {
             // The circle through the diamond's tips: generous, like every
             // helpful or mixed object.
             Self::Crystal { center, size } => ObjectShape::Circle(CircleShape::new(*center, *size)),
+            Self::TwinPortals { a, b, radius } => {
+                ObjectShape::Pair([CircleShape::new(*a, *radius), CircleShape::new(*b, *radius)])
+            }
             Self::WindRibbon { path, width } => ObjectShape::Path(PathShape {
                 points: path,
                 half_width: width / 2.0,
@@ -219,6 +242,7 @@ impl Placement {
             Self::CloudPuff { .. }
             | Self::Bubble { .. }
             | Self::Crystal { .. }
+            | Self::TwinPortals { .. }
             | Self::SporeFlower { .. }
             | Self::CometStone { .. }
             | Self::WindRibbon { .. } => self.outline(),
@@ -259,6 +283,16 @@ pub struct WindRibbonConfig {
     /// How strongly the wind pulls the astronaut's velocity toward the flow,
     /// in units/s². Stronger than gravity, so ribbons can carry you upward.
     pub pull: f32,
+}
+
+/// Twin portal tuning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TwinPortalsConfig {
+    /// How far outside the exit the astronaut appears, beyond the portal's
+    /// radius, in world units.
+    pub exit_clearance: f32,
+    /// Seconds before portals accept the astronaut again.
+    pub cooldown: f32,
 }
 
 /// Gravity orb tuning.
@@ -328,6 +362,8 @@ pub struct ObjectsConfig {
     pub wind_ribbon: WindRibbonConfig,
     /// Crystal.
     pub crystal: CrystalConfig,
+    /// Twin portals.
+    pub twin_portals: TwinPortalsConfig,
     /// Gravity orb.
     pub gravity_orb: GravityOrbConfig,
     /// Bubble.

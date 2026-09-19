@@ -9,7 +9,7 @@ use core::f32::consts::FRAC_PI_4;
 
 use crate::objects::{
     BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
-    ObjectsConfig, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
+    ObjectsConfig, SporeFlowerConfig, StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
 };
 use crate::physics::movement::MovementConfig;
 
@@ -58,6 +58,12 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     crystal: CrystalConfig {
         // Clearly visible even when the astronaut was barely moving sideways.
         min_sideways_speed: 350.0,
+    },
+    twin_portals: TwinPortalsConfig {
+        // Far enough out not to land back inside the exit.
+        exit_clearance: 40.0,
+        // Long enough that you can't bounce straight back (Section 3.4).
+        cooldown: 0.5,
     },
     gravity_orb: GravityOrbConfig {
         // The pull reaches four core radii out, and the field is drawn.

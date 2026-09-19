@@ -29,6 +29,9 @@ const CHEVRON_SPACING: f32 = 90.0;
 const CHEVRON_SIZE: f32 = 16.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
+/// Twin portals: two matching rings with a bright rim.
+const PORTAL_RIM: Color = Color::linear_rgb(1.5, 0.9, 2.6);
+const PORTAL_FILL: Color = Color::linear_rgba(0.5, 0.25, 1.0, 0.35);
 /// Gravity orbs: a bright core with a faint ring showing how far the pull
 /// reaches (the player has to be able to judge it).
 const ORB_CORE: Color = Color::linear_rgb(1.9, 1.2, 2.8);
@@ -73,6 +76,8 @@ pub(super) struct ObjectAssets {
     crystal: Handle<ColorMaterial>,
     ribbon: Handle<ColorMaterial>,
     chevron: Handle<ColorMaterial>,
+    portal_rim: Handle<ColorMaterial>,
+    portal_fill: Handle<ColorMaterial>,
     orb_core: Handle<ColorMaterial>,
     orb_field: Handle<ColorMaterial>,
     orb_field_edge: Handle<ColorMaterial>,
@@ -112,6 +117,8 @@ impl FromWorld for ObjectAssets {
             crystal: materials.add(CRYSTAL_GLOW),
             ribbon: materials.add(RIBBON_GLOW),
             chevron: materials.add(CHEVRON_GLOW),
+            portal_rim: materials.add(PORTAL_RIM),
+            portal_fill: materials.add(PORTAL_FILL),
             orb_core: materials.add(ORB_CORE),
             orb_field: materials.add(ORB_FIELD),
             orb_field_edge: materials.add(ORB_FIELD_EDGE),
@@ -137,6 +144,24 @@ pub(super) fn spawn_look(
     placement: &Placement,
 ) {
     match placement {
+        Placement::TwinPortals { a, b, radius } => {
+            // Children are placed relative to the pair's midpoint.
+            let middle = placement.center();
+            for end in [*a, *b] {
+                let local = (end - middle).extend(0.0);
+                parent.spawn((
+                    Mesh2d(assets.unit_circle.clone()),
+                    MeshMaterial2d(assets.portal_fill.clone()),
+                    Transform::from_translation(local).with_scale(Vec3::splat(*radius)),
+                ));
+                parent.spawn((
+                    Mesh2d(assets.unit_ring.clone()),
+                    MeshMaterial2d(assets.portal_rim.clone()),
+                    Transform::from_translation(local + Vec3::Z * 0.1)
+                        .with_scale(Vec3::splat(*radius)),
+                ));
+            }
+        }
         Placement::GravityOrb { radius, .. } => {
             let field = radius * config.gravity_orb.field_scale;
             parent.spawn((

@@ -16,7 +16,7 @@ pub use behavior::{Outcome, on_enter, while_inside};
 pub use kind::{
     BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, GravityOrbConfig,
     MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig,
-    StaticCloudConfig, WindRibbonConfig,
+    StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
 };
 use visuals::ObjectAssets;
 
@@ -161,14 +161,10 @@ fn touch_objects(
         // Instant effects fire on entering only: touching now, not before.
         if !was_touching {
             touched.write(ObjectTouched { kind, entity });
-            match on_enter(
-                kind,
-                placement.center(),
-                &config.objects,
-                &config.movement,
-                body,
-            ) {
+            match on_enter(placement, &config.objects, &config.movement, body) {
                 Outcome::Nothing => {}
+                // A jump, not a move: no smeared line across the screen.
+                Outcome::Teleported(changed) => astronaut.teleport(changed),
                 Outcome::Changed(changed) => {
                     astronaut.set_body(changed);
                     // A bubble is spent for the rest of the attempt.
@@ -436,6 +432,30 @@ pub(crate) mod tests {
         assert_eq!(
             *app.world().resource::<State<LevelPhase>>().get(),
             LevelPhase::Restarting
+        );
+    }
+
+    #[test]
+    fn falling_into_a_portal_comes_out_of_the_other_end_once() {
+        let mut level = Level::for_tests();
+        let (a, b) = (Vec2::new(0.0, -700.0), Vec2::new(300.0, -1300.0));
+        level.objects = vec![Placement::TwinPortals { a, b, radius: 60.0 }];
+        let mut app = object_app(level, Vec2::new(0.0, -500.0));
+        app.init_resource::<Touches>().add_systems(Update, record);
+        // ~1.5 s: long enough to fall the 200 units to the near end.
+        drop_for(&mut app, 90);
+        let world = app.world_mut();
+        let body = world.query::<&Motion>().single(world).map(Motion::body);
+        let position = body.unwrap_or_default().position;
+        // Out of the far end, then falling on from there.
+        assert!(
+            (position.x - b.x).abs() < 50.0,
+            "came out at the far end: {position}"
+        );
+        assert!(position.y < b.y, "and kept falling: {position}");
+        assert_eq!(
+            app.world().resource::<Touches>().0,
+            vec![ObjectKind::TwinPortals]
         );
     }
 }

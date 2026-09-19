@@ -132,6 +132,9 @@ pub struct Effects {
     pub comet_dive: f32,
     /// Held by a bubble, if any.
     pub captured: Option<Capture>,
+    /// Portals ignore the astronaut until this runs out, so it can't bounce
+    /// straight back through the end it just came out of.
+    pub portal_cooldown: f32,
 }
 
 impl Effects {
@@ -141,6 +144,7 @@ impl Effects {
         Self {
             swapped_controls: (self.swapped_controls - dt).max(0.0),
             comet_dive: (self.comet_dive - dt).max(0.0),
+            portal_cooldown: (self.portal_cooldown - dt).max(0.0),
             // A finished capture becomes `None`: the bubble popped.
             captured: self.captured.and_then(|capture| {
                 let seconds_left = capture.seconds_left - dt;
@@ -150,6 +154,12 @@ impl Effects {
                 })
             }),
         }
+    }
+
+    /// Whether portals are currently ignoring the astronaut.
+    #[must_use]
+    pub fn portals_on_cooldown(self) -> bool {
+        self.portal_cooldown > 0.0
     }
 
     /// Whether a bubble is currently carrying the astronaut.
@@ -202,6 +212,20 @@ impl Body {
         Self {
             effects: Effects {
                 swapped_controls: seconds,
+                ..self.effects
+            },
+            ..self
+        }
+    }
+
+    /// Moved to `position` by a portal, keeping speed, direction and every
+    /// other effect; portals then ignore the astronaut for `cooldown` seconds.
+    #[must_use]
+    pub fn teleported(self, position: Vec2, cooldown: f32) -> Self {
+        Self {
+            position,
+            effects: Effects {
+                portal_cooldown: cooldown,
                 ..self.effects
             },
             ..self
@@ -663,6 +687,7 @@ pub(crate) mod tests {
             swapped_controls: 0.2,
             comet_dive: 0.1,
             captured: None,
+            portal_cooldown: 0.0,
         };
         let later = effects.after(0.15);
         assert!((later.swapped_controls - 0.05).abs() < 1e-6);

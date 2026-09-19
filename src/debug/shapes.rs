@@ -69,6 +69,11 @@ fn draw_shape(gizmos: &mut Gizmos, shape: ObjectShape, color: Color) {
         ObjectShape::Circle(circle) => {
             gizmos.circle_2d(circle.center, circle.radius, color);
         }
+        ObjectShape::Pair(ends) => {
+            for end in ends {
+                gizmos.circle_2d(end.center, end.radius, color);
+            }
+        }
         ObjectShape::Path(path) => {
             gizmos.linestrip_2d(path.points.iter().copied(), color);
             for &point in path.points {

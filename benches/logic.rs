@@ -92,11 +92,18 @@ fn object_effects(c: &mut Criterion) {
         velocity: Vec2::new(240.0, -450.0),
         ..Body::default()
     };
+    let cloud = Placement::CloudPuff {
+        center: Vec2::new(0.0, -500.0),
+        radius: 80.0,
+    };
+    let crystal = Placement::Crystal {
+        center: Vec2::new(0.0, -500.0),
+        size: 50.0,
+    };
     c.bench_function("cloud puff on_enter", |b| {
         b.iter(|| {
             on_enter(
-                ObjectKind::CloudPuff,
-                black_box(Vec2::new(0.0, -500.0)),
+                black_box(&cloud),
                 &CONFIG.objects,
                 &CONFIG.movement,
                 black_box(body),
@@ -106,8 +113,7 @@ fn object_effects(c: &mut Criterion) {
     c.bench_function("crystal on_enter", |b| {
         b.iter(|| {
             on_enter(
-                ObjectKind::Crystal,
-                black_box(Vec2::new(0.0, -500.0)),
+                black_box(&crystal),
                 &CONFIG.objects,
                 &CONFIG.movement,
                 black_box(body),

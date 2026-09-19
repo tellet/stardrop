@@ -302,6 +302,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Touching the core** replaces the velocity with a soft 420 u/s push straight out, instead of letting the astronaut pass through the center.
 - Like the wind ribbon, the orb acts continuously (`while_inside`) and entering it does nothing by itself.
 
+## M4-4 · Twin portals
+
+- **One entry per pair** (the user's choice): `TwinPortals(a:, b:, radius:)`. A portal can't be unpaired or double-paired, because a level file can't express it ("make invalid states unrepresentable"). Validation only has to check that the ends are at least three radii apart.
+- **A third shape:** `ObjectShape::Pair([CircleShape; 2])`, touched if either end is.
+- **`on_enter` takes the placed object**, not just its type and center, because a portal must know which end was touched (the nearer one). The effect is still one exhaustive `match`, now over `Placement`.
+- **`Outcome::Teleported`** exists so the astronaut *jumps*: the drawn position is reset too, instead of being smoothly blended across the screen.
+- **Cooldown** of 0.5 s in `Effects`, so you can't bounce straight back. Speed, direction and all other effects (spores, dives) carry through unchanged.
+
 ---
 
 ## Baseline measurements (M0)
@@ -359,3 +367,17 @@ Release build, same machine as M0, 60 Hz with vsync.
 | Contact check, plain loop | 171 ns (12 objects) / 560 ns (40) | Per physics step; see M3-4. |
 | Parse + validate test level | 6.7 µs | Was 3.7 µs; the level now has objects. Budget: 200 ms. |
 | Movement step | 6.7 ns | Unchanged. |
+
+## Measurements (M4)
+
+Benchmarks now use the game's real `GameConfig` (no constant folding), so these
+replace the M3 numbers rather than comparing directly.
+
+| Metric | Value | Notes |
+|---|---|---|
+| Movement step | 8.4 ns | Was 6.7 ns before timed effects. |
+| Cloud puff / crystal effect | 50 ns / 11 ns | Now matched on the placed object. |
+| Wind ribbon step (16 points) | 66 ns | |
+| Contact check, plain loop | 79 ns (12 objects) / 261 ns (40) | Two per frame. |
+| Contact check, grid | 86 ns / 229 ns | Now level with the loop: the loop stays (M3-4). |
+| Parse + validate test level | 10.0 µs | Nine object types in it. Budget: 200 ms. |

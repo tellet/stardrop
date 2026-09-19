@@ -22,6 +22,8 @@
         StaticCloud(center: (330, 1250), radius: 95),
         // Near the right-hand mote: sends you back toward the middle.
         Crystal(center: (900, 1350), size: 50),
+        // A pair of portals: in on the left, out on the right.
+        TwinPortals(a: (150, 1250), b: (900, 900), radius: 55),
         // Swing around this on the way down.
         GravityOrb(center: (760, 1600), radius: 50),
         // Left side, flowing down and right toward the beacon: a shortcut,
