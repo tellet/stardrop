@@ -8,14 +8,10 @@ use core::fmt;
 
 use super::data::{FilePoint, LEVEL_HEIGHT, LEVEL_WIDTH, LevelFile, to_world};
 use super::scenery::MOTE_RADIUS;
-use crate::collision::{Shape, circle_overlaps_rect};
+use crate::collision::{Shape, circle_overlaps_rect, circles_overlap};
 use crate::config::ASTRONAUT_RADIUS;
-use crate::objects::{ObjectKind, Placement};
+use crate::objects::{MAX_RIBBON_POINTS, Placement};
 use crate::scoring::MAX_STARDUST;
-
-/// Object sizes (radius, or half-size) must be within this range, so every
-/// object stays readable and touchable.
-pub const OBJECT_SIZE_RANGE: core::ops::RangeInclusive<f32> = 20.0..=300.0;
 
 /// Which thing in the level an error is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,8 +66,17 @@ pub enum LevelError {
     BadTargetTime,
     /// More stardust than a run can track.
     TooMuchStardust(usize),
-    /// An object's size is outside [`OBJECT_SIZE_RANGE`].
-    BadObjectSize(usize),
+    /// An object's size is outside its type's range.
+    BadObjectSize {
+        /// Index of the object in the list.
+        object: usize,
+        /// Smallest allowed size for its type.
+        min: f32,
+        /// Largest allowed size for its type.
+        max: f32,
+    },
+    /// A wind ribbon's path needs 2 to `MAX_RIBBON_POINTS` points.
+    BadRibbonPath(usize),
     /// An object covers something it must not (e.g. the start, or a hazard
     /// on the beacon).
     Overlaps {
@@ -100,12 +105,15 @@ impl fmt::Display for LevelError {
             Self::BadBeaconSize => write!(f, "the beacon's width and height must be positive"),
             Self::BeaconAboveStart => write!(f, "the beacon must be below the start"),
             Self::BadTargetTime => write!(f, "target_time must be more than 0 seconds"),
-            Self::BadObjectSize(i) => write!(
+            Self::BadObjectSize { object, min, max } => write!(
                 f,
-                "{}'s size must be between {} and {}",
-                Item::Object(*i),
-                OBJECT_SIZE_RANGE.start(),
-                OBJECT_SIZE_RANGE.end()
+                "{}'s size must be between {min} and {max}",
+                Item::Object(*object)
+            ),
+            Self::BadRibbonPath(i) => write!(
+                f,
+                "{}'s path needs 2 to {MAX_RIBBON_POINTS} points",
+                Item::Object(*i)
             ),
             Self::Overlaps { object, item } => {
                 write!(f, "{} overlaps {item}", Item::Object(*object))
@@ -164,24 +172,23 @@ fn check_objects(file: &LevelFile) -> Result<(), LevelError> {
     for (i, object) in file.objects.iter().enumerate() {
         let placed = object.clone().into_world();
         check_object_shape(&placed, i)?;
-        let outline = placed.outline();
         // The astronaut must never start inside anything.
-        if outline.overlaps_circle(start, ASTRONAUT_RADIUS) {
+        if placed.outline().overlaps_circle(start, ASTRONAUT_RADIUS) {
             return Err(LevelError::Overlaps {
                 object: i,
                 item: Item::Start,
             });
         }
         // Hazards must leave the goal and every mote reachable.
-        if placed.kind() == ObjectKind::StaticCloud {
-            if circle_overlaps_rect(outline.center, outline.radius, beacon_center, beacon_size) {
+        if let Placement::StaticCloud { center, radius } = placed {
+            if circle_overlaps_rect(center, radius, beacon_center, beacon_size) {
                 return Err(LevelError::Overlaps {
                     object: i,
                     item: Item::Beacon,
                 });
             }
             for (m, &mote) in file.stardust.iter().enumerate() {
-                if outline.overlaps_circle(to_world(mote), MOTE_RADIUS) {
+                if circles_overlap(center, radius, to_world(mote), MOTE_RADIUS) {
                     return Err(LevelError::Overlaps {
                         object: i,
                         item: Item::Stardust(m),
@@ -193,19 +200,34 @@ fn check_objects(file: &LevelFile) -> Result<(), LevelError> {
     Ok(())
 }
 
-/// Position and size rules that every object shares.
+/// Size and position rules for every object.
 fn check_object_shape(placed: &Placement, index: usize) -> Result<(), LevelError> {
-    let outline = placed.outline();
-    finite("an object's size", outline.radius)?;
-    if !OBJECT_SIZE_RANGE.contains(&outline.radius) {
-        return Err(LevelError::BadObjectSize(index));
+    let size = placed.size();
+    finite("an object's size", size)?;
+    let range = placed.kind().size_range();
+    if !range.contains(&size) {
+        return Err(LevelError::BadObjectSize {
+            object: index,
+            min: *range.start(),
+            max: *range.end(),
+        });
     }
-    // Back to file coordinates for the shared "inside the level" rule.
-    let center = placed.center();
-    inside(
-        FilePoint(center.x + LEVEL_WIDTH / 2.0, -center.y),
-        Item::Object(index),
-    )
+    if let Placement::WindRibbon { path, .. } = placed {
+        if !(2..=MAX_RIBBON_POINTS).contains(&path.len()) {
+            return Err(LevelError::BadRibbonPath(index));
+        }
+        // Every point of the path, not just its middle, must be inside.
+        for point in path {
+            inside(to_file(*point), Item::Object(index))?;
+        }
+        return Ok(());
+    }
+    inside(to_file(placed.center()), Item::Object(index))
+}
+
+/// World coordinates back to file coordinates, for the shared "inside" rule.
+fn to_file(point: bevy::math::Vec2) -> FilePoint {
+    FilePoint(point.x + LEVEL_WIDTH / 2.0, -point.y)
 }
 
 fn check_beacon(file: &LevelFile) -> Result<(), LevelError> {
@@ -405,11 +427,19 @@ mod tests {
             ),
             (
                 "StaticCloud(center: (300, 800), radius: 5)",
-                LevelError::BadObjectSize(0),
+                LevelError::BadObjectSize {
+                    object: 0,
+                    min: 20.0,
+                    max: 300.0,
+                },
             ),
             (
                 "StaticCloud(center: (300, 800), radius: 900)",
-                LevelError::BadObjectSize(0),
+                LevelError::BadObjectSize {
+                    object: 0,
+                    min: 20.0,
+                    max: 300.0,
+                },
             ),
             (
                 "StaticCloud(center: (560, 240), radius: 60)",
@@ -430,6 +460,41 @@ mod tests {
                 LevelError::Overlaps {
                     object: 0,
                     item: Item::Stardust(0),
+                },
+            ),
+        ];
+        for (objects, expected) in cases {
+            let error = Level::parse(&with_objects(objects)).unwrap_err();
+            assert_eq!(error, expected, "for {objects}");
+        }
+    }
+
+    #[test]
+    fn ribbon_rules_are_enforced() {
+        let ok = "WindRibbon(path: [(100, 600), (500, 700), (900, 650)], width: 80)";
+        assert!(Level::parse(&with_objects(ok)).is_ok());
+        let cases = [
+            (
+                "WindRibbon(path: [(100, 600)], width: 80)",
+                LevelError::BadRibbonPath(0),
+            ),
+            (
+                "WindRibbon(path: [(100, 600), (1200, 700)], width: 80)",
+                LevelError::Outside(Item::Object(0)),
+            ),
+            (
+                "WindRibbon(path: [(100, 600), (500, 700)], width: 10)",
+                LevelError::BadObjectSize {
+                    object: 0,
+                    min: 30.0,
+                    max: 240.0,
+                },
+            ),
+            (
+                "WindRibbon(path: [(400, 150), (700, 250)], width: 80)",
+                LevelError::Overlaps {
+                    object: 0,
+                    item: Item::Start,
                 },
             ),
         ];

@@ -39,6 +39,65 @@ impl Shape for CircleShape {
     }
 }
 
+/// A thick path: a chain of segments with rounded ends (capsules), like a
+/// wind ribbon.
+///
+/// It *borrows* its points (`&'a [Vec2]`) instead of copying them: the
+/// lifetime `'a` tells the compiler this shape can't outlive the level data
+/// it points into, so checking a collision never allocates.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PathShape<'a> {
+    /// The centerline, in order (at least two points).
+    pub points: &'a [Vec2],
+    /// Distance from the centerline to the edge.
+    pub half_width: f32,
+}
+
+impl PathShape<'_> {
+    /// The segment closest to `point`: its index (from `points[i]` to
+    /// `points[i + 1]`) and the squared distance. `None` for fewer than two points.
+    #[must_use]
+    pub fn closest_segment(&self, point: Vec2) -> Option<(usize, f32)> {
+        self.points
+            .windows(2)
+            .map(|pair| distance_squared_to_segment(point, pair[0], pair[1]))
+            .enumerate()
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+    }
+
+    /// Direction of travel along segment `index` (unit length, or zero for a
+    /// degenerate segment).
+    #[must_use]
+    pub fn direction(&self, index: usize) -> Vec2 {
+        match (self.points.get(index), self.points.get(index + 1)) {
+            (Some(&a), Some(&b)) => (b - a).normalize_or_zero(),
+            _ => Vec2::ZERO,
+        }
+    }
+}
+
+impl Shape for PathShape<'_> {
+    fn overlaps_circle(&self, center: Vec2, radius: f32) -> bool {
+        let reach = self.half_width + radius;
+        self.closest_segment(center)
+            .is_some_and(|(_, distance_squared)| distance_squared <= reach * reach)
+    }
+}
+
+/// Squared distance from `point` to the segment from `a` to `b`.
+#[must_use]
+pub fn distance_squared_to_segment(point: Vec2, a: Vec2, b: Vec2) -> f32 {
+    let along = b - a;
+    let length_squared = along.length_squared();
+    // How far along the segment the closest point is (0 = at a, 1 = at b).
+    let t = if length_squared > 0.0 {
+        ((point - a).dot(along) / length_squared).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    point.distance_squared(a + along * t)
+}
+
 /// Whether two circles touch or overlap.
 #[must_use]
 pub fn circles_overlap(a: Vec2, a_radius: f32, b: Vec2, b_radius: f32) -> bool {
@@ -113,6 +172,34 @@ mod tests {
             rect.0,
             rect.1
         ));
+    }
+
+    #[test]
+    fn distance_to_a_segment_uses_the_nearest_point() {
+        let (a, b) = (Vec2::ZERO, Vec2::new(10.0, 0.0));
+        assert!((distance_squared_to_segment(Vec2::new(5.0, 3.0), a, b) - 9.0).abs() < 1e-6);
+        // Beyond the end: distance to the end point.
+        assert!((distance_squared_to_segment(Vec2::new(13.0, 4.0), a, b) - 25.0).abs() < 1e-6);
+        // A zero-length segment is just a point.
+        assert!((distance_squared_to_segment(Vec2::new(3.0, 4.0), a, a) - 25.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn path_shape_touches_along_its_whole_length() {
+        let points = [Vec2::ZERO, Vec2::new(100.0, 0.0), Vec2::new(100.0, -100.0)];
+        let path = PathShape {
+            points: &points,
+            half_width: 20.0,
+        };
+        assert!(path.overlaps_circle(Vec2::new(50.0, 25.0), 10.0));
+        assert!(path.overlaps_circle(Vec2::new(125.0, -50.0), 10.0));
+        assert!(!path.overlaps_circle(Vec2::new(50.0, 31.0), 10.0));
+        assert_eq!(
+            path.closest_segment(Vec2::new(110.0, -80.0))
+                .map(|(i, _)| i),
+            Some(1)
+        );
+        assert_eq!(path.direction(1), Vec2::new(0.0, -1.0));
     }
 
     #[test]

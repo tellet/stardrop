@@ -42,6 +42,8 @@ pub(super) struct FileBeacon {
 pub(super) enum FileObject {
     /// `CloudPuff(center: (x, depth), radius: r)`.
     CloudPuff { center: FilePoint, radius: f32 },
+    /// `WindRibbon(path: [(x, depth), ...], width: w)`.
+    WindRibbon { path: Vec<FilePoint>, width: f32 },
     /// `Crystal(center: (x, depth), size: s)`.
     Crystal { center: FilePoint, size: f32 },
     /// `StaticCloud(center: (x, depth), radius: r)`.
@@ -200,6 +202,10 @@ impl FileObject {
             Self::CloudPuff { center, radius } => Placement::CloudPuff {
                 center: to_world(center),
                 radius,
+            },
+            Self::WindRibbon { path, width } => Placement::WindRibbon {
+                path: path.into_iter().map(to_world).collect(),
+                width,
             },
             Self::Crystal { center, size } => Placement::Crystal {
                 center: to_world(center),

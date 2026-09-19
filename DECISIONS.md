@@ -254,6 +254,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Hitboxes:** helpful and mixed objects use their full outline (generous). The crystal uses the circle through its tips.
 - **Caught before running:** `touch_objects` first asked for `&Motion` and `&mut Motion` on the astronaut. Bevy rejects that at startup (B0001, the same rule as Rust's borrowing), so it now uses a single `&mut` handle.
 
+## M3-3 · Wind ribbon
+
+- **Shape:** `PathShape<'a>`, a chain of capsules (a centerline plus a half-width) that *borrows* the ribbon's points. `ObjectShape` is an enum of `Circle` and `Path` that implements `Shape`, so collision, validation and F2 treat every object alike.
+- **Behavior:** continuous, in the pure function `while_inside`. Each step inside, the velocity moves toward `direction of the nearest segment × 500 u/s` at 1800 u/s² (4× gravity, so ribbons can carry you up, and you can still steer a little). The astronaut is marked `Coasting` inside, so leaving at the end or out the side keeps the speed ("released at its end", and the spacey feel).
+- **Entering** a ribbon still sends `ObjectTouched` (for the journal and sounds), with `Outcome::Nothing` as its instant effect.
+- **Meshes per ribbon:** unlike other types, each ribbon's strip and chevrons follow its own path. They're freed when the ribbon despawns (the last handle drops the asset). The leak test includes a ribbon and confirms the mesh count stays constant over 20 reloads.
+- **Validation:** 2–16 points, all inside the level; width 30–240; not overlapping the start. Per-type size ranges replace the single range.
+
 ---
 
 ## Baseline measurements (M0)

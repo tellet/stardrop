@@ -4,12 +4,15 @@
 
 use bevy::math::Vec2;
 
-use super::kind::{ObjectKind, ObjectsConfig};
+use super::kind::{ObjectKind, ObjectShape, ObjectsConfig, Placement};
 use crate::physics::movement::Body;
 
 /// The result of touching an object.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Outcome {
+    /// Nothing happens on entering (the object acts continuously instead;
+    /// see [`while_inside`]).
+    Nothing,
     /// The astronaut takes on this velocity (and coasts; see `Body::launched`).
     Launch(Vec2),
     /// The attempt ends (hazard).
@@ -25,8 +28,33 @@ pub enum Outcome {
 pub fn on_enter(kind: ObjectKind, center: Vec2, config: &ObjectsConfig, body: Body) -> Outcome {
     match kind {
         ObjectKind::CloudPuff => Outcome::Launch(cloud_bounce(center, config, body)),
+        ObjectKind::WindRibbon => Outcome::Nothing,
         ObjectKind::Crystal => Outcome::Launch(crystal_reverse(center, config, body)),
         ObjectKind::StaticCloud => Outcome::FailAttempt,
+    }
+}
+
+/// The astronaut's new velocity after one fixed step of `dt` seconds inside
+/// `placement`, for objects that act continuously; `None` for the rest.
+///
+/// A wind ribbon pulls the velocity toward its flow (the direction of the
+/// nearest segment, at `flow_speed`) at `pull` units/s². Leaving the ribbon
+/// simply stops the pull, so the astronaut keeps its speed: "released at its end".
+#[must_use]
+pub fn while_inside(
+    placement: &Placement,
+    config: &ObjectsConfig,
+    body: Body,
+    dt: f32,
+) -> Option<Vec2> {
+    match placement.outline() {
+        ObjectShape::Path(path) if placement.kind() == ObjectKind::WindRibbon => {
+            let (segment, _) = path.closest_segment(body.position)?;
+            let wind = config.wind_ribbon;
+            let target = path.direction(segment) * wind.flow_speed;
+            Some(body.velocity.move_towards(target, wind.pull * dt))
+        }
+        _ => None,
     }
 }
 
@@ -63,12 +91,18 @@ mod tests {
     use core::f32::consts::FRAC_PI_4;
 
     use super::*;
-    use crate::objects::kind::{CloudPuffConfig, CrystalConfig, StaticCloudConfig};
+    use crate::objects::kind::{
+        CloudPuffConfig, CrystalConfig, StaticCloudConfig, WindRibbonConfig,
+    };
 
     const CONFIG: ObjectsConfig = ObjectsConfig {
         cloud_puff: CloudPuffConfig {
             bounce_speed: 650.0,
             max_tilt: FRAC_PI_4,
+        },
+        wind_ribbon: WindRibbonConfig {
+            flow_speed: 500.0,
+            pull: 1800.0,
         },
         crystal: CrystalConfig {
             min_sideways_speed: 350.0,
@@ -87,7 +121,7 @@ mod tests {
     fn launched(kind: ObjectKind, center: Vec2, body: Body) -> Vec2 {
         match on_enter(kind, center, &CONFIG, body) {
             Outcome::Launch(velocity) => velocity,
-            Outcome::FailAttempt => panic!("{kind:?} should launch"),
+            other => panic!("{kind:?} should launch, got {other:?}"),
         }
     }
 
@@ -194,5 +228,77 @@ mod tests {
             body(Vec2::new(230.0, -1480.0), incoming),
         );
         assert_eq!(a, b);
+    }
+
+    fn ribbon(points: &[Vec2]) -> Placement {
+        Placement::WindRibbon {
+            path: points.to_vec(),
+            width: 80.0,
+        }
+    }
+
+    /// Steps inside the ribbon until the velocity stops changing.
+    fn settle(placement: &Placement, mut body: Body) -> Vec2 {
+        for _ in 0..240 {
+            if let Some(velocity) = while_inside(placement, &CONFIG, body, 1.0 / 120.0) {
+                body.velocity = velocity;
+            }
+        }
+        body.velocity
+    }
+
+    #[test]
+    fn wind_carries_the_astronaut_along_its_flow() {
+        let rightward = ribbon(&[Vec2::new(-400.0, -500.0), Vec2::new(400.0, -500.0)]);
+        let falling = body(Vec2::new(0.0, -500.0), Vec2::new(0.0, -450.0));
+        let settled = settle(&rightward, falling);
+        assert!(
+            (settled - Vec2::new(500.0, 0.0)).length() < 1e-2,
+            "{settled}"
+        );
+    }
+
+    #[test]
+    fn wind_can_carry_the_astronaut_upward() {
+        let upward = ribbon(&[Vec2::new(0.0, -900.0), Vec2::new(0.0, -300.0)]);
+        let settled = settle(
+            &upward,
+            body(Vec2::new(0.0, -700.0), Vec2::new(0.0, -450.0)),
+        );
+        assert!(settled.y > 450.0, "{settled}");
+    }
+
+    #[test]
+    fn wind_follows_the_nearest_segment() {
+        let bent = ribbon(&[
+            Vec2::new(0.0, 0.0),
+            Vec2::new(300.0, 0.0),
+            Vec2::new(300.0, -300.0),
+        ]);
+        // Near the second (downward) segment.
+        let settled = settle(&bent, body(Vec2::new(310.0, -200.0), Vec2::ZERO));
+        assert!(
+            (settled - Vec2::new(0.0, -500.0)).length() < 1e-2,
+            "{settled}"
+        );
+    }
+
+    #[test]
+    fn only_wind_acts_continuously() {
+        let cloud = Placement::CloudPuff {
+            center: Vec2::ZERO,
+            radius: 80.0,
+        };
+        assert_eq!(
+            while_inside(&cloud, &CONFIG, body(Vec2::ZERO, Vec2::ZERO), 0.01),
+            None
+        );
+        let entering = on_enter(
+            ObjectKind::WindRibbon,
+            Vec2::ZERO,
+            &CONFIG,
+            body(Vec2::ZERO, Vec2::ZERO),
+        );
+        assert_eq!(entering, Outcome::Nothing);
     }
 }

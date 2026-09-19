@@ -12,9 +12,10 @@ mod behavior;
 mod kind;
 mod visuals;
 
-pub use behavior::{Outcome, on_enter};
+pub use behavior::{Outcome, on_enter, while_inside};
 pub use kind::{
-    CloudPuffConfig, CrystalConfig, ObjectKind, ObjectsConfig, Placement, StaticCloudConfig,
+    CloudPuffConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig,
+    Placement, StaticCloudConfig, WindRibbonConfig,
 };
 use visuals::ObjectAssets;
 
@@ -23,6 +24,7 @@ use crate::attempt::{AttemptFailed, AttemptRestarted, fail};
 use crate::config::GameConfig;
 use crate::level::{ActiveLevel, LevelPhase, LevelSystems, still_falling};
 use crate::physics::Motion;
+use crate::physics::movement::{Body, Drift};
 
 /// Sent when the astronaut starts touching an object.
 #[derive(Message, Debug, Clone, Copy)]
@@ -80,6 +82,7 @@ fn spawn_objects(
     mut commands: Commands,
     level: Res<ActiveLevel>,
     assets: Res<ObjectAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
     old: Query<Entity, With<ObjectIndex>>,
 ) {
     for entity in &old {
@@ -94,15 +97,17 @@ fn spawn_objects(
                 visuals::transform_for(placement),
                 Visibility::default(),
             ))
-            .with_children(|parent| visuals::spawn_look(parent, &assets, placement));
+            .with_children(|parent| visuals::spawn_look(parent, &assets, &mut meshes, placement));
     }
 }
 
-/// Finds objects the astronaut just started touching and applies their effect.
+/// Finds objects the astronaut touches and applies their effects: instant
+/// ones on entering, continuous ones (wind) on every step inside.
 ///
 /// A plain loop over the level's objects: one screen holds a few dozen at
 /// most, which a loop checks in well under a microsecond (see `benches/`).
 fn touch_objects(
+    time: Res<Time>,
     level: Res<ActiveLevel>,
     config: Res<GameConfig>,
     // One mutable handle for reading *and* writing: asking Bevy for `&Motion`
@@ -126,17 +131,33 @@ fn touch_objects(
         if touching != was_touching {
             contact.0 = touching;
         }
-        // Effects fire on entering only: touching now, not touching before.
-        if !touching || was_touching {
+        if !touching {
             continue;
         }
-        let kind = placement.kind();
-        touched.write(ObjectTouched { kind, entity });
-        match on_enter(kind, placement.center(), &config.objects, body) {
-            Outcome::Launch(velocity) => {
-                astronaut.set_body(body.launched(velocity, &config.movement));
+        // Instant effects fire on entering only: touching now, not before.
+        if !was_touching {
+            let kind = placement.kind();
+            touched.write(ObjectTouched { kind, entity });
+            match on_enter(kind, placement.center(), &config.objects, body) {
+                Outcome::Nothing => {}
+                Outcome::Launch(velocity) => {
+                    astronaut.set_body(body.launched(velocity, &config.movement));
+                }
+                Outcome::FailAttempt => {
+                    fail(&mut failed, &mut next_phase);
+                    return;
+                }
             }
-            Outcome::FailAttempt => fail(&mut failed, &mut next_phase),
+        }
+        // Continuous effects act on every step inside. The astronaut coasts
+        // afterwards, keeping the speed the wind gave it.
+        let body = astronaut.body();
+        if let Some(velocity) = while_inside(placement, &config.objects, body, time.delta_secs()) {
+            astronaut.set_body(Body {
+                velocity,
+                drift: Drift::Coasting,
+                ..body
+            });
         }
     }
 }
@@ -270,5 +291,27 @@ pub(crate) mod tests {
             app.update();
         }
         assert!(astronaut_velocity(&mut app).x < -300.0);
+    }
+
+    #[test]
+    fn a_wind_ribbon_carries_the_astronaut_and_lets_it_coast_on() {
+        let mut level = Level::for_tests();
+        // A horizontal ribbon flowing right, across the astronaut's fall.
+        level.objects = vec![Placement::WindRibbon {
+            path: vec![Vec2::new(-200.0, -800.0), Vec2::new(200.0, -800.0)],
+            width: 120.0,
+        }];
+        let mut app = object_app(level, Vec2::new(-150.0, -650.0));
+        let mut fastest_sideways: f32 = 0.0;
+        for _ in 0..90 {
+            app.update();
+            fastest_sideways = fastest_sideways.max(astronaut_velocity(&mut app).x);
+        }
+        assert!(
+            fastest_sideways > 250.0,
+            "carried right ({fastest_sideways})"
+        );
+        // Long after leaving the ribbon, still drifting right (coasting).
+        assert!(astronaut_velocity(&mut app).x > 50.0);
     }
 }

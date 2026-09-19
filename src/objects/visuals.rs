@@ -2,7 +2,10 @@
 //! Final art arrives in Milestone 7.
 //!
 //! Meshes are unit-sized (radius 1) and scaled per object, and every object
-//! of a type shares them, so reloading a level never creates new assets.
+//! of a type shares them. Wind ribbons are the exception: each one's mesh
+//! follows its own path. Their meshes are freed automatically when the
+//! ribbon is despawned (the last handle to an asset drops it), so reloads
+//! still don't grow memory.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
@@ -18,6 +21,12 @@ const PUFF_LOBES: [(Vec2, f32); 3] = [
     (Vec2::new(0.0, 0.2), 0.72),
 ];
 const PUFF_COLOR: Color = Color::srgb(0.96, 0.86, 0.95);
+/// Wind ribbons: a translucent glowing strip, with brighter chevrons every
+/// `CHEVRON_SPACING` units pointing along the flow.
+const RIBBON_GLOW: Color = Color::linear_rgba(0.3, 1.3, 1.2, 0.28);
+const CHEVRON_GLOW: Color = Color::linear_rgba(0.6, 2.2, 1.9, 0.8);
+const CHEVRON_SPACING: f32 = 90.0;
+const CHEVRON_SIZE: f32 = 16.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
 /// Spikes around a static cloud's outline.
@@ -37,6 +46,8 @@ pub(super) struct ObjectAssets {
     spiky_star: Handle<Mesh>,
     puff: Handle<ColorMaterial>,
     crystal: Handle<ColorMaterial>,
+    ribbon: Handle<ColorMaterial>,
+    chevron: Handle<ColorMaterial>,
     static_core: Handle<ColorMaterial>,
     static_crackle: Handle<ColorMaterial>,
 }
@@ -55,19 +66,37 @@ impl FromWorld for ObjectAssets {
             spiky_star,
             puff: materials.add(PUFF_COLOR),
             crystal: materials.add(CRYSTAL_GLOW),
+            ribbon: materials.add(RIBBON_GLOW),
+            chevron: materials.add(CHEVRON_GLOW),
             static_core: materials.add(STATIC_CORE),
             static_crackle: materials.add(STATIC_CRACKLE),
         }
     }
 }
 
-/// Spawns the visible parts of `placement` as children of `parent`.
+/// Spawns the visible parts of `placement` as children of `parent` (which
+/// sits at `placement.center()`).
 pub(super) fn spawn_look(
     parent: &mut ChildSpawnerCommands,
     assets: &ObjectAssets,
+    meshes: &mut Assets<Mesh>,
     placement: &Placement,
 ) {
     match placement {
+        Placement::WindRibbon { path, width } => {
+            // Mesh points are relative to the parent, which sits at the center.
+            let center = placement.center();
+            let local: Vec<Vec2> = path.iter().map(|&point| point - center).collect();
+            parent.spawn((
+                Mesh2d(meshes.add(ribbon_mesh(&local, *width))),
+                MeshMaterial2d(assets.ribbon.clone()),
+            ));
+            parent.spawn((
+                Mesh2d(meshes.add(chevron_mesh(&local))),
+                MeshMaterial2d(assets.chevron.clone()),
+                Transform::from_xyz(0.0, 0.0, 0.1),
+            ));
+        }
         Placement::CloudPuff { radius, .. } => {
             for (offset, scale) in PUFF_LOBES {
                 parent.spawn((
@@ -104,6 +133,65 @@ pub(super) fn spawn_look(
 /// The entity transform for an object (its children carry the shapes).
 pub(super) fn transform_for(placement: &Placement) -> Transform {
     Transform::from_translation(placement.center().extend(OBJECT_DEPTH))
+}
+
+/// A strip `width` wide along `path`: two vertices per point, offset along
+/// the averaged normal of the neighboring segments so joints stay closed.
+fn ribbon_mesh(path: &[Vec2], width: f32) -> Mesh {
+    let mut positions = Vec::with_capacity(path.len() * 2);
+    for (i, &point) in path.iter().enumerate() {
+        let before = if i > 0 {
+            point - path[i - 1]
+        } else {
+            Vec2::ZERO
+        };
+        let after = path.get(i + 1).map_or(Vec2::ZERO, |&next| next - point);
+        let tangent =
+            (before.normalize_or_zero() + after.normalize_or_zero()).normalize_or(Vec2::X);
+        let side = tangent.perp() * (width / 2.0);
+        positions.push((point + side).extend(0.0).to_array());
+        positions.push((point - side).extend(0.0).to_array());
+    }
+    let mut indices = Vec::with_capacity(path.len().saturating_sub(1) * 6);
+    // `u16` counting: a ribbon has at most 16 points (32 vertices).
+    for (segment, _) in (0_u16..).zip(path.windows(2)) {
+        let a = segment * 2;
+        indices.extend([a, a + 2, a + 1, a + 1, a + 2, a + 3]);
+    }
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_indices(Indices::U16(indices))
+}
+
+/// Small arrowheads every `CHEVRON_SPACING` units along `path`, each
+/// pointing in the direction of flow.
+fn chevron_mesh(path: &[Vec2]) -> Mesh {
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut travelled = CHEVRON_SPACING / 2.0;
+    for pair in path.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let length = a.distance(b);
+        let direction = (b - a).normalize_or_zero();
+        while travelled <= length {
+            let tip = a + direction * (travelled + CHEVRON_SIZE / 2.0);
+            let back = tip - direction * CHEVRON_SIZE;
+            let side = direction.perp() * (CHEVRON_SIZE * 0.6);
+            for corner in [tip, back + side, back - side] {
+                positions.push(corner.extend(0.0).to_array());
+            }
+            travelled += CHEVRON_SPACING;
+        }
+        travelled -= length;
+    }
+    // Separate triangles (no shared vertices), so no index buffer is needed.
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
 }
 
 /// A star-shaped outline with `points` spikes, alternating between `inner`

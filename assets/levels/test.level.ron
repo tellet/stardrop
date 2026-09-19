@@ -17,6 +17,9 @@
         StaticCloud(center: (330, 1250), radius: 95),
         // Near the right-hand mote: sends you back toward the middle.
         Crystal(center: (900, 1350), size: 50),
+        // Left side, flowing down and right toward the beacon: a shortcut,
+        // if you notice which way the chevrons point.
+        WindRibbon(path: [(90, 1450), (250, 1600), (460, 1700)], width: 90),
     ],
     target_time: 8.0,
 )

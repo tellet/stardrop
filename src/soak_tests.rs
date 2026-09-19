@@ -88,10 +88,17 @@ fn reload_level(app: &mut App) {
 #[test]
 fn twenty_retries_failures_and_reloads_leave_no_trace() {
     let mut level = Level::for_tests();
-    level.objects = vec![Placement::StaticCloud {
-        center: Vec2::new(300.0, -900.0),
-        radius: 90.0,
-    }];
+    // A ribbon owns its own meshes: reloads must free them, not pile them up.
+    level.objects = vec![
+        Placement::StaticCloud {
+            center: Vec2::new(300.0, -900.0),
+            radius: 90.0,
+        },
+        Placement::WindRibbon {
+            path: vec![Vec2::new(-400.0, -1300.0), Vec2::new(-100.0, -1350.0)],
+            width: 80.0,
+        },
+    ];
     let mut app = object_app(level, Vec2::new(0.0, -200.0));
     app.add_plugins(CollectiblesPlugin);
     reload_scenery(app.world_mut());

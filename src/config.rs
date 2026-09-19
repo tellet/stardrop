@@ -7,7 +7,9 @@ use bevy::prelude::*;
 
 use core::f32::consts::FRAC_PI_4;
 
-use crate::objects::{CloudPuffConfig, CrystalConfig, ObjectsConfig, StaticCloudConfig};
+use crate::objects::{
+    CloudPuffConfig, CrystalConfig, ObjectsConfig, StaticCloudConfig, WindRibbonConfig,
+};
 use crate::physics::movement::MovementConfig;
 
 /// Falling and drifting feel (world units, seconds). See DECISIONS.md M1-2
@@ -44,6 +46,13 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
         bounce_speed: 650.0,
         // Always at least 45° upward: "up and away", never sideways.
         max_tilt: FRAC_PI_4,
+    },
+    wind_ribbon: WindRibbonConfig {
+        // Carries the astronaut at its own top sideways speed.
+        flow_speed: 500.0,
+        // Four times gravity: ribbons can carry you upward, and you can still
+        // steer a little inside them.
+        pull: 1800.0,
     },
     crystal: CrystalConfig {
         // Clearly visible even when the astronaut was barely moving sideways.

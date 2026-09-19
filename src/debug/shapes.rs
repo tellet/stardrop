@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use crate::astronaut::Astronaut;
 use crate::config::GameConfig;
 use crate::level::{ActiveLevel, MOTE_RADIUS};
+use crate::objects::ObjectShape;
 use crate::physics::Motion;
 
 const OUTLINE: Color = Color::srgba(1.0, 1.0, 1.0, 0.35);
@@ -49,10 +50,8 @@ fn draw(
     astronaut: Query<&Motion, With<Astronaut>>,
 ) {
     for placement in &level.objects {
-        let outline = placement.outline();
-        gizmos.circle_2d(outline.center, outline.radius, OUTLINE);
-        let hitbox = placement.hitbox(&config.objects);
-        gizmos.circle_2d(hitbox.center, hitbox.radius, HITBOX);
+        draw_shape(&mut gizmos, placement.outline(), OUTLINE);
+        draw_shape(&mut gizmos, placement.hitbox(&config.objects), HITBOX);
     }
     gizmos.rect_2d(level.beacon.center, level.beacon.size, GOAL);
     for &mote in &level.stardust {
@@ -60,5 +59,21 @@ fn draw(
     }
     for motion in &astronaut {
         gizmos.circle_2d(motion.body().position, config.astronaut_radius, PLAYER);
+    }
+}
+
+/// Circles as circles; paths as their centerline plus the reach around each
+/// point (the capsule ends).
+fn draw_shape(gizmos: &mut Gizmos, shape: ObjectShape, color: Color) {
+    match shape {
+        ObjectShape::Circle(circle) => {
+            gizmos.circle_2d(circle.center, circle.radius, color);
+        }
+        ObjectShape::Path(path) => {
+            gizmos.linestrip_2d(path.points.iter().copied(), color);
+            for &point in path.points {
+                gizmos.circle_2d(point, path.half_width, color);
+            }
+        }
     }
 }
