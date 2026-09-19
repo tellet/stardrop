@@ -5,7 +5,7 @@
 use bevy::math::Vec2;
 
 use super::kind::{ObjectKind, ObjectShape, ObjectsConfig, Placement};
-use crate::physics::movement::{Body, MovementConfig};
+use crate::physics::movement::{Body, Capture, MovementConfig};
 
 /// The result of touching an object.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,6 +40,11 @@ pub fn on_enter(
         ObjectKind::Crystal => {
             Outcome::Changed(body.launched(crystal_reverse(center, config, body), movement))
         }
+        ObjectKind::Bubble => Outcome::Changed(body.captured(Capture {
+            seconds_left: config.bubble.seconds,
+            rise_speed: config.bubble.rise_speed,
+            nudge_speed: config.bubble.nudge_speed,
+        })),
         ObjectKind::SporeFlower => {
             Outcome::Changed(body.with_swapped_controls(config.spore_flower.swap_seconds))
         }
@@ -109,8 +114,8 @@ mod tests {
 
     use super::*;
     use crate::objects::kind::{
-        CloudPuffConfig, CometStoneConfig, CrystalConfig, SporeFlowerConfig, StaticCloudConfig,
-        WindRibbonConfig,
+        BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, SporeFlowerConfig,
+        StaticCloudConfig, WindRibbonConfig,
     };
 
     const CONFIG: ObjectsConfig = ObjectsConfig {
@@ -124,6 +129,11 @@ mod tests {
         },
         crystal: CrystalConfig {
             min_sideways_speed: 350.0,
+        },
+        bubble: BubbleConfig {
+            rise_speed: 90.0,
+            seconds: 2.5,
+            nudge_speed: 120.0,
         },
         spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
         comet_stone: CometStoneConfig {

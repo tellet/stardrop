@@ -29,6 +29,11 @@ const CHEVRON_SPACING: f32 = 90.0;
 const CHEVRON_SIZE: f32 = 16.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
+/// Bubbles: a faint glassy shell with a soft sheen.
+const BUBBLE_SHELL: Color = Color::linear_rgba(0.9, 1.6, 2.0, 0.55);
+const BUBBLE_FILL: Color = Color::linear_rgba(0.5, 0.9, 1.3, 0.16);
+/// Shell thickness as a fraction of the radius.
+const BUBBLE_RIM: f32 = 0.08;
 /// Spore flowers: five petals around a bright core, in mischievous magenta.
 const PETALS: u8 = 5;
 const PETAL_COLOR: Color = Color::linear_rgb(1.4, 0.35, 1.1);
@@ -49,6 +54,8 @@ const OBJECT_DEPTH: f32 = 6.0;
 #[derive(Resource)]
 pub(super) struct ObjectAssets {
     unit_circle: Handle<Mesh>,
+    /// A ring of unit outer radius (the bubble's shell).
+    unit_ring: Handle<Mesh>,
     /// A 1x1 triangle pointing down (the comet stone's flame).
     down_triangle: Handle<Mesh>,
     diamond: Handle<Mesh>,
@@ -57,6 +64,8 @@ pub(super) struct ObjectAssets {
     crystal: Handle<ColorMaterial>,
     ribbon: Handle<ColorMaterial>,
     chevron: Handle<ColorMaterial>,
+    bubble_shell: Handle<ColorMaterial>,
+    bubble_fill: Handle<ColorMaterial>,
     petal: Handle<ColorMaterial>,
     flower_core: Handle<ColorMaterial>,
     stone: Handle<ColorMaterial>,
@@ -69,6 +78,7 @@ impl FromWorld for ObjectAssets {
     fn from_world(world: &mut World) -> Self {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let unit_circle = meshes.add(Circle::new(1.0));
+        let unit_ring = meshes.add(Annulus::new(1.0 - BUBBLE_RIM, 1.0));
         let spiky_star = meshes.add(star_mesh(STATIC_SPIKES, 0.82, 1.0));
         // Narrower than tall, tips at distance 1 from the center.
         let diamond = meshes.add(Rhombus::new(1.3, 2.0));
@@ -80,6 +90,7 @@ impl FromWorld for ObjectAssets {
         let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
         Self {
             unit_circle,
+            unit_ring,
             down_triangle,
             diamond,
             spiky_star,
@@ -87,6 +98,8 @@ impl FromWorld for ObjectAssets {
             crystal: materials.add(CRYSTAL_GLOW),
             ribbon: materials.add(RIBBON_GLOW),
             chevron: materials.add(CHEVRON_GLOW),
+            bubble_shell: materials.add(BUBBLE_SHELL),
+            bubble_fill: materials.add(BUBBLE_FILL),
             petal: materials.add(PETAL_COLOR),
             flower_core: materials.add(FLOWER_CORE),
             stone: materials.add(STONE_COLOR),
@@ -129,6 +142,18 @@ pub(super) fn spawn_look(
                         .with_scale(Vec3::splat(radius * scale)),
                 ));
             }
+        }
+        Placement::Bubble { radius, .. } => {
+            parent.spawn((
+                Mesh2d(assets.unit_circle.clone()),
+                MeshMaterial2d(assets.bubble_fill.clone()),
+                Transform::from_scale(Vec3::splat(*radius)),
+            ));
+            parent.spawn((
+                Mesh2d(assets.unit_ring.clone()),
+                MeshMaterial2d(assets.bubble_shell.clone()),
+                Transform::from_xyz(0.0, 0.0, 0.1).with_scale(Vec3::splat(*radius)),
+            ));
         }
         Placement::SporeFlower { radius, .. } => {
             for petal in 0..PETALS {

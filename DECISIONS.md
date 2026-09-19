@@ -286,6 +286,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Comet dive:** the terminal-velocity rule is skipped while `comet_dive` is running, so the dive holds its speed; when it ends, the existing "ease toward terminal velocity" takes over with no special case.
 - **Spores** are shown by a magenta ring around the astronaut, and both timers appear in the F1 overlay.
 
+## M4-2 · Bubble
+
+- **Capture copies the bubble's tuning into the astronaut's state** (`Effects::captured: Option<Capture>` holding rise speed, nudge speed and seconds left). Movement physics therefore never needs to know what a bubble is, and the values still come from the one per-type config.
+- **While captured**, `step` ignores gravity, air control and drag: the bubble carries the astronaut up, sideways nudging is capped at 120 u/s, and the side walls still hold. When the timer ends, that same step sets the velocity to zero: "the fall resumes from rest".
+- **Only hazards reach the astronaut inside a bubble** (the user's choice): every other object is skipped, including wind. Static clouds still end the attempt, so "a static cloud always sends you back" has no exceptions.
+- **One use per attempt** (the user's choice): the bubble entity carries a `Used` flag and hides itself; a fresh attempt restores every one.
+- The astronaut is drawn inside a bubble while held, the same way spores show a shimmer.
+
 ---
 
 ## Baseline measurements (M0)

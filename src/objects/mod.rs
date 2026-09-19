@@ -14,8 +14,8 @@ mod visuals;
 
 pub use behavior::{Outcome, on_enter, while_inside};
 pub use kind::{
-    CloudPuffConfig, CometStoneConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind, ObjectShape,
-    ObjectsConfig, Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
+    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind,
+    ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
 };
 use visuals::ObjectAssets;
 
@@ -51,6 +51,10 @@ pub(crate) struct ObjectIndex(pub usize);
 /// effects fire on entering, once.
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq)]
 struct Contact(bool);
+
+/// Whether a one-use object (a bubble) has been spent this attempt.
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq)]
+struct Used(bool);
 
 /// Objects: spawning, contact and effects.
 pub(crate) struct ObjectsPlugin;
@@ -93,6 +97,7 @@ fn spawn_objects(
             .spawn((
                 ObjectIndex(index),
                 Contact::default(),
+                Used::default(),
                 crate::effects::ContactPulse::default(),
                 visuals::transform_for(placement),
                 Visibility::default(),
@@ -114,12 +119,21 @@ fn touch_objects(
     // and `&mut Motion` of the same entity in one system is a conflict it
     // refuses at startup (the same rule as Rust's borrowing).
     mut astronaut: Single<&mut Motion, With<Astronaut>>,
-    mut objects: Query<(Entity, &ObjectIndex, &mut Contact)>,
+    mut objects: Query<(
+        Entity,
+        &ObjectIndex,
+        &mut Contact,
+        &mut Used,
+        &mut Visibility,
+    )>,
     mut touched: MessageWriter<ObjectTouched>,
     mut failed: MessageWriter<AttemptFailed>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
 ) {
-    for (entity, index, mut contact) in &mut objects {
+    for (entity, index, mut contact, mut used, mut visibility) in &mut objects {
+        if used.0 {
+            continue;
+        }
         // Re-read each time: an earlier object this step may have launched us.
         let body = astronaut.body();
         // `get` instead of `[]`: after a level edit the list may be shorter.
@@ -134,9 +148,14 @@ fn touch_objects(
         if !touching {
             continue;
         }
+        let kind = placement.kind();
+        // Inside a bubble, only hazards reach the astronaut: nothing else
+        // pushes, pulls or carries it (DECISIONS.md M4-2).
+        if body.effects.held_by_bubble() && kind != ObjectKind::StaticCloud {
+            continue;
+        }
         // Instant effects fire on entering only: touching now, not before.
         if !was_touching {
-            let kind = placement.kind();
             touched.write(ObjectTouched { kind, entity });
             match on_enter(
                 kind,
@@ -146,7 +165,14 @@ fn touch_objects(
                 body,
             ) {
                 Outcome::Nothing => {}
-                Outcome::Changed(changed) => astronaut.set_body(changed),
+                Outcome::Changed(changed) => {
+                    astronaut.set_body(changed);
+                    // A bubble is spent for the rest of the attempt.
+                    if kind == ObjectKind::Bubble {
+                        used.0 = true;
+                        *visibility = Visibility::Hidden;
+                    }
+                }
                 Outcome::FailAttempt => {
                     fail(&mut failed, &mut next_phase);
                     return;
@@ -166,10 +192,12 @@ fn touch_objects(
     }
 }
 
-/// A fresh attempt starts without any contacts.
-fn forget_contacts(mut contacts: Query<&mut Contact>) {
-    for mut contact in &mut contacts {
+/// A fresh attempt starts with no contacts and every one-use object back.
+fn forget_contacts(mut objects: Query<(&mut Contact, &mut Used, &mut Visibility)>) {
+    for (mut contact, mut used, mut visibility) in &mut objects {
         contact.set_if_neq(Contact(false));
+        used.set_if_neq(Used(false));
+        visibility.set_if_neq(Visibility::Inherited);
     }
 }
 
@@ -317,5 +345,93 @@ pub(crate) mod tests {
         );
         // Long after leaving the ribbon, still drifting right (coasting).
         assert!(astronaut_velocity(&mut app).x > 50.0);
+    }
+
+    /// Drops the astronaut from `start` and runs `frames` frames.
+    fn drop_for(app: &mut App, frames: usize) {
+        for _ in 0..frames {
+            app.update();
+        }
+    }
+
+    #[test]
+    fn a_bubble_catches_the_astronaut_then_pops_once_per_attempt() {
+        let mut level = Level::for_tests();
+        level.objects = vec![Placement::Bubble {
+            center: Vec2::new(0.0, -700.0),
+            radius: 70.0,
+        }];
+        let mut app = object_app(level, Vec2::new(0.0, -500.0));
+        app.init_resource::<Touches>().add_systems(Update, record);
+        let mut rose = false;
+        for _ in 0..60 {
+            app.update();
+            rose |= astronaut_velocity(&mut app).y > 0.0;
+        }
+        assert!(rose, "the bubble carried the astronaut upward");
+        assert_eq!(
+            app.world().resource::<Touches>().0,
+            vec![ObjectKind::Bubble]
+        );
+        // It's spent: falling back through it does nothing this attempt.
+        drop_for(&mut app, 180);
+        assert_eq!(
+            app.world().resource::<Touches>().0.len(),
+            1,
+            "one use per attempt"
+        );
+    }
+
+    #[test]
+    fn inside_a_bubble_only_hazards_reach_the_astronaut() {
+        let mut level = Level::for_tests();
+        level.objects = vec![
+            Placement::Bubble {
+                center: Vec2::new(0.0, -700.0),
+                radius: 70.0,
+            },
+            // On the way up, inside the bubble: normally it would reverse us.
+            Placement::Crystal {
+                center: Vec2::new(0.0, -600.0),
+                size: 60.0,
+            },
+        ];
+        // Starting inside the bubble: captured on the first step.
+        let mut app = object_app(level, Vec2::new(0.0, -700.0));
+        app.init_resource::<Touches>().add_systems(Update, record);
+        // 100 frames at 60 FPS: still well inside the 2.5 s capture.
+        drop_for(&mut app, 100);
+        let touches = &app.world().resource::<Touches>().0;
+        assert_eq!(
+            touches,
+            &vec![ObjectKind::Bubble],
+            "the crystal is ignored while held"
+        );
+    }
+
+    #[test]
+    fn a_hazard_still_ends_the_attempt_inside_a_bubble() {
+        let mut level = Level::for_tests();
+        level.objects = vec![
+            Placement::Bubble {
+                center: Vec2::new(0.0, -700.0),
+                radius: 70.0,
+            },
+            Placement::StaticCloud {
+                center: Vec2::new(0.0, -560.0),
+                radius: 90.0,
+            },
+        ];
+        let mut app = object_app(level, Vec2::new(0.0, -660.0));
+        let mut frames = 0;
+        while *app.world().resource::<State<LevelPhase>>().get() == LevelPhase::Falling {
+            app.update();
+            frames += 1;
+            assert!(frames < 200, "the bubble never carried us into the hazard");
+        }
+        assert_eq!(
+            *app.world().resource::<State<LevelPhase>>().get(),
+            LevelPhase::Restarting
+        );
     }
 }

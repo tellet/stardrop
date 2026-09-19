@@ -7,8 +7,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use stardrop::debug::stats::summarize;
 use stardrop::level::Level;
 use stardrop::objects::{
-    CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectKind, ObjectsConfig, Placement,
-    SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig, on_enter, while_inside,
+    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectKind, ObjectsConfig,
+    Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig, on_enter, while_inside,
 };
 use stardrop::physics::movement::{AirInput, Body, MovementConfig, Walls, step};
 
@@ -74,6 +74,11 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     },
     crystal: CrystalConfig {
         min_sideways_speed: 350.0,
+    },
+    bubble: BubbleConfig {
+        rise_speed: 90.0,
+        seconds: 2.5,
+        nudge_speed: 120.0,
     },
     spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
     comet_stone: CometStoneConfig {

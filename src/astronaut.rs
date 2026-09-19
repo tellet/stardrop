@@ -23,6 +23,13 @@ pub(crate) enum AstronautSystems {
     Input,
 }
 
+/// The bubble shown around the astronaut while one is carrying it.
+#[derive(Component)]
+pub(crate) struct CaptureBubble;
+
+const CAPTURE_COLOR: Color = Color::linear_rgba(0.9, 1.6, 2.0, 0.5);
+const CAPTURE_GAP: f32 = 16.0;
+
 /// The shimmer shown around the astronaut while spores have swapped the
 /// controls: a soft magenta ring, hidden the rest of the time.
 #[derive(Component)]
@@ -76,6 +83,15 @@ fn spawn_astronaut(
             Shimmer,
             Mesh2d(ring),
             MeshMaterial2d(materials.add(SHIMMER_COLOR)),
+            Visibility::Hidden,
+        ))
+        .with_child((
+            CaptureBubble,
+            Mesh2d(meshes.add(Annulus::new(
+                config.astronaut_radius + CAPTURE_GAP,
+                config.astronaut_radius + CAPTURE_GAP + 4.0,
+            ))),
+            MeshMaterial2d(materials.add(CAPTURE_COLOR)),
             Visibility::Hidden,
         ));
 }

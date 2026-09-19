@@ -104,6 +104,20 @@ pub enum Drift {
     Coasting,
 }
 
+/// Being carried by a bubble.
+///
+/// The bubble copies its own tuning in here when it captures the astronaut,
+/// so movement physics never needs to know what a bubble is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Capture {
+    /// Seconds until the bubble pops.
+    pub seconds_left: f32,
+    /// How fast the bubble floats upward, in units/s.
+    pub rise_speed: f32,
+    /// Fastest sideways nudge allowed inside, in units/s.
+    pub nudge_speed: f32,
+}
+
 /// Effects with a timer, carried by the astronaut.
 ///
 /// At most one of each kind at a time: touching the same kind again resets
@@ -116,6 +130,8 @@ pub struct Effects {
     /// Diving faster than terminal velocity (comet stone): while this lasts,
     /// the fall speed is held instead of easing back.
     pub comet_dive: f32,
+    /// Held by a bubble, if any.
+    pub captured: Option<Capture>,
 }
 
 impl Effects {
@@ -125,7 +141,21 @@ impl Effects {
         Self {
             swapped_controls: (self.swapped_controls - dt).max(0.0),
             comet_dive: (self.comet_dive - dt).max(0.0),
+            // A finished capture becomes `None`: the bubble popped.
+            captured: self.captured.and_then(|capture| {
+                let seconds_left = capture.seconds_left - dt;
+                (seconds_left > 0.0).then_some(Capture {
+                    seconds_left,
+                    ..capture
+                })
+            }),
         }
+    }
+
+    /// Whether a bubble is currently carrying the astronaut.
+    #[must_use]
+    pub fn held_by_bubble(self) -> bool {
+        self.captured.is_some()
     }
 
     /// Whether left and right are currently swapped.
@@ -178,6 +208,18 @@ impl Body {
         }
     }
 
+    /// Caught by a bubble: carried upward until it pops.
+    #[must_use]
+    pub fn captured(self, capture: Capture) -> Self {
+        Self {
+            effects: Effects {
+                captured: Some(capture),
+                ..self.effects
+            },
+            ..self
+        }
+    }
+
     /// Thrown downward at `speed`, holding it for `seconds` before easing
     /// back to terminal velocity. Steering still works during the dive.
     #[must_use]
@@ -216,6 +258,37 @@ impl Body {
 pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, dt: f32) -> Body {
     let mut velocity = body.velocity;
     let effects = body.effects.after(dt);
+    let input = if body.effects.controls_swapped() {
+        input.swapped()
+    } else {
+        input
+    };
+
+    // Inside a bubble nothing else applies: it carries the astronaut upward,
+    // with gentle sideways nudging. When it pops, the fall resumes from rest.
+    if let Some(capture) = body.effects.captured {
+        velocity = Vec2::new(
+            move_towards(
+                velocity.x,
+                input.value() * capture.nudge_speed,
+                config.air_acceleration * dt,
+            ),
+            capture.rise_speed,
+        );
+        let mut position = body.position + velocity * dt;
+        let popped = effects.captured.is_none();
+        if popped {
+            velocity = Vec2::ZERO;
+        }
+        position.x = position.x.clamp(walls.left, walls.right);
+        return Body {
+            position,
+            velocity,
+            control_recovery: 0.0,
+            drift: Drift::Steered,
+            effects,
+        };
+    }
 
     // Vertical: ease toward terminal velocity at the rate of gravity. From
     // below terminal speed this is ordinary gravity; a comet dive holds its
@@ -225,12 +298,7 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
     }
 
     // Horizontal: accelerate toward the steered speed, or brake toward zero,
-    // weakened for a moment after a wall bounce. Spores swap left and right.
-    let input = if body.effects.controls_swapped() {
-        input.swapped()
-    } else {
-        input
-    };
+    // weakened for a moment after a wall bounce.
     let target = input.value() * config.max_air_speed;
     let control = control_after_bounce(body.control_recovery, config.control_recovery_time);
     // Any steering puts the player back in charge.
@@ -594,10 +662,63 @@ pub(crate) mod tests {
         let effects = Effects {
             swapped_controls: 0.2,
             comet_dive: 0.1,
+            captured: None,
         };
         let later = effects.after(0.15);
         assert!((later.swapped_controls - 0.05).abs() < 1e-6);
         assert!(!later.diving(), "never goes negative");
         assert_eq!(later.after(10.0), Effects::default());
+    }
+
+    const CAPTURE: Capture = Capture {
+        seconds_left: 2.5,
+        rise_speed: 90.0,
+        nudge_speed: 120.0,
+    };
+
+    #[test]
+    fn a_bubble_carries_the_astronaut_upward_whatever_it_was_doing() {
+        let diving = Body {
+            velocity: Vec2::new(-400.0, -1100.0),
+            ..Body::default()
+        };
+        let held = run_from(diving.captured(CAPTURE), AirInput::NONE, 0.5);
+        assert!(
+            (held.velocity.y - CAPTURE.rise_speed).abs() < 1e-3,
+            "{held:?}"
+        );
+        assert!(held.position.y > 0.0, "rising");
+        assert!(held.effects.held_by_bubble());
+    }
+
+    #[test]
+    fn inside_a_bubble_steering_is_a_gentle_nudge() {
+        let held = run_from(Body::default().captured(CAPTURE), AirInput::RIGHT, 1.0);
+        assert!(
+            (held.velocity.x - CAPTURE.nudge_speed).abs() < 1e-3,
+            "{held:?}"
+        );
+    }
+
+    #[test]
+    fn a_bubble_pops_and_the_fall_resumes_from_rest() {
+        let held = Body::default().captured(CAPTURE);
+        // The step where the capture ends is the pop itself.
+        let popped = run_from(held, AirInput::RIGHT, CAPTURE.seconds_left);
+        assert!(!popped.effects.held_by_bubble());
+        assert_eq!(popped.velocity, Vec2::ZERO, "from rest");
+        // Then the usual fall takes over again.
+        let falling = run_from(popped, AirInput::NONE, 0.5);
+        assert!(falling.velocity.y < -100.0, "{falling:?}");
+    }
+
+    #[test]
+    fn a_bubble_holds_the_astronaut_inside_the_walls() {
+        let near_wall = Body {
+            position: Vec2::new(WALLS.right - 5.0, 0.0),
+            ..Body::default()
+        };
+        let held = run_from(near_wall.captured(CAPTURE), AirInput::RIGHT, 2.0);
+        assert!(held.position.x <= WALLS.right + 1e-3, "{held:?}");
     }
 }

@@ -18,6 +18,8 @@ pub enum ObjectKind {
     WindRibbon,
     /// Glassy diamond: reverses sideways motion.
     Crystal,
+    /// Floating bubble: catches the astronaut and carries it upward.
+    Bubble,
     /// Mischievous flower: swaps left and right for a few seconds.
     SporeFlower,
     /// Heavy stone: throws the astronaut into a fast dive.
@@ -33,6 +35,7 @@ impl ObjectKind {
     pub fn size_range(self) -> RangeInclusive<f32> {
         match self {
             Self::CloudPuff
+            | Self::Bubble
             | Self::Crystal
             | Self::SporeFlower
             | Self::CometStone
@@ -64,6 +67,13 @@ pub enum Placement {
         path: Vec<Vec2>,
         /// Full width of the ribbon.
         width: f32,
+    },
+    /// A bubble: a circle.
+    Bubble {
+        /// Center of the bubble.
+        center: Vec2,
+        /// Visible radius.
+        radius: f32,
     },
     /// A spore flower: a circle.
     SporeFlower {
@@ -120,6 +130,7 @@ impl Placement {
     pub fn kind(&self) -> ObjectKind {
         match self {
             Self::CloudPuff { .. } => ObjectKind::CloudPuff,
+            Self::Bubble { .. } => ObjectKind::Bubble,
             Self::SporeFlower { .. } => ObjectKind::SporeFlower,
             Self::CometStone { .. } => ObjectKind::CometStone,
             Self::WindRibbon { .. } => ObjectKind::WindRibbon,
@@ -134,6 +145,7 @@ impl Placement {
     pub fn center(&self) -> Vec2 {
         match self {
             Self::CloudPuff { center, .. }
+            | Self::Bubble { center, .. }
             | Self::Crystal { center, .. }
             | Self::SporeFlower { center, .. }
             | Self::CometStone { center, .. }
@@ -154,6 +166,7 @@ impl Placement {
     pub fn size(&self) -> f32 {
         match self {
             Self::CloudPuff { radius, .. }
+            | Self::Bubble { radius, .. }
             | Self::SporeFlower { radius, .. }
             | Self::CometStone { radius, .. }
             | Self::StaticCloud { radius, .. } => *radius,
@@ -167,6 +180,7 @@ impl Placement {
     pub fn outline(&self) -> ObjectShape<'_> {
         match self {
             Self::CloudPuff { center, radius }
+            | Self::Bubble { center, radius }
             | Self::SporeFlower { center, radius }
             | Self::CometStone { center, radius }
             | Self::StaticCloud { center, radius } => {
@@ -189,6 +203,7 @@ impl Placement {
     pub fn hitbox(&self, config: &ObjectsConfig) -> ObjectShape<'_> {
         match self {
             Self::CloudPuff { .. }
+            | Self::Bubble { .. }
             | Self::Crystal { .. }
             | Self::SporeFlower { .. }
             | Self::CometStone { .. }
@@ -225,6 +240,17 @@ pub struct WindRibbonConfig {
     /// How strongly the wind pulls the astronaut's velocity toward the flow,
     /// in units/s². Stronger than gravity, so ribbons can carry you upward.
     pub pull: f32,
+}
+
+/// Bubble tuning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BubbleConfig {
+    /// How fast the bubble floats upward, in units/s.
+    pub rise_speed: f32,
+    /// How long it carries the astronaut before popping, in seconds.
+    pub seconds: f32,
+    /// Fastest sideways nudge inside the bubble, in units/s.
+    pub nudge_speed: f32,
 }
 
 /// Spore flower tuning.
@@ -267,6 +293,8 @@ pub struct ObjectsConfig {
     pub wind_ribbon: WindRibbonConfig,
     /// Crystal.
     pub crystal: CrystalConfig,
+    /// Bubble.
+    pub bubble: BubbleConfig,
     /// Spore flower.
     pub spore_flower: SporeFlowerConfig,
     /// Comet stone.

@@ -13,6 +13,8 @@
     objects: [
         // Right under the start: every attempt meets it first.
         CloudPuff(center: (580, 640), radius: 90),
+        // A lift back up, if you can reach it (one use per attempt).
+        Bubble(center: (540, 1150), radius: 70),
         // Mischief on the right, a shortcut on the left.
         SporeFlower(center: (830, 780), radius: 55),
         CometStone(center: (230, 860), radius: 55),

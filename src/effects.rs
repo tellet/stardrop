@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::astronaut::{Astronaut, Shimmer};
+use crate::astronaut::{Astronaut, CaptureBubble, Shimmer};
 use crate::objects::ObjectTouched;
 use crate::physics::Motion;
 
@@ -27,7 +27,7 @@ impl Plugin for EffectsPlugin {
             Update,
             (
                 (start_pulses.run_if(on_message::<ObjectTouched>), run_pulses).chain(),
-                show_shimmer,
+                (show_shimmer, show_capture_bubble),
             ),
         );
     }
@@ -59,6 +59,23 @@ fn run_pulses(time: Res<Time>, mut pulses: Query<(&mut ContactPulse, &mut Transf
         let elapsed = elapsed + time.delta_secs();
         pulse.0 = (elapsed < PULSE_SECONDS).then_some(elapsed);
         transform.scale = pulse_scale(elapsed).extend(1.0);
+    }
+}
+
+/// Shows a bubble around the astronaut exactly while one is carrying it.
+fn show_capture_bubble(
+    astronaut: Query<&Motion, With<Astronaut>>,
+    mut bubble: Query<&mut Visibility, With<CaptureBubble>>,
+) {
+    let held = astronaut
+        .iter()
+        .any(|motion| motion.body().effects.held_by_bubble());
+    for mut visibility in &mut bubble {
+        visibility.set_if_neq(if held {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
     }
 }
 

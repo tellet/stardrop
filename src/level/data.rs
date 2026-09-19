@@ -44,6 +44,8 @@ pub(super) enum FileObject {
     CloudPuff { center: FilePoint, radius: f32 },
     /// `WindRibbon(path: [(x, depth), ...], width: w)`.
     WindRibbon { path: Vec<FilePoint>, width: f32 },
+    /// `Bubble(center: (x, depth), radius: r)`.
+    Bubble { center: FilePoint, radius: f32 },
     /// `SporeFlower(center: (x, depth), radius: r)`.
     SporeFlower { center: FilePoint, radius: f32 },
     /// `CometStone(center: (x, depth), radius: r)`.
@@ -210,6 +212,10 @@ impl FileObject {
             Self::WindRibbon { path, width } => Placement::WindRibbon {
                 path: path.into_iter().map(to_world).collect(),
                 width,
+            },
+            Self::Bubble { center, radius } => Placement::Bubble {
+                center: to_world(center),
+                radius,
             },
             Self::SporeFlower { center, radius } => Placement::SporeFlower {
                 center: to_world(center),

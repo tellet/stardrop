@@ -8,8 +8,8 @@ use bevy::prelude::*;
 use core::f32::consts::FRAC_PI_4;
 
 use crate::objects::{
-    CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectsConfig, SporeFlowerConfig,
-    StaticCloudConfig, WindRibbonConfig,
+    BubbleConfig, CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectsConfig,
+    SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
 };
 use crate::physics::movement::MovementConfig;
 
@@ -58,6 +58,14 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     crystal: CrystalConfig {
         // Clearly visible even when the astronaut was barely moving sideways.
         min_sideways_speed: 350.0,
+    },
+    bubble: BubbleConfig {
+        // A slow, cozy float upward...
+        rise_speed: 90.0,
+        // ...for long enough to cross about an eighth of the screen.
+        seconds: 2.5,
+        // Gentle steering inside, far below normal air control.
+        nudge_speed: 120.0,
     },
     spore_flower: SporeFlowerConfig {
         // Long enough to matter, short enough not to feel punishing.
