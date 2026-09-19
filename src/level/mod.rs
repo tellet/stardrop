@@ -6,6 +6,14 @@
 
 use bevy::prelude::*;
 
+// Pure level format and validation. Not used by the running game until step
+// 2b; `expect` (unlike `allow`) warns as soon as that stops being true, so
+// this line can't be forgotten.
+#[expect(dead_code, reason = "wired into the game in milestone 2, step 2b")]
+mod data;
+#[expect(dead_code, reason = "wired into the game in milestone 2, step 2b")]
+mod validate;
+
 use crate::camera::DESIGN_SIZE;
 use crate::config::GameConfig;
 use crate::physics::movement::{Body, Walls};

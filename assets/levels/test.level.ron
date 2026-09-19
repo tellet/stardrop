@@ -1,0 +1,20 @@
+// Test level for development: ten screens of open sky.
+// Format reference: docs/LEVELS.md
+(
+    name: "Test Fall",
+    height: 10800,
+    theme: DeepSpace,
+    start: (960, 300),
+    beacon: (center: (960, 10770), size: (360, 40)),
+    checkpoints: [
+        (960, 3600),
+        (700, 7200),
+    ],
+    stardust: [
+        (400, 1800),
+        (1500, 4200),
+        (180, 6400),
+        (1740, 9000),
+    ],
+    target_time: 30.0,
+)

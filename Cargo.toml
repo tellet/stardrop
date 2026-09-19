@@ -57,6 +57,10 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "bevy_text",             # Text rendering.
     "default_font",          # Built-in font so text works before we ship our own.
 ] }
+# Level files (Section 4). Both are already compiled as part of Bevy, so these
+# exact versions add no build time or binary size.
+ron = { version = "=0.12.2", default-features = false }   # Reads the RON level format.
+serde = { version = "=1.0.229", features = ["derive"] }    # Turns parsed text into our structs.
 
 [dev-dependencies]
 # Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.

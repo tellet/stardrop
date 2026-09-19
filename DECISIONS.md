@@ -154,6 +154,17 @@ What we decided, why, and what we considered instead. Newest at the bottom.
   - Lower braking for everything: spacey, but imprecise when the player lets go.
   - The brief's original cushion: felt wrong to the user.
 
+## M2-1 · Level format: serde + RON, validated into a `Level` type
+
+- **Dependencies:** `serde =1.0.229` and `ron =0.12.2`. Bevy already compiles both (for asset metadata), so they cost nothing extra.
+- **Hand-written error type** (`LevelError` implementing `Display` and `std::error::Error`) instead of `thiserror`: about 20 lines, no new dependency.
+- **Two types:** `LevelFile` is what's on disk. `Level` is validated and in world coordinates, and `Level::parse` is the only way to get one. The rest of the game can therefore never see an invalid level ("make invalid states unrepresentable").
+- **`deny_unknown_fields`** enforces the consistency rule mechanically: a level file can't carry behavior fields.
+- **File coordinates** are `(x from the left edge, depth downward)`, the convention of tile editors like Tiled. They are converted to world coordinates on load.
+- **Checkpoints activate by depth** (user's choice, option A): crossing a ring's depth anywhere counts, so a safety net can never be missed.
+- **Minimum height of one screen (1080):** the camera clamps between the level's top and bottom, and `f32::clamp` panics if the minimum is larger than the maximum. Validation rules this out.
+- Validation reports the **first** error. That's simple, and the author fixes one problem at a time with hot reload.
+
 ---
 
 ## Baseline measurements (M0)
