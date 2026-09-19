@@ -262,6 +262,18 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Meshes per ribbon:** unlike other types, each ribbon's strip and chevrons follow its own path. They're freed when the ribbon despawns (the last handle drops the asset). The leak test includes a ribbon and confirms the mesh count stays constant over 20 reloads.
 - **Validation:** 2–16 points, all inside the level; width 30–240; not overlapping the start. Per-type size ranges replace the single range.
 
+## M3-4 · Broad phase: plain loop (measured)
+
+- **Measured** (criterion, release). The grid was written only in the benchmark file:
+
+  | Objects on screen | Plain loop | Uniform grid (240-unit cells) |
+  |---|---|---|
+  | 12 | 171 ns | 91 ns |
+  | 40 (a very busy level) | 560 ns | 228 ns |
+
+- **Decision:** keep the plain loop. The grid is about 2.5× faster, but the loop costs at most about 1.1 µs per frame (two physics steps with 40 objects): 0.1 % of the 1 ms budget. The grid would also need rebuilding on every reload and special handling for long ribbons. Section 7.3 says not to trade readability for speed unless a measurement shows it matters, and this one shows it doesn't.
+- **Revisit** if a level ever holds hundreds of objects. The benchmark stays in `benches/logic.rs`.
+
 ---
 
 ## Baseline measurements (M0)
@@ -308,3 +320,14 @@ Release build, same machine as M0, 60 Hz with vsync.
 | Movement step | 6.7 ns | Was 3.0 ns before the wall bounce and drift logic. |
 | Respawn soak, 5 min, about 30 respawns | RSS 429 → 440 MB (peak at 1 min) → 433.8 → 434.1 MB (min 2–4.5) | Settles after warm-up. No warnings or errors. |
 | CPU while falling | ~15–16 % of one core | Release build, 60 FPS. |
+
+## Measurements (M3)
+
+| Metric | Value | Notes |
+|---|---|---|
+| Cloud puff effect | 19 ns | `on_enter` |
+| Crystal effect | 1.2 ns | `on_enter` |
+| Wind ribbon step (16 points) | 72 ns | `while_inside` |
+| Contact check, plain loop | 171 ns (12 objects) / 560 ns (40) | Per physics step; see M3-4. |
+| Parse + validate test level | 6.7 µs | Was 3.7 µs; the level now has objects. Budget: 200 ms. |
+| Movement step | 6.7 ns | Unchanged. |
