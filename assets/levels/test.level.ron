@@ -10,5 +10,9 @@
         (820, 1100),
         (360, 1500),
     ],
+    objects: [
+        // Off the straight path: a plain drop misses it, drifting left doesn't.
+        StaticCloud(center: (330, 1250), radius: 95),
+    ],
     target_time: 8.0,
 )

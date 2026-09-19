@@ -46,11 +46,26 @@ For scale, the astronaut is a circle with a radius of 28 units, so the level is 
         (360, 1500),
     ],
 
+    // Objects: what the astronaut touches (see "Objects" below). Optional.
+    objects: [
+        StaticCloud(center: (330, 1250), radius: 95),
+    ],
+
     // Seconds for the "fast run" star: a good attempt, not a perfect one.
     // The clock starts when the fall starts, not while studying the level.
     target_time: 8.0,
 )
 ```
+
+## Objects
+
+Each object is written as `Type(fields...)`. Objects have **placement fields only**: where they are and how big. How strongly an object acts is set once per type in `src/config.rs` and is the same in every level (the consistency rule). Sizes (radius) must be 20–300.
+
+| Object | Fields | What it does (designer notes; players are never told) |
+|---|---|---|
+| `StaticCloud` | `center: (x, depth)`, `radius` | Hazard: touching it ends the attempt. Its hitbox is 80 % of its visible size, so near misses are safe. It can't cover the start, the beacon or any stardust. |
+
+More object types arrive in Milestones 3 and 4.
 
 ## Rules the game checks
 
@@ -63,5 +78,6 @@ A level that breaks any of these rules is rejected, and the message says what's 
 - The start, the whole beacon pad, every checkpoint and every stardust mote are inside the level.
 - The beacon is below the start, and its width and height are positive.
 - There are at most 64 stardust motes.
+- Objects are inside the level, sized 20–300, and never overlap the start (the astronaut would begin inside them).
+- Static clouds don't cover the beacon or any stardust.
 
-Objects (clouds, crystals, ...) get their own fields in Milestones 3–4, and this document will be extended then.

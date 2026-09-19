@@ -13,6 +13,7 @@ use bevy::math::Vec2;
 use serde::Deserialize;
 
 use super::validate::{self, LevelError};
+use crate::objects::Placement;
 use crate::physics::movement::Walls;
 
 /// Every level is exactly this wide, in world units.
@@ -34,6 +35,15 @@ pub(super) struct FileBeacon {
     pub size: (f32, f32),
 }
 
+/// An object as written in a level file. Each variant allows only placement
+/// fields; `deny_unknown_fields` rejects anything else (like a strength).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) enum FileObject {
+    /// `StaticCloud(center: (x, depth), radius: r)`.
+    StaticCloud { center: FilePoint, radius: f32 },
+}
+
 /// A level file exactly as written on disk, before validation.
 ///
 /// `deny_unknown_fields` makes any unexpected field an error. That enforces
@@ -48,6 +58,8 @@ pub(super) struct LevelFile {
     pub beacon: FileBeacon,
     #[serde(default)]
     pub stardust: Vec<FilePoint>,
+    #[serde(default)]
+    pub objects: Vec<FileObject>,
     pub target_time: f32,
 }
 
@@ -100,6 +112,8 @@ pub struct Level {
     pub beacon: Beacon,
     /// Stardust mote positions.
     pub stardust: Vec<Vec2>,
+    /// Objects, in the order they're listed in the file.
+    pub objects: Vec<Placement>,
     /// Seconds for the "fast run" star.
     pub target_time: f32,
 }
@@ -144,6 +158,11 @@ impl Level {
                 size: Vec2::new(file.beacon.size.0, file.beacon.size.1),
             },
             stardust: file.stardust.into_iter().map(to_world).collect(),
+            objects: file
+                .objects
+                .into_iter()
+                .map(FileObject::into_world)
+                .collect(),
             name: file.name,
             theme: file.theme,
             target_time: file.target_time,
@@ -170,8 +189,20 @@ impl Level {
     }
 }
 
+impl FileObject {
+    /// This object in world coordinates.
+    pub(super) fn into_world(self) -> Placement {
+        match self {
+            Self::StaticCloud { center, radius } => Placement::StaticCloud {
+                center: to_world(center),
+                radius,
+            },
+        }
+    }
+}
+
 /// File `(x from left, depth down)` → world `(x from center, y up)`.
-fn to_world(point: FilePoint) -> Vec2 {
+pub(super) fn to_world(point: FilePoint) -> Vec2 {
     Vec2::new(point.0 - LEVEL_WIDTH / 2.0, -point.1)
 }
 
@@ -199,6 +230,22 @@ mod tests {
         assert_eq!(level.stardust[0], Vec2::new(-340.0, -1000.0));
         assert_eq!(level.beacon.center, Vec2::new(0.0, -1880.0));
         assert_eq!(level.bottom(), -1920.0);
+    }
+
+    #[test]
+    fn objects_convert_to_world_coordinates() {
+        let text = VALID.replace(
+            "target_time: 8.0,",
+            "objects: [StaticCloud(center: (240, 900), radius: 80)], target_time: 8.0,",
+        );
+        let level = Level::parse(&text).unwrap();
+        assert_eq!(
+            level.objects,
+            vec![Placement::StaticCloud {
+                center: Vec2::new(-300.0, -900.0),
+                radius: 80.0
+            }]
+        );
     }
 
     #[test]

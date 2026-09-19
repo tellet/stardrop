@@ -159,6 +159,16 @@ fn drop_on_first_input(control: Res<AirControl>, mut next_phase: ResMut<NextStat
     }
 }
 
+/// Ends the current attempt: the fade back to the start begins. The one way
+/// every failure (falling out, hazards) is reported.
+pub(crate) fn fail(
+    failed: &mut MessageWriter<AttemptFailed>,
+    next_phase: &mut NextState<LevelPhase>,
+) {
+    failed.write(AttemptFailed);
+    next_phase.set(LevelPhase::Restarting);
+}
+
 /// Missing the beacon (falling out of the bottom) fails the attempt.
 fn fall_out_of_level(
     level: Res<ActiveLevel>,
@@ -168,8 +178,7 @@ fn fall_out_of_level(
     mut next_phase: ResMut<NextState<LevelPhase>>,
 ) {
     if astronaut.body().position.y < level.bottom() - config.astronaut_radius {
-        failed.write(AttemptFailed);
-        next_phase.set(LevelPhase::Restarting);
+        fail(&mut failed, &mut next_phase);
     }
 }
 

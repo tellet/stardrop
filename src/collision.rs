@@ -6,6 +6,39 @@
 
 use bevy::math::Vec2;
 
+/// A collision shape the astronaut (a circle) can touch.
+///
+/// A trait: each shape type (circle now, the wind ribbon's path later)
+/// implements it, and code that only needs "does the astronaut touch it?"
+/// works with any of them.
+pub trait Shape {
+    /// Whether a circle at `center` with `radius` touches or overlaps the shape.
+    fn overlaps_circle(&self, center: Vec2, radius: f32) -> bool;
+}
+
+/// A circle shape.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CircleShape {
+    /// Center, in world coordinates.
+    pub center: Vec2,
+    /// Radius, in world units.
+    pub radius: f32,
+}
+
+impl CircleShape {
+    /// A circle at `center` with `radius`.
+    #[must_use]
+    pub const fn new(center: Vec2, radius: f32) -> Self {
+        Self { center, radius }
+    }
+}
+
+impl Shape for CircleShape {
+    fn overlaps_circle(&self, center: Vec2, radius: f32) -> bool {
+        circles_overlap(self.center, self.radius, center, radius)
+    }
+}
+
 /// Whether two circles touch or overlap.
 #[must_use]
 pub fn circles_overlap(a: Vec2, a_radius: f32, b: Vec2, b_radius: f32) -> bool {

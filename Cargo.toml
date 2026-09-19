@@ -12,6 +12,8 @@ default = []
 dev = [
     "bevy/dynamic_linking", # Bevy is linked as a shared library, so relinking our code is much faster.
     "bevy/file_watcher",    # Reload assets (level files, later) when they change on disk.
+    "bevy/bevy_gizmos",     # Debug line drawing for F2 (collision shapes)...
+    "bevy/bevy_gizmos_render", # ...and its renderer. Never in shipped builds.
 ]
 # Profiling with Tracy: `cargo run --release --features trace`. Costs nothing when off.
 trace = ["bevy/trace_tracy"]

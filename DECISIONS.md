@@ -231,6 +231,21 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Run time** counts only while falling (`still_falling`), so studying the level is free.
 - **Text:** plain words (no arrows or "·"), because Bevy's built-in font is a small subset. Real fonts come in M7.
 
+## M3-1 · The object framework
+
+- **Two enums:** `ObjectKind` (fieldless: a *type*, used in events, tuning and later the journal) and `Placement` (an enum *with data*: one placed object, carrying only placement fields). Behavior is one exhaustive `match` in `objects::behavior::on_enter`, a pure function of the type's tuning and the astronaut's state.
+- **Consistency rule, three ways:**
+  - tuning exists only in `GameConfig.objects`, once per type
+  - level files can't hold behavior fields (`deny_unknown_fields`, per enum variant)
+  - effects are pure functions of the type's tuning and the astronaut's state
+- **`Shape` trait** (`collision.rs`) with `CircleShape`. The wind ribbon's path shape joins it in step 3.
+- **Contact on entry:** each object entity has `Contact(bool)`. An effect fires only on a not-touching → touching change, and contacts are cleared on every fresh attempt.
+- **Hitboxes vs outlines:** validation uses the full visible outline. Play uses the hitbox, which for hazards is 80 % of the outline (`hitbox_scale`); a test checks that a visible graze is safe.
+- **Hazards end attempts through `attempt::fail`**, the same path as falling out.
+- **Visual reaction:** `effects::ContactPulse`, an always-present component holding `Option<f32>`, so touches never add or remove components. The squish is a half-sine bump.
+- **Assets:** unit-sized meshes shared per type (`ObjectAssets`), scaled per object; reloads create none.
+- **F2** needs Bevy's gizmo features, which are only in the `dev` cargo feature. `check.sh` runs Clippy a second time with `--features dev`, so that code is linted too.
+
 ---
 
 ## Baseline measurements (M0)

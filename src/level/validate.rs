@@ -6,8 +6,16 @@
 
 use core::fmt;
 
-use super::data::{FilePoint, LEVEL_HEIGHT, LEVEL_WIDTH, LevelFile};
+use super::data::{FilePoint, LEVEL_HEIGHT, LEVEL_WIDTH, LevelFile, to_world};
+use super::scenery::MOTE_RADIUS;
+use crate::collision::{Shape, circle_overlaps_rect};
+use crate::config::ASTRONAUT_RADIUS;
+use crate::objects::{ObjectKind, Placement};
 use crate::scoring::MAX_STARDUST;
+
+/// Object sizes (radius, or half-size) must be within this range, so every
+/// object stays readable and touchable.
+pub const OBJECT_SIZE_RANGE: core::ops::RangeInclusive<f32> = 20.0..=300.0;
 
 /// Which thing in the level an error is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +26,8 @@ pub enum Item {
     Beacon,
     /// A stardust mote, by its position in the list (0-based).
     Stardust(usize),
+    /// An object, by its position in the list (0-based).
+    Object(usize),
 }
 
 impl fmt::Display for Item {
@@ -27,6 +37,7 @@ impl fmt::Display for Item {
             Self::Start => write!(f, "the start"),
             Self::Beacon => write!(f, "the beacon"),
             Self::Stardust(i) => write!(f, "stardust #{}", i + 1),
+            Self::Object(i) => write!(f, "object #{}", i + 1),
         }
     }
 }
@@ -59,6 +70,16 @@ pub enum LevelError {
     BadTargetTime,
     /// More stardust than a run can track.
     TooMuchStardust(usize),
+    /// An object's size is outside [`OBJECT_SIZE_RANGE`].
+    BadObjectSize(usize),
+    /// An object covers something it must not (e.g. the start, or a hazard
+    /// on the beacon).
+    Overlaps {
+        /// Index of the object in the list.
+        object: usize,
+        /// What it covers.
+        item: Item,
+    },
 }
 
 impl fmt::Display for LevelError {
@@ -79,6 +100,16 @@ impl fmt::Display for LevelError {
             Self::BadBeaconSize => write!(f, "the beacon's width and height must be positive"),
             Self::BeaconAboveStart => write!(f, "the beacon must be below the start"),
             Self::BadTargetTime => write!(f, "target_time must be more than 0 seconds"),
+            Self::BadObjectSize(i) => write!(
+                f,
+                "{}'s size must be between {} and {}",
+                Item::Object(*i),
+                OBJECT_SIZE_RANGE.start(),
+                OBJECT_SIZE_RANGE.end()
+            ),
+            Self::Overlaps { object, item } => {
+                write!(f, "{} overlaps {item}", Item::Object(*object))
+            }
             Self::TooMuchStardust(count) => write!(
                 f,
                 "{count} stardust motes; a level can have at most {MAX_STARDUST}"
@@ -123,7 +154,58 @@ pub(super) fn check(file: &LevelFile) -> Result<(), LevelError> {
     for (i, &mote) in file.stardust.iter().enumerate() {
         inside(mote, Item::Stardust(i))?;
     }
+    check_objects(file)
+}
+
+fn check_objects(file: &LevelFile) -> Result<(), LevelError> {
+    let start = to_world(file.start);
+    let beacon_center = to_world(file.beacon.center);
+    let beacon_size = bevy::math::Vec2::new(file.beacon.size.0, file.beacon.size.1);
+    for (i, object) in file.objects.iter().enumerate() {
+        let placed = object.clone().into_world();
+        check_object_shape(&placed, i)?;
+        let outline = placed.outline();
+        // The astronaut must never start inside anything.
+        if outline.overlaps_circle(start, ASTRONAUT_RADIUS) {
+            return Err(LevelError::Overlaps {
+                object: i,
+                item: Item::Start,
+            });
+        }
+        // Hazards must leave the goal and every mote reachable.
+        if placed.kind() == ObjectKind::StaticCloud {
+            if circle_overlaps_rect(outline.center, outline.radius, beacon_center, beacon_size) {
+                return Err(LevelError::Overlaps {
+                    object: i,
+                    item: Item::Beacon,
+                });
+            }
+            for (m, &mote) in file.stardust.iter().enumerate() {
+                if outline.overlaps_circle(to_world(mote), MOTE_RADIUS) {
+                    return Err(LevelError::Overlaps {
+                        object: i,
+                        item: Item::Stardust(m),
+                    });
+                }
+            }
+        }
+    }
     Ok(())
+}
+
+/// Position and size rules that every object shares.
+fn check_object_shape(placed: &Placement, index: usize) -> Result<(), LevelError> {
+    let outline = placed.outline();
+    finite("an object's size", outline.radius)?;
+    if !OBJECT_SIZE_RANGE.contains(&outline.radius) {
+        return Err(LevelError::BadObjectSize(index));
+    }
+    // Back to file coordinates for the shared "inside the level" rule.
+    let center = placed.center();
+    inside(
+        FilePoint(center.x + LEVEL_WIDTH / 2.0, -center.y),
+        Item::Object(index),
+    )
 }
 
 fn check_beacon(file: &LevelFile) -> Result<(), LevelError> {
@@ -292,6 +374,69 @@ mod tests {
             &format!("stardust: [{motes}]"),
         );
         assert_eq!(error, LevelError::TooMuchStardust(MAX_STARDUST + 1));
+    }
+
+    fn with_objects(objects: &str) -> String {
+        VALID.replace(
+            "target_time: 8.0,",
+            &format!("objects: [{objects}], target_time: 8.0,"),
+        )
+    }
+
+    #[test]
+    fn valid_objects_pass() {
+        assert!(Level::parse(&with_objects("StaticCloud(center: (300, 800), radius: 80)")).is_ok());
+    }
+
+    #[test]
+    fn objects_cannot_set_behavior() {
+        // Consistency rule: a level can't make one cloud stronger than another.
+        let text = with_objects("StaticCloud(center: (300, 800), radius: 80, hitbox_scale: 0.1)");
+        let error = Level::parse(&text).unwrap_err();
+        assert!(error.to_string().contains("hitbox_scale"), "{error}");
+    }
+
+    #[test]
+    fn object_rules_are_enforced() {
+        let cases = [
+            (
+                "StaticCloud(center: (300, 2500), radius: 80)",
+                LevelError::Outside(Item::Object(0)),
+            ),
+            (
+                "StaticCloud(center: (300, 800), radius: 5)",
+                LevelError::BadObjectSize(0),
+            ),
+            (
+                "StaticCloud(center: (300, 800), radius: 900)",
+                LevelError::BadObjectSize(0),
+            ),
+            (
+                "StaticCloud(center: (560, 240), radius: 60)",
+                LevelError::Overlaps {
+                    object: 0,
+                    item: Item::Start,
+                },
+            ),
+            (
+                "StaticCloud(center: (540, 1800), radius: 60)",
+                LevelError::Overlaps {
+                    object: 0,
+                    item: Item::Beacon,
+                },
+            ),
+            (
+                "StaticCloud(center: (220, 1000), radius: 60)",
+                LevelError::Overlaps {
+                    object: 0,
+                    item: Item::Stardust(0),
+                },
+            ),
+        ];
+        for (objects, expected) in cases {
+            let error = Level::parse(&with_objects(objects)).unwrap_err();
+            assert_eq!(error, expected, "for {objects}");
+        }
     }
 
     #[test]

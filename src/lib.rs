@@ -15,7 +15,9 @@ mod collectibles;
 pub mod collision;
 mod config;
 pub mod debug;
+mod effects;
 pub mod level;
+pub mod objects;
 pub mod physics;
 mod rng;
 pub mod scoring;
@@ -45,6 +47,8 @@ pub fn run() -> AppExit {
             astronaut::AstronautPlugin,
             attempt::AttemptPlugin,
             collectibles::CollectiblesPlugin,
+            objects::ObjectsPlugin,
+            effects::EffectsPlugin,
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,

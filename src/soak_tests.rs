@@ -2,16 +2,14 @@
 //! retries, failed attempts and level reloads must not grow the world or the
 //! assets.
 
-use core::time::Duration;
-
-use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
 
 use crate::astronaut::Astronaut;
-use crate::attempt::AttemptPlugin;
 use crate::collectibles::CollectiblesPlugin;
-use crate::level::tests::{play_app, reload_scenery};
-use crate::level::{ActiveLevel, LevelPhase};
+use crate::level::tests::reload_scenery;
+use crate::level::{ActiveLevel, Level, LevelPhase};
+use crate::objects::Placement;
+use crate::objects::tests::object_app;
 use crate::physics::movement::{AirInput, Body};
 use crate::physics::{AirControl, Motion};
 
@@ -78,14 +76,24 @@ fn fall_out_and_restart(app: &mut App) {
     assert_eq!(phase(app), LevelPhase::Ready);
 }
 
+/// Everything a hot reload redoes: scenery respawns, and marking the level
+/// changed makes objects respawn and the attempt restart.
+fn reload_level(app: &mut App) {
+    reload_scenery(app.world_mut());
+    app.world_mut().resource_mut::<ActiveLevel>().set_changed();
+    app.update();
+    app.update();
+}
+
 #[test]
 fn twenty_retries_failures_and_reloads_leave_no_trace() {
-    let mut app = play_app(Vec2::new(0.0, -200.0), Duration::from_secs_f64(1.0 / 60.0));
-    app.add_plugins(AssetPlugin::default())
-        .init_asset::<Mesh>()
-        .init_asset::<ColorMaterial>()
-        .init_resource::<ButtonInput<KeyCode>>()
-        .add_plugins((AttemptPlugin, CollectiblesPlugin));
+    let mut level = Level::for_tests();
+    level.objects = vec![Placement::StaticCloud {
+        center: Vec2::new(300.0, -900.0),
+        radius: 90.0,
+    }];
+    let mut app = object_app(level, Vec2::new(0.0, -200.0));
+    app.add_plugins(CollectiblesPlugin);
     reload_scenery(app.world_mut());
     // Warm up: a few frames of falling, one of each flow, so one-time
     // allocations (fade overlay, first messages) are included in the baseline.
@@ -95,7 +103,7 @@ fn twenty_retries_failures_and_reloads_leave_no_trace() {
     press(&mut app, KeyCode::KeyR);
     drop(&mut app);
     fall_out_and_restart(&mut app);
-    reload_scenery(app.world_mut());
+    reload_level(&mut app);
     let before = footprint(&app);
 
     for _ in 0..20 {
@@ -106,7 +114,7 @@ fn twenty_retries_failures_and_reloads_leave_no_trace() {
         press(&mut app, KeyCode::KeyR);
         drop(&mut app);
         fall_out_and_restart(&mut app);
-        reload_scenery(app.world_mut());
+        reload_level(&mut app);
     }
 
     assert_eq!(footprint(&app), before);

@@ -9,6 +9,8 @@ use crate::astronaut::Astronaut;
 use crate::collectibles::CurrentRun;
 use crate::physics::Motion;
 
+#[cfg(feature = "dev")]
+mod shapes;
 pub mod stats;
 
 /// Frame-time history kept by Bevy: ~4 s at 60 FPS, the window for "average" and "worst".
@@ -37,6 +39,8 @@ pub(crate) struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "dev")]
+        app.add_plugins(shapes::ShapesPlugin);
         app.add_plugins(FrameTimeDiagnosticsPlugin::new(FRAME_HISTORY))
             .init_state::<OverlayState>()
             .add_systems(Update, toggle_overlay)

@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+use crate::objects::{ObjectsConfig, StaticCloudConfig};
 use crate::physics::movement::MovementConfig;
 
 /// Falling and drifting feel (world units, seconds). See DECISIONS.md M1-2
@@ -30,8 +31,18 @@ const MOVEMENT: MovementConfig = MovementConfig {
     coast_drag: 100.0,
 };
 
-/// The astronaut's collision radius, in world units.
-const ASTRONAUT_RADIUS: f32 = 28.0;
+/// The astronaut's collision radius, in world units. Also used by level
+/// validation (nothing may overlap the astronaut's start).
+pub(crate) const ASTRONAUT_RADIUS: f32 = 28.0;
+
+/// Object behavior, one set per type (Section 3.3: never per level or instance).
+const OBJECTS: ObjectsConfig = ObjectsConfig {
+    static_cloud: StaticCloudConfig {
+        // Hazards are more forgiving than they look: the hitbox is 80 % of
+        // the visible cloud, so near misses feel fair, never cheap.
+        hitbox_scale: 0.8,
+    },
+};
 
 /// Global gameplay tuning.
 #[derive(Resource, Debug, Clone)]
@@ -40,6 +51,8 @@ pub(crate) struct GameConfig {
     pub movement: MovementConfig,
     /// The astronaut is a circle of this radius.
     pub astronaut_radius: f32,
+    /// Every object type's behavior.
+    pub objects: ObjectsConfig,
 }
 
 impl Default for GameConfig {
@@ -47,6 +60,7 @@ impl Default for GameConfig {
         Self {
             movement: MOVEMENT,
             astronaut_radius: ASTRONAUT_RADIUS,
+            objects: OBJECTS,
         }
     }
 }
