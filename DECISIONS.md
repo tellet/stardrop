@@ -274,6 +274,18 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Decision:** keep the plain loop. The grid is about 2.5× faster, but the loop costs at most about 1.1 µs per frame (two physics steps with 40 objects): 0.1 % of the 1 ms budget. The grid would also need rebuilding on every reload and special handling for long ribbons. Section 7.3 says not to trade readability for speed unless a measurement shows it matters, and this one shows it doesn't.
 - **Revisit** if a level ever holds hundreds of objects. The benchmark stays in `benches/logic.rs`.
 
+## M4-1 · Timed effects and how they combine
+
+- **One `Effects` value on the astronaut's `Body`** (plain Rust, `Copy`), holding "seconds left" per effect: `swapped_controls` (spores) and `comet_dive` so far; bubble capture and the portal cooldown join them. `Effects::after(dt)` counts them all down, never below zero.
+- **The rules** (the brief asks for these to be written down):
+  1. **At most one of each kind.** Touching the same kind again resets its timer; effects never stack.
+  2. **The latest push wins.** A cloud bounce during a comet dive replaces the velocity.
+  3. **Spores only change the controls**, so they combine with everything, including pushes.
+  4. **A fresh attempt clears everything** (the astronaut is rebuilt with `Body::at_rest`).
+- **`on_enter` now returns the astronaut's new state** (`Outcome::Changed(Body)`) instead of a velocity. Boosts, swapped controls and (soon) bubble capture then all fit one exhaustive `match`, and each object's effect stays a pure function.
+- **Comet dive:** the terminal-velocity rule is skipped while `comet_dive` is running, so the dive holds its speed; when it ends, the existing "ease toward terminal velocity" takes over with no special case.
+- **Spores** are shown by a magenta ring around the astronaut, and both timers appear in the F1 overlay.
+
 ---
 
 ## Baseline measurements (M0)

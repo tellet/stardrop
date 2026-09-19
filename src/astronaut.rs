@@ -23,6 +23,14 @@ pub(crate) enum AstronautSystems {
     Input,
 }
 
+/// The shimmer shown around the astronaut while spores have swapped the
+/// controls: a soft magenta ring, hidden the rest of the time.
+#[derive(Component)]
+pub(crate) struct Shimmer;
+
+const SHIMMER_COLOR: Color = Color::linear_rgba(1.6, 0.4, 1.4, 0.55);
+const SHIMMER_THICKNESS: f32 = 7.0;
+
 /// Marks the player's astronaut.
 #[derive(Component)]
 pub(crate) struct Astronaut;
@@ -52,13 +60,24 @@ fn spawn_astronaut(
     config: Res<GameConfig>,
     level: Res<ActiveLevel>,
 ) {
-    commands.spawn((
-        Astronaut,
-        Motion::at_rest(level.start),
-        Mesh2d(meshes.add(Circle::new(config.astronaut_radius))),
-        MeshMaterial2d(materials.add(ASTRONAUT_GLOW)),
-        Transform::from_translation(level.start.extend(ASTRONAUT_DEPTH)),
+    let ring = meshes.add(Annulus::new(
+        config.astronaut_radius + SHIMMER_THICKNESS,
+        config.astronaut_radius + SHIMMER_THICKNESS * 2.0,
     ));
+    commands
+        .spawn((
+            Astronaut,
+            Motion::at_rest(level.start),
+            Mesh2d(meshes.add(Circle::new(config.astronaut_radius))),
+            MeshMaterial2d(materials.add(ASTRONAUT_GLOW)),
+            Transform::from_translation(level.start.extend(ASTRONAUT_DEPTH)),
+        ))
+        .with_child((
+            Shimmer,
+            Mesh2d(ring),
+            MeshMaterial2d(materials.add(SHIMMER_COLOR)),
+            Visibility::Hidden,
+        ));
 }
 
 /// Each gamepad is an entity with its own settings; apply our dead zone when

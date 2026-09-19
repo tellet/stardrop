@@ -65,6 +65,8 @@ Each object is written as `Type(fields...)`. An effect happens when the astronau
 |---|---|---|
 | `CloudPuff` | `center: (x, depth)`, `radius` | Bounces the astronaut upward and away from its center, always at least 45° up, at the same speed however it's touched. The astronaut then coasts. |
 | `WindRibbon` | `path: [(x, depth), ...]` (2–16 points, in flow order), `width` (30–240) | While inside, pulls the astronaut along the flow of the nearest segment. On leaving (at the end, or out the side) the astronaut keeps that speed and coasts. Chevrons show the flow direction. Every path point must be inside the level. |
+| `SporeFlower` | `center: (x, depth)`, `radius` | Swaps left and right for 4 seconds; a shimmer around the astronaut shows it's active. Touching another flower resets the 4 seconds instead of adding to them. |
+| `CometStone` | `center: (x, depth)`, `radius` | Throws the astronaut into a dive far faster than normal (2.4×) for 0.6 s, then it eases back. Sideways steering still works. A fast shortcut, dangerous near hazards. |
 | `Crystal` | `center: (x, depth)`, `size` (center to tip) | Reverses sideways motion, with a minimum sideways speed so it's always noticeable. The fall speed is kept. Falling straight onto it pushes away from its center. |
 | `StaticCloud` | `center: (x, depth)`, `radius` | Hazard: touching it ends the attempt. Its hitbox is 80 % of its visible size, so near misses are safe. It can't cover the start, the beacon or any stardust. |
 

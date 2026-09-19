@@ -8,7 +8,8 @@ use bevy::prelude::*;
 use core::f32::consts::FRAC_PI_4;
 
 use crate::objects::{
-    CloudPuffConfig, CrystalConfig, ObjectsConfig, StaticCloudConfig, WindRibbonConfig,
+    CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectsConfig, SporeFlowerConfig,
+    StaticCloudConfig, WindRibbonConfig,
 };
 use crate::physics::movement::MovementConfig;
 
@@ -57,6 +58,16 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     crystal: CrystalConfig {
         // Clearly visible even when the astronaut was barely moving sideways.
         min_sideways_speed: 350.0,
+    },
+    spore_flower: SporeFlowerConfig {
+        // Long enough to matter, short enough not to feel punishing.
+        swap_seconds: 4.0,
+    },
+    comet_stone: CometStoneConfig {
+        // 2.4x terminal velocity: a real shortcut, and dangerous near hazards.
+        dive_speed: 1100.0,
+        // Held briefly, then eased back by the usual terminal-velocity rule.
+        dive_seconds: 0.6,
     },
     static_cloud: StaticCloudConfig {
         // Hazards are more forgiving than they look: the hitbox is 80 % of

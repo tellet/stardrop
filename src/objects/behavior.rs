@@ -5,7 +5,7 @@
 use bevy::math::Vec2;
 
 use super::kind::{ObjectKind, ObjectShape, ObjectsConfig, Placement};
-use crate::physics::movement::Body;
+use crate::physics::movement::{Body, MovementConfig};
 
 /// The result of touching an object.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13,8 +13,8 @@ pub enum Outcome {
     /// Nothing happens on entering (the object acts continuously instead;
     /// see [`while_inside`]).
     Nothing,
-    /// The astronaut takes on this velocity (and coasts; see `Body::launched`).
-    Launch(Vec2),
+    /// The astronaut's new state.
+    Changed(Body),
     /// The attempt ends (hazard).
     FailAttempt,
 }
@@ -25,11 +25,28 @@ pub enum Outcome {
 /// One exhaustive `match`: adding an object type makes the compiler point
 /// here until its behavior is written.
 #[must_use]
-pub fn on_enter(kind: ObjectKind, center: Vec2, config: &ObjectsConfig, body: Body) -> Outcome {
+pub fn on_enter(
+    kind: ObjectKind,
+    center: Vec2,
+    config: &ObjectsConfig,
+    movement: &MovementConfig,
+    body: Body,
+) -> Outcome {
     match kind {
-        ObjectKind::CloudPuff => Outcome::Launch(cloud_bounce(center, config, body)),
+        ObjectKind::CloudPuff => {
+            Outcome::Changed(body.launched(cloud_bounce(center, config, body), movement))
+        }
         ObjectKind::WindRibbon => Outcome::Nothing,
-        ObjectKind::Crystal => Outcome::Launch(crystal_reverse(center, config, body)),
+        ObjectKind::Crystal => {
+            Outcome::Changed(body.launched(crystal_reverse(center, config, body), movement))
+        }
+        ObjectKind::SporeFlower => {
+            Outcome::Changed(body.with_swapped_controls(config.spore_flower.swap_seconds))
+        }
+        ObjectKind::CometStone => Outcome::Changed(body.diving(
+            config.comet_stone.dive_speed,
+            config.comet_stone.dive_seconds,
+        )),
         ObjectKind::StaticCloud => Outcome::FailAttempt,
     }
 }
@@ -92,7 +109,8 @@ mod tests {
 
     use super::*;
     use crate::objects::kind::{
-        CloudPuffConfig, CrystalConfig, StaticCloudConfig, WindRibbonConfig,
+        CloudPuffConfig, CometStoneConfig, CrystalConfig, SporeFlowerConfig, StaticCloudConfig,
+        WindRibbonConfig,
     };
 
     const CONFIG: ObjectsConfig = ObjectsConfig {
@@ -107,7 +125,24 @@ mod tests {
         crystal: CrystalConfig {
             min_sideways_speed: 350.0,
         },
+        spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
+        comet_stone: CometStoneConfig {
+            dive_speed: 1100.0,
+            dive_seconds: 0.6,
+        },
         static_cloud: StaticCloudConfig { hitbox_scale: 0.8 },
+    };
+
+    /// Movement tuning for tests (only `control_recovery_time` matters here).
+    const MOVEMENT: MovementConfig = MovementConfig {
+        gravity: 450.0,
+        terminal_velocity: 450.0,
+        max_air_speed: 500.0,
+        air_acceleration: 2000.0,
+        air_braking: 1250.0,
+        wall_restitution: 0.6,
+        control_recovery_time: 0.5,
+        coast_drag: 100.0,
     };
 
     fn body(position: Vec2, velocity: Vec2) -> Body {
@@ -118,11 +153,16 @@ mod tests {
         }
     }
 
-    fn launched(kind: ObjectKind, center: Vec2, body: Body) -> Vec2 {
-        match on_enter(kind, center, &CONFIG, body) {
-            Outcome::Launch(velocity) => velocity,
-            other => panic!("{kind:?} should launch, got {other:?}"),
+    /// The astronaut's new state after touching `kind`.
+    fn touched(kind: ObjectKind, center: Vec2, body: Body) -> Body {
+        match on_enter(kind, center, &CONFIG, &MOVEMENT, body) {
+            Outcome::Changed(changed) => changed,
+            other => panic!("{kind:?} should change the astronaut, got {other:?}"),
         }
+    }
+
+    fn launched(kind: ObjectKind, center: Vec2, body: Body) -> Vec2 {
+        touched(kind, center, body).velocity
     }
 
     #[test]
@@ -136,6 +176,7 @@ mod tests {
                 ObjectKind::StaticCloud,
                 Vec2::ZERO,
                 &CONFIG,
+                &MOVEMENT,
                 body(Vec2::Y, velocity),
             );
             assert_eq!(outcome, Outcome::FailAttempt);
@@ -297,8 +338,65 @@ mod tests {
             ObjectKind::WindRibbon,
             Vec2::ZERO,
             &CONFIG,
+            &MOVEMENT,
             body(Vec2::ZERO, Vec2::ZERO),
         );
         assert_eq!(entering, Outcome::Nothing);
+    }
+
+    #[test]
+    fn spore_flower_swaps_controls_without_moving_the_astronaut() {
+        let before = body(Vec2::new(10.0, -200.0), Vec2::new(120.0, -300.0));
+        let after = touched(ObjectKind::SporeFlower, Vec2::ZERO, before);
+        assert_eq!(after.velocity, before.velocity, "spores don't push");
+        assert!(after.effects.controls_swapped());
+        assert!((after.effects.swapped_controls - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn touching_a_flower_again_resets_the_timer_instead_of_stacking() {
+        let fresh = touched(
+            ObjectKind::SporeFlower,
+            Vec2::ZERO,
+            body(Vec2::ZERO, Vec2::ZERO),
+        );
+        let nearly_over = Body {
+            effects: fresh.effects.after(3.5),
+            ..fresh
+        };
+        let again = touched(ObjectKind::SporeFlower, Vec2::ZERO, nearly_over);
+        assert!((again.effects.swapped_controls - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the dive must pass sideways speed through untouched"
+    )]
+    fn comet_stone_throws_the_astronaut_into_a_dive() {
+        let before = body(Vec2::new(0.0, -300.0), Vec2::new(200.0, -450.0));
+        let after = touched(ObjectKind::CometStone, Vec2::ZERO, before);
+        assert!(
+            (after.velocity.y + 1100.0).abs() < 1e-3,
+            "beyond terminal velocity"
+        );
+        assert_eq!(
+            after.velocity.x, before.velocity.x,
+            "sideways motion is kept"
+        );
+        assert!(after.effects.diving());
+        assert!((after.effects.comet_dive - 0.6).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_latest_push_wins() {
+        // A cloud bounce during a dive replaces the velocity: one push at a time.
+        let diving = touched(
+            ObjectKind::CometStone,
+            Vec2::ZERO,
+            body(Vec2::new(0.0, -300.0), Vec2::ZERO),
+        );
+        let bounced = touched(ObjectKind::CloudPuff, Vec2::new(0.0, -400.0), diving);
+        assert!(bounced.velocity.y > 0.0, "now going up");
     }
 }

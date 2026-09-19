@@ -14,8 +14,8 @@ mod visuals;
 
 pub use behavior::{Outcome, on_enter, while_inside};
 pub use kind::{
-    CloudPuffConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig,
-    Placement, StaticCloudConfig, WindRibbonConfig,
+    CloudPuffConfig, CometStoneConfig, CrystalConfig, MAX_RIBBON_POINTS, ObjectKind, ObjectShape,
+    ObjectsConfig, Placement, SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig,
 };
 use visuals::ObjectAssets;
 
@@ -138,11 +138,15 @@ fn touch_objects(
         if !was_touching {
             let kind = placement.kind();
             touched.write(ObjectTouched { kind, entity });
-            match on_enter(kind, placement.center(), &config.objects, body) {
+            match on_enter(
+                kind,
+                placement.center(),
+                &config.objects,
+                &config.movement,
+                body,
+            ) {
                 Outcome::Nothing => {}
-                Outcome::Launch(velocity) => {
-                    astronaut.set_body(body.launched(velocity, &config.movement));
-                }
+                Outcome::Changed(changed) => astronaut.set_body(changed),
                 Outcome::FailAttempt => {
                     fail(&mut failed, &mut next_phase);
                     return;

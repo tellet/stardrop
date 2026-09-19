@@ -7,8 +7,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use stardrop::debug::stats::summarize;
 use stardrop::level::Level;
 use stardrop::objects::{
-    CloudPuffConfig, CrystalConfig, ObjectKind, ObjectsConfig, Placement, StaticCloudConfig,
-    WindRibbonConfig, on_enter, while_inside,
+    CloudPuffConfig, CometStoneConfig, CrystalConfig, ObjectKind, ObjectsConfig, Placement,
+    SporeFlowerConfig, StaticCloudConfig, WindRibbonConfig, on_enter, while_inside,
 };
 use stardrop::physics::movement::{AirInput, Body, MovementConfig, Walls, step};
 
@@ -20,17 +20,20 @@ fn frame_summary(c: &mut Criterion) {
     });
 }
 
+/// The game's movement tuning (kept in step with `src/config.rs`).
+const MOVEMENT: MovementConfig = MovementConfig {
+    gravity: 450.0,
+    terminal_velocity: 450.0,
+    max_air_speed: 500.0,
+    air_acceleration: 2000.0,
+    air_braking: 1250.0,
+    wall_restitution: 0.6,
+    control_recovery_time: 0.5,
+    coast_drag: 100.0,
+};
+
 fn movement_step(c: &mut Criterion) {
-    let config = MovementConfig {
-        gravity: 450.0,
-        terminal_velocity: 450.0,
-        max_air_speed: 500.0,
-        air_acceleration: 2000.0,
-        air_braking: 1250.0,
-        wall_restitution: 0.6,
-        control_recovery_time: 0.5,
-        coast_drag: 100.0,
-    };
+    let config = MOVEMENT;
     let walls = Walls {
         left: -932.0,
         right: 932.0,
@@ -71,6 +74,11 @@ const OBJECTS: ObjectsConfig = ObjectsConfig {
     },
     crystal: CrystalConfig {
         min_sideways_speed: 350.0,
+    },
+    spore_flower: SporeFlowerConfig { swap_seconds: 4.0 },
+    comet_stone: CometStoneConfig {
+        dive_speed: 1100.0,
+        dive_seconds: 0.6,
     },
     static_cloud: StaticCloudConfig { hitbox_scale: 0.8 },
 };
@@ -120,6 +128,7 @@ fn object_effects(c: &mut Criterion) {
                 ObjectKind::CloudPuff,
                 black_box(Vec2::new(0.0, -500.0)),
                 &OBJECTS,
+                &MOVEMENT,
                 black_box(body),
             )
         });
@@ -130,6 +139,7 @@ fn object_effects(c: &mut Criterion) {
                 ObjectKind::Crystal,
                 black_box(Vec2::new(0.0, -500.0)),
                 &OBJECTS,
+                &MOVEMENT,
                 black_box(body),
             )
         });

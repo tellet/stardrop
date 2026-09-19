@@ -18,6 +18,10 @@ pub enum ObjectKind {
     WindRibbon,
     /// Glassy diamond: reverses sideways motion.
     Crystal,
+    /// Mischievous flower: swaps left and right for a few seconds.
+    SporeFlower,
+    /// Heavy stone: throws the astronaut into a fast dive.
+    CometStone,
     /// Dark, crackling cloud: touching it ends the attempt.
     StaticCloud,
 }
@@ -28,7 +32,11 @@ impl ObjectKind {
     #[must_use]
     pub fn size_range(self) -> RangeInclusive<f32> {
         match self {
-            Self::CloudPuff | Self::Crystal | Self::StaticCloud => 20.0..=300.0,
+            Self::CloudPuff
+            | Self::Crystal
+            | Self::SporeFlower
+            | Self::CometStone
+            | Self::StaticCloud => 20.0..=300.0,
             // Ribbon width.
             Self::WindRibbon => 30.0..=240.0,
         }
@@ -56,6 +64,20 @@ pub enum Placement {
         path: Vec<Vec2>,
         /// Full width of the ribbon.
         width: f32,
+    },
+    /// A spore flower: a circle.
+    SporeFlower {
+        /// Center of the flower.
+        center: Vec2,
+        /// Visible radius.
+        radius: f32,
+    },
+    /// A comet stone: a circle.
+    CometStone {
+        /// Center of the stone.
+        center: Vec2,
+        /// Visible radius.
+        radius: f32,
     },
     /// A crystal: a diamond, `size` from its center to each tip.
     Crystal {
@@ -98,6 +120,8 @@ impl Placement {
     pub fn kind(&self) -> ObjectKind {
         match self {
             Self::CloudPuff { .. } => ObjectKind::CloudPuff,
+            Self::SporeFlower { .. } => ObjectKind::SporeFlower,
+            Self::CometStone { .. } => ObjectKind::CometStone,
             Self::WindRibbon { .. } => ObjectKind::WindRibbon,
             Self::Crystal { .. } => ObjectKind::Crystal,
             Self::StaticCloud { .. } => ObjectKind::StaticCloud,
@@ -111,6 +135,8 @@ impl Placement {
         match self {
             Self::CloudPuff { center, .. }
             | Self::Crystal { center, .. }
+            | Self::SporeFlower { center, .. }
+            | Self::CometStone { center, .. }
             | Self::StaticCloud { center, .. } => *center,
             Self::WindRibbon { path, .. } => {
                 // A ribbon has at most MAX_RIBBON_POINTS points, so this
@@ -127,7 +153,10 @@ impl Placement {
     #[must_use]
     pub fn size(&self) -> f32 {
         match self {
-            Self::CloudPuff { radius, .. } | Self::StaticCloud { radius, .. } => *radius,
+            Self::CloudPuff { radius, .. }
+            | Self::SporeFlower { radius, .. }
+            | Self::CometStone { radius, .. }
+            | Self::StaticCloud { radius, .. } => *radius,
             Self::Crystal { size, .. } => *size,
             Self::WindRibbon { width, .. } => *width,
         }
@@ -137,7 +166,10 @@ impl Placement {
     #[must_use]
     pub fn outline(&self) -> ObjectShape<'_> {
         match self {
-            Self::CloudPuff { center, radius } | Self::StaticCloud { center, radius } => {
+            Self::CloudPuff { center, radius }
+            | Self::SporeFlower { center, radius }
+            | Self::CometStone { center, radius }
+            | Self::StaticCloud { center, radius } => {
                 ObjectShape::Circle(CircleShape::new(*center, *radius))
             }
             // The circle through the diamond's tips: generous, like every
@@ -156,9 +188,11 @@ impl Placement {
     #[must_use]
     pub fn hitbox(&self, config: &ObjectsConfig) -> ObjectShape<'_> {
         match self {
-            Self::CloudPuff { .. } | Self::Crystal { .. } | Self::WindRibbon { .. } => {
-                self.outline()
-            }
+            Self::CloudPuff { .. }
+            | Self::Crystal { .. }
+            | Self::SporeFlower { .. }
+            | Self::CometStone { .. }
+            | Self::WindRibbon { .. } => self.outline(),
             Self::StaticCloud { center, radius } => ObjectShape::Circle(CircleShape::new(
                 *center,
                 radius * config.static_cloud.hitbox_scale,
@@ -193,6 +227,22 @@ pub struct WindRibbonConfig {
     pub pull: f32,
 }
 
+/// Spore flower tuning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SporeFlowerConfig {
+    /// How long left and right stay swapped, in seconds.
+    pub swap_seconds: f32,
+}
+
+/// Comet stone tuning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CometStoneConfig {
+    /// Dive speed, in units/s (well beyond terminal velocity).
+    pub dive_speed: f32,
+    /// How long the dive speed is held, in seconds, before easing back.
+    pub dive_seconds: f32,
+}
+
 /// Crystal tuning.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CrystalConfig {
@@ -217,6 +267,10 @@ pub struct ObjectsConfig {
     pub wind_ribbon: WindRibbonConfig,
     /// Crystal.
     pub crystal: CrystalConfig,
+    /// Spore flower.
+    pub spore_flower: SporeFlowerConfig,
+    /// Comet stone.
+    pub comet_stone: CometStoneConfig,
     /// Static cloud.
     pub static_cloud: StaticCloudConfig,
 }

@@ -123,6 +123,16 @@ fn refresh_overlay(
             velocity.x, velocity.y
         );
     }
+    if let Some(motion) = astronaut.iter().next() {
+        let effects = motion.body().effects;
+        if effects.controls_swapped() || effects.diving() {
+            let _ = write!(
+                buffer,
+                "\neffects  swapped {:.1}s  dive {:.1}s",
+                effects.swapped_controls, effects.comet_dive
+            );
+        }
+    }
     let _ = write!(
         buffer,
         "\nrun  {:.1} s  stardust {}",

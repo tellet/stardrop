@@ -4,7 +4,9 @@
 
 use bevy::prelude::*;
 
+use crate::astronaut::{Astronaut, Shimmer};
 use crate::objects::ObjectTouched;
+use crate::physics::Motion;
 
 /// How long a contact squish lasts, in seconds.
 const PULSE_SECONDS: f32 = 0.35;
@@ -23,7 +25,10 @@ impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (start_pulses.run_if(on_message::<ObjectTouched>), run_pulses).chain(),
+            (
+                (start_pulses.run_if(on_message::<ObjectTouched>), run_pulses).chain(),
+                show_shimmer,
+            ),
         );
     }
 }
@@ -54,6 +59,24 @@ fn run_pulses(time: Res<Time>, mut pulses: Query<(&mut ContactPulse, &mut Transf
         let elapsed = elapsed + time.delta_secs();
         pulse.0 = (elapsed < PULSE_SECONDS).then_some(elapsed);
         transform.scale = pulse_scale(elapsed).extend(1.0);
+    }
+}
+
+/// Shows the shimmer around the astronaut exactly while spores have swapped
+/// the controls.
+fn show_shimmer(
+    astronaut: Query<&Motion, With<Astronaut>>,
+    mut shimmer: Query<&mut Visibility, With<Shimmer>>,
+) {
+    let swapped = astronaut
+        .iter()
+        .any(|motion| motion.body().effects.controls_swapped());
+    for mut visibility in &mut shimmer {
+        visibility.set_if_neq(if swapped {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
     }
 }
 

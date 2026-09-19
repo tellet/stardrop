@@ -76,6 +76,12 @@ impl AirInput {
     pub fn value(self) -> f32 {
         self.0
     }
+
+    /// Left and right swapped (spore flower).
+    #[must_use]
+    pub fn swapped(self) -> Self {
+        Self(-self.0)
+    }
 }
 
 /// Where the astronaut's *center* may go sideways (level edges minus its radius).
@@ -98,6 +104,43 @@ pub enum Drift {
     Coasting,
 }
 
+/// Effects with a timer, carried by the astronaut.
+///
+/// At most one of each kind at a time: touching the same kind again resets
+/// its timer instead of stacking (Section 3.3 in the brief, and the rules in
+/// DECISIONS.md). Every value is "seconds left", counted down each step.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Effects {
+    /// Left and right are swapped (spore flower).
+    pub swapped_controls: f32,
+    /// Diving faster than terminal velocity (comet stone): while this lasts,
+    /// the fall speed is held instead of easing back.
+    pub comet_dive: f32,
+}
+
+impl Effects {
+    /// Counts every timer down by `dt` seconds, never below zero.
+    #[must_use]
+    pub fn after(self, dt: f32) -> Self {
+        Self {
+            swapped_controls: (self.swapped_controls - dt).max(0.0),
+            comet_dive: (self.comet_dive - dt).max(0.0),
+        }
+    }
+
+    /// Whether left and right are currently swapped.
+    #[must_use]
+    pub fn controls_swapped(self) -> bool {
+        self.swapped_controls > 0.0
+    }
+
+    /// Whether the comet dive is holding the fall speed.
+    #[must_use]
+    pub fn diving(self) -> bool {
+        self.comet_dive > 0.0
+    }
+}
+
 /// The astronaut's physical state.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Body {
@@ -109,6 +152,8 @@ pub struct Body {
     pub control_recovery: f32,
     /// Whether sideways motion is the player's own or a push from outside.
     pub drift: Drift,
+    /// Timed effects currently on the astronaut.
+    pub effects: Effects,
 }
 
 impl Body {
@@ -118,6 +163,33 @@ impl Body {
         Self {
             position,
             ..Self::default()
+        }
+    }
+
+    /// Left and right swapped for `seconds` (a fresh touch resets the timer).
+    #[must_use]
+    pub fn with_swapped_controls(self, seconds: f32) -> Self {
+        Self {
+            effects: Effects {
+                swapped_controls: seconds,
+                ..self.effects
+            },
+            ..self
+        }
+    }
+
+    /// Thrown downward at `speed`, holding it for `seconds` before easing
+    /// back to terminal velocity. Steering still works during the dive.
+    #[must_use]
+    pub fn diving(self, speed: f32, seconds: f32) -> Self {
+        Self {
+            velocity: Vec2::new(self.velocity.x, -speed),
+            drift: Drift::Coasting,
+            effects: Effects {
+                comet_dive: seconds,
+                ..self.effects
+            },
+            ..self
         }
     }
 
@@ -143,14 +215,22 @@ impl Body {
 #[must_use]
 pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, dt: f32) -> Body {
     let mut velocity = body.velocity;
+    let effects = body.effects.after(dt);
 
     // Vertical: ease toward terminal velocity at the rate of gravity. From
-    // below terminal speed this is ordinary gravity; if an object ever pushes
-    // us faster (later milestones), we ease back instead of snapping.
-    velocity.y = move_towards(velocity.y, -config.terminal_velocity, config.gravity * dt);
+    // below terminal speed this is ordinary gravity; a comet dive holds its
+    // speed while it lasts, and eases back once it ends.
+    if !body.effects.diving() {
+        velocity.y = move_towards(velocity.y, -config.terminal_velocity, config.gravity * dt);
+    }
 
     // Horizontal: accelerate toward the steered speed, or brake toward zero,
-    // weakened for a moment after a wall bounce.
+    // weakened for a moment after a wall bounce. Spores swap left and right.
+    let input = if body.effects.controls_swapped() {
+        input.swapped()
+    } else {
+        input
+    };
     let target = input.value() * config.max_air_speed;
     let control = control_after_bounce(body.control_recovery, config.control_recovery_time);
     // Any steering puts the player back in charge.
@@ -185,6 +265,7 @@ pub fn step(body: Body, input: AirInput, config: &MovementConfig, walls: Walls, 
         velocity,
         control_recovery,
         drift,
+        effects,
     }
 }
 
@@ -249,6 +330,17 @@ pub(crate) mod tests {
         left: -900.0,
         right: 900.0,
     };
+
+    /// Steps `body` for `seconds` with steady input.
+    fn run_from(mut body: Body, input: AirInput, seconds: f32) -> Body {
+        // `seconds` is small in tests, so the cast can't truncate meaningfully.
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let steps = (seconds / DT).round() as usize;
+        for _ in 0..steps {
+            body = step(body, input, &CONFIG, WALLS, DT);
+        }
+        body
+    }
 
     fn run(mut body: Body, input: AirInput, seconds: f32) -> Body {
         // `seconds` is small in tests, so the cast can't truncate meaningfully.
@@ -467,5 +559,45 @@ pub(crate) mod tests {
                 _ => AirInput::new(0.8),
             })
             .collect()
+    }
+
+    #[test]
+    fn spores_swap_left_and_right_until_the_timer_runs_out() {
+        let swapped = Body::default().with_swapped_controls(0.5);
+        // Steering right now moves left...
+        let after = run_from(swapped, AirInput::RIGHT, 0.25);
+        assert!(after.velocity.x < 0.0, "{after:?}");
+        // ...and once the timer is over, right means right again.
+        let later = run_from(after, AirInput::RIGHT, 1.0);
+        assert!(later.velocity.x > 0.0, "{later:?}");
+        assert!(!later.effects.controls_swapped());
+    }
+
+    #[test]
+    fn a_comet_dive_holds_its_speed_then_eases_back_to_terminal() {
+        let diving = Body::default().diving(1100.0, 0.6);
+        let during = run_from(diving, AirInput::NONE, 0.5);
+        assert!(
+            (during.velocity.y + 1100.0).abs() < 1e-3,
+            "speed held: {during:?}"
+        );
+        // After the dive, the usual terminal-velocity rule eases it back.
+        let after = run_from(diving, AirInput::NONE, 3.0);
+        assert!(
+            (after.velocity.y + CONFIG.terminal_velocity).abs() < 1e-3,
+            "{after:?}"
+        );
+    }
+
+    #[test]
+    fn effect_timers_count_down_and_stop_at_zero() {
+        let effects = Effects {
+            swapped_controls: 0.2,
+            comet_dive: 0.1,
+        };
+        let later = effects.after(0.15);
+        assert!((later.swapped_controls - 0.05).abs() < 1e-6);
+        assert!(!later.diving(), "never goes negative");
+        assert_eq!(later.after(10.0), Effects::default());
     }
 }

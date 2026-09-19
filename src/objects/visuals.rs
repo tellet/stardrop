@@ -29,6 +29,13 @@ const CHEVRON_SPACING: f32 = 90.0;
 const CHEVRON_SIZE: f32 = 16.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
+/// Spore flowers: five petals around a bright core, in mischievous magenta.
+const PETALS: u8 = 5;
+const PETAL_COLOR: Color = Color::linear_rgb(1.4, 0.35, 1.1);
+const FLOWER_CORE: Color = Color::linear_rgb(2.4, 1.9, 0.6);
+/// Comet stones: a dark stone with a bright flame pointing down (where it throws you).
+const STONE_COLOR: Color = Color::srgb(0.24, 0.20, 0.26);
+const FLAME_COLOR: Color = Color::linear_rgb(3.0, 1.1, 0.35);
 /// Spikes around a static cloud's outline.
 const STATIC_SPIKES: u16 = 14;
 /// Dark and brooding, with a faint violet crackle around it (no bloom).
@@ -42,12 +49,18 @@ const OBJECT_DEPTH: f32 = 6.0;
 #[derive(Resource)]
 pub(super) struct ObjectAssets {
     unit_circle: Handle<Mesh>,
+    /// A 1x1 triangle pointing down (the comet stone's flame).
+    down_triangle: Handle<Mesh>,
     diamond: Handle<Mesh>,
     spiky_star: Handle<Mesh>,
     puff: Handle<ColorMaterial>,
     crystal: Handle<ColorMaterial>,
     ribbon: Handle<ColorMaterial>,
     chevron: Handle<ColorMaterial>,
+    petal: Handle<ColorMaterial>,
+    flower_core: Handle<ColorMaterial>,
+    stone: Handle<ColorMaterial>,
+    flame: Handle<ColorMaterial>,
     static_core: Handle<ColorMaterial>,
     static_crackle: Handle<ColorMaterial>,
 }
@@ -59,15 +72,25 @@ impl FromWorld for ObjectAssets {
         let spiky_star = meshes.add(star_mesh(STATIC_SPIKES, 0.82, 1.0));
         // Narrower than tall, tips at distance 1 from the center.
         let diamond = meshes.add(Rhombus::new(1.3, 2.0));
+        let down_triangle = meshes.add(Triangle2d::new(
+            Vec2::new(-0.5, 0.5),
+            Vec2::new(0.5, 0.5),
+            Vec2::new(0.0, -0.5),
+        ));
         let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
         Self {
             unit_circle,
+            down_triangle,
             diamond,
             spiky_star,
             puff: materials.add(PUFF_COLOR),
             crystal: materials.add(CRYSTAL_GLOW),
             ribbon: materials.add(RIBBON_GLOW),
             chevron: materials.add(CHEVRON_GLOW),
+            petal: materials.add(PETAL_COLOR),
+            flower_core: materials.add(FLOWER_CORE),
+            stone: materials.add(STONE_COLOR),
+            flame: materials.add(FLAME_COLOR),
             static_core: materials.add(STATIC_CORE),
             static_crackle: materials.add(STATIC_CRACKLE),
         }
@@ -106,6 +129,40 @@ pub(super) fn spawn_look(
                         .with_scale(Vec3::splat(radius * scale)),
                 ));
             }
+        }
+        Placement::SporeFlower { radius, .. } => {
+            for petal in 0..PETALS {
+                let angle = f32::from(petal) / f32::from(PETALS) * core::f32::consts::TAU;
+                let offset = Vec2::from_angle(angle) * (radius * 0.55);
+                parent.spawn((
+                    Mesh2d(assets.unit_circle.clone()),
+                    MeshMaterial2d(assets.petal.clone()),
+                    Transform::from_translation(offset.extend(0.0))
+                        .with_scale(Vec3::splat(radius * 0.45)),
+                ));
+            }
+            parent.spawn((
+                Mesh2d(assets.unit_circle.clone()),
+                MeshMaterial2d(assets.flower_core.clone()),
+                Transform::from_xyz(0.0, 0.0, 0.1).with_scale(Vec3::splat(radius * 0.3)),
+            ));
+        }
+        Placement::CometStone { radius, .. } => {
+            // The flame points down: the direction the stone throws you.
+            parent.spawn((
+                Mesh2d(assets.down_triangle.clone()),
+                MeshMaterial2d(assets.flame.clone()),
+                Transform::from_xyz(0.0, -radius * 0.9, -0.1).with_scale(Vec3::new(
+                    radius * 0.9,
+                    radius * 1.2,
+                    1.0,
+                )),
+            ));
+            parent.spawn((
+                Mesh2d(assets.unit_circle.clone()),
+                MeshMaterial2d(assets.stone.clone()),
+                Transform::from_scale(Vec3::splat(*radius)),
+            ));
         }
         Placement::Crystal { size, .. } => {
             parent.spawn((
