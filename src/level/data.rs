@@ -174,6 +174,7 @@ impl Level {
             theme: DeepSpace,
             start: (960, 300),
             beacon: (center: (960, 10770), size: (360, 40)),
+            checkpoints: [(960, 3600), (700, 7200)],
             target_time: 30.0,
         )"#;
         match Self::parse(text) {

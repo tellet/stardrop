@@ -10,6 +10,7 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
 use crate::astronaut::Astronaut;
+use crate::checkpoint::{Respawn, RunRestarted};
 use crate::level::{ActiveLevel, LEVEL_WIDTH, Level};
 use crate::physics::Motion;
 
@@ -30,7 +31,7 @@ const LOOK_AHEAD_SECONDS: f32 = 0.25;
 /// How quickly the camera catches up (exponential decay rate, 1/s). Higher is
 /// snappier; ~5 feels calm without ever losing the astronaut.
 const FOLLOW_RATE: f32 = 5.0;
-/// Jumps larger than this (e.g. restarting at the top) cut instead of pan.
+/// Jumps larger than this cut instead of pan (e.g. after a level edit).
 const SNAP_DISTANCE: f32 = DESIGN_SIZE.y;
 
 /// Marks the one gameplay camera.
@@ -97,13 +98,19 @@ fn camera_target(astronaut_y: f32, fall_speed: f32, level: &Level) -> f32 {
 }
 
 /// Runs every frame (after physics interpolation), using the *drawn* astronaut
-/// position so the camera moves as smoothly as the astronaut does.
+/// position so the camera moves as smoothly as the astronaut does. Cuts
+/// straight to the astronaut after a respawn or retry.
 fn follow_astronaut(
     time: Res<Time>,
     level: Res<ActiveLevel>,
+    mut respawns: MessageReader<Respawn>,
+    mut restarts: MessageReader<RunRestarted>,
     astronaut: Single<(&Transform, &Motion), (With<Astronaut>, Without<MainCamera>)>,
     mut camera: Single<&mut Transform, With<MainCamera>>,
 ) {
+    // Read both readers in full (`count` consumes them), not `||`, which
+    // would skip the second one and leave its messages for later frames.
+    let teleported = respawns.read().count() + restarts.read().count() > 0;
     let (astronaut_transform, motion) = *astronaut;
     let target = camera_target(
         astronaut_transform.translation.y,
@@ -111,7 +118,7 @@ fn follow_astronaut(
         &level,
     );
     let y = &mut camera.translation.y;
-    if (target - *y).abs() > SNAP_DISTANCE {
+    if teleported || (target - *y).abs() > SNAP_DISTANCE {
         *y = target;
     } else {
         // Frame-rate independent smoothing: the same feel at 60 or 144 Hz.

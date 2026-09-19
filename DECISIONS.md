@@ -180,6 +180,16 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **`still_falling` run condition:** the phase must be `Falling` *and* no phase change may be pending. Several fixed steps can run in one frame, but state changes only apply between frames. Without the pending check, the step right after landing moved the astronaut again and completed the level twice. A test reproduces that failure when the check is weakened.
 - **`add_play_rules`:** the level's gameplay rules are registered separately from file loading, so tests run the real rules in a minimal app.
 
+## M2-4 · Checkpoints, respawn and retry
+
+- **Activation** (option A): `newly_passed` returns the deepest ring at or above the astronaut, if it's further along than the active one. Skipping several rings at once activates the deepest. The active ring glows brighter; its color only updates when progress changes or rings respawn.
+- **Progress** is `Option<usize>`: `None` means "no checkpoint yet, use the start". If a level edit removes the active checkpoint, `checkpoints.get(i)` returns `None` and the respawn falls back to the start, so it can't crash.
+- **Respawn:** `LevelPhase::Respawning` pauses physics. A full-screen fade in night blue (0.3 s out, 0.1 s hold, 0.3 s in, smoothstep) covers the screen, and the astronaut is moved at rest while it's covered, with a `Respawn` event. "Under one second" is a **compile-time assertion**.
+- **Retry (R):** teleport to the start, clear progress, send `RunRestarted` and resume falling. No loading and no spawning, so it's instant and can't leak. `NextState::set_if_neq` avoids re-running Falling's enter/exit systems when already falling.
+- **Camera** cuts (no pan) on `Respawn` and `RunRestarted`.
+- **The astronaut spawns on `OnExit(Loading)`, not `OnEnter(Falling)`:** respawns and retries also re-enter Falling and would have spawned extra astronauts.
+- **F3** (debug builds) jumps to and activates the next checkpoint.
+
 ---
 
 ## Baseline measurements (M0)

@@ -25,8 +25,10 @@ pub(crate) struct AstronautPlugin;
 
 impl Plugin for AstronautPlugin {
     fn build(&self, app: &mut App) {
-        // The astronaut appears once the level has loaded (it needs the start point).
-        app.add_systems(OnEnter(LevelPhase::Falling), spawn_astronaut)
+        // The astronaut appears once, when the first valid level has loaded (it
+        // needs the start point). Not `OnEnter(Falling)`: respawns and retries
+        // return to Falling too, and would each spawn another astronaut.
+        app.add_systems(OnExit(LevelPhase::Loading), spawn_astronaut)
             .add_systems(
                 Update,
                 (configure_stick_dead_zone, read_air_control).chain(),

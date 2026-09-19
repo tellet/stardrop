@@ -10,6 +10,7 @@ use bevy::window::WindowResolution;
 mod astronaut;
 mod background;
 mod camera;
+mod checkpoint;
 pub mod collision;
 mod config;
 pub mod debug;
@@ -38,6 +39,7 @@ pub fn run() -> AppExit {
             level::LevelPlugin,
             physics::PhysicsPlugin,
             astronaut::AstronautPlugin,
+            checkpoint::CheckpointPlugin,
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,

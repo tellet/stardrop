@@ -16,17 +16,16 @@ mod validate;
 pub(crate) use data::{LEVEL_WIDTH, Level};
 pub(crate) use goal::LevelCompleted;
 use loader::{LevelAsset, LevelLoader};
-use scenery::{LevelEntity, SceneryAssets};
+use scenery::LevelEntity;
+pub(crate) use scenery::{CheckpointRing, SceneryAssets};
 
-use crate::config::GameConfig;
 use crate::physics::movement::Body;
 use crate::physics::{Motion, PhysicsSystems};
 
 /// The level loaded at startup, relative to `assets/`. Level selection arrives in Milestone 5.
 const LEVEL_PATH: &str = "levels/test.level.ron";
 
-/// Where the current level is in its lifecycle. Respawning arrives later in
-/// Milestone 2.
+/// Where the current level is in its lifecycle.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) enum LevelPhase {
     /// Waiting for the level file (or for a broken one to be fixed).
@@ -34,6 +33,8 @@ pub(crate) enum LevelPhase {
     Loading,
     /// Playing.
     Falling,
+    /// Missed the beacon: fading back to the last checkpoint. Physics is paused.
+    Respawning,
     /// Reached the beacon; physics is paused.
     Landed,
 }
@@ -80,11 +81,18 @@ fn add_play_rules(app: &mut App) {
         .configure_sets(FixedUpdate, PhysicsSystems::Step.run_if(still_falling))
         .add_systems(
             FixedUpdate,
-            (goal::land_on_beacon, restart_below_bottom)
-                .chain()
-                .after(PhysicsSystems::Step)
+            goal::land_on_beacon
+                .in_set(LevelSystems::Rules)
                 .run_if(still_falling),
-        );
+        )
+        .configure_sets(FixedUpdate, LevelSystems::Rules.after(PhysicsSystems::Step));
+}
+
+/// Ordering label for rules that react to where physics moved the astronaut.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum LevelSystems {
+    /// Landing, checkpoints, falling out (in `FixedUpdate`, after physics).
+    Rules,
 }
 
 /// Run condition: falling, with no phase change waiting.
@@ -92,7 +100,10 @@ fn add_play_rules(app: &mut App) {
 /// Several fixed steps can run in one frame, but a state change only happens
 /// between frames. Without the second check, the step right after landing
 /// would still move the astronaut (and could land a second time).
-fn still_falling(phase: Res<State<LevelPhase>>, next: Res<NextState<LevelPhase>>) -> bool {
+pub(crate) fn still_falling(
+    phase: Res<State<LevelPhase>>,
+    next: Res<NextState<LevelPhase>>,
+) -> bool {
     *phase.get() == LevelPhase::Falling && matches!(*next, NextState::Unchanged)
 }
 
@@ -165,20 +176,6 @@ fn report_unreadable_file(
     }
 }
 
-/// Placeholder until checkpoints exist (later in Milestone 2): falling past
-/// the bottom starts the fall again from the top.
-fn restart_below_bottom(
-    level: Res<ActiveLevel>,
-    config: Res<GameConfig>,
-    mut bodies: Query<&mut Motion>,
-) {
-    for mut motion in &mut bodies {
-        if motion.body().position.y < level.bottom() - config.astronaut_radius {
-            motion.teleport(Body::at_rest(level.start));
-        }
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use core::time::Duration;
@@ -188,6 +185,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::astronaut::Astronaut;
+    use crate::config::GameConfig;
     use crate::physics::PhysicsPlugin;
 
     /// A minimal app running the real level rules and physics on
