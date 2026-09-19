@@ -1,12 +1,16 @@
-//! On-screen messages. For now: what's wrong with the level file, if anything.
+//! On-screen messages: level-file problems and the placeholder
+//! "level complete" message (the real screen arrives in Milestone 5).
 
 use bevy::prelude::*;
 
-use crate::level::LevelProblem;
+use crate::level::{LevelPhase, LevelProblem};
 
 /// Soft coral: clearly a problem, but calm, like everything else.
 const PROBLEM_COLOR: Color = Color::srgb(1.0, 0.72, 0.62);
 const PROBLEM_FONT_SIZE: f32 = 22.0;
+
+const COMPLETE_COLOR: Color = Color::srgb(0.85, 0.97, 1.0);
+const COMPLETE_FONT_SIZE: f32 = 40.0;
 
 /// The text node that shows level problems.
 #[derive(Component)]
@@ -17,11 +21,13 @@ pub(crate) struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_problem_text).add_systems(
-            Update,
-            // Only when the problem changes, never every frame.
-            show_problem.run_if(resource_changed::<LevelProblem>),
-        );
+        app.add_systems(Startup, spawn_problem_text)
+            .add_systems(
+                Update,
+                // Only when the problem changes, never every frame.
+                show_problem.run_if(resource_changed::<LevelProblem>),
+            )
+            .add_systems(OnEnter(LevelPhase::Landed), spawn_complete_text);
     }
 }
 
@@ -55,4 +61,23 @@ fn show_problem(
         }
         None => **visibility = Visibility::Hidden,
     }
+}
+
+/// Placeholder until the level-complete screen (Milestone 5). Removed
+/// automatically when the level phase changes (retry arrives in step 2d).
+fn spawn_complete_text(mut commands: Commands) {
+    commands.spawn((
+        DespawnOnExit(LevelPhase::Landed),
+        Text::new("Level complete"),
+        TextFont::from_font_size(COMPLETE_FONT_SIZE),
+        TextColor(COMPLETE_COLOR),
+        TextLayout::justify(Justify::Center),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(30.0),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+    ));
 }

@@ -10,6 +10,7 @@ use bevy::window::WindowResolution;
 mod astronaut;
 mod background;
 mod camera;
+pub mod collision;
 mod config;
 pub mod debug;
 mod level;

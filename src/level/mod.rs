@@ -8,11 +8,13 @@ use bevy::asset::AssetLoadFailedEvent;
 use bevy::prelude::*;
 
 mod data;
+mod goal;
 mod loader;
 mod scenery;
 mod validate;
 
 pub(crate) use data::{LEVEL_WIDTH, Level};
+pub(crate) use goal::LevelCompleted;
 use loader::{LevelAsset, LevelLoader};
 use scenery::{LevelEntity, SceneryAssets};
 
@@ -23,8 +25,8 @@ use crate::physics::{Motion, PhysicsSystems};
 /// The level loaded at startup, relative to `assets/`. Level selection arrives in Milestone 5.
 const LEVEL_PATH: &str = "levels/test.level.ron";
 
-/// Where the current level is in its lifecycle. Respawning and landing
-/// arrive later in Milestone 2.
+/// Where the current level is in its lifecycle. Respawning arrives later in
+/// Milestone 2.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) enum LevelPhase {
     /// Waiting for the level file (or for a broken one to be fixed).
@@ -32,6 +34,8 @@ pub(crate) enum LevelPhase {
     Loading,
     /// Playing.
     Falling,
+    /// Reached the beacon; physics is paused.
+    Landed,
 }
 
 /// The validated level currently being played. Only exists once a valid
@@ -52,15 +56,10 @@ pub(crate) struct LevelPlugin;
 
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
+        add_play_rules(app);
         app.init_asset::<LevelAsset>()
             .init_asset_loader::<LevelLoader>()
-            .init_state::<LevelPhase>()
             .init_resource::<LevelProblem>()
-            // Physics only runs while falling through a loaded level.
-            .configure_sets(
-                FixedUpdate,
-                PhysicsSystems::Step.run_if(in_state(LevelPhase::Falling)),
-            )
             .add_systems(Startup, start_loading)
             .add_systems(
                 Update,
@@ -68,14 +67,33 @@ impl Plugin for LevelPlugin {
                     apply_level_changes.run_if(on_message::<AssetEvent<LevelAsset>>),
                     report_unreadable_file.run_if(on_message::<AssetLoadFailedEvent<LevelAsset>>),
                 ),
-            )
-            .add_systems(
-                FixedUpdate,
-                restart_below_bottom
-                    .after(PhysicsSystems::Step)
-                    .run_if(in_state(LevelPhase::Falling)),
             );
     }
+}
+
+/// The gameplay rules of a level, without any file loading. Kept separate so
+/// tests can run the real rules in a minimal app with a level they provide.
+fn add_play_rules(app: &mut App) {
+    app.init_state::<LevelPhase>()
+        .add_message::<LevelCompleted>()
+        // Physics only runs while falling through a loaded level.
+        .configure_sets(FixedUpdate, PhysicsSystems::Step.run_if(still_falling))
+        .add_systems(
+            FixedUpdate,
+            (goal::land_on_beacon, restart_below_bottom)
+                .chain()
+                .after(PhysicsSystems::Step)
+                .run_if(still_falling),
+        );
+}
+
+/// Run condition: falling, with no phase change waiting.
+///
+/// Several fixed steps can run in one frame, but a state change only happens
+/// between frames. Without the second check, the step right after landing
+/// would still move the astronaut (and could land a second time).
+fn still_falling(phase: Res<State<LevelPhase>>, next: Res<NextState<LevelPhase>>) -> bool {
+    *phase.get() == LevelPhase::Falling && matches!(*next, NextState::Unchanged)
 }
 
 fn start_loading(mut commands: Commands, server: Res<AssetServer>) {
@@ -158,5 +176,69 @@ fn restart_below_bottom(
         if motion.body().position.y < level.bottom() - config.astronaut_radius {
             motion.teleport(Body::at_rest(level.start));
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use core::time::Duration;
+
+    use bevy::state::app::StatesPlugin;
+    use bevy::time::TimeUpdateStrategy;
+
+    use super::*;
+    use crate::astronaut::Astronaut;
+    use crate::physics::PhysicsPlugin;
+
+    /// A minimal app running the real level rules and physics on
+    /// [`Level::for_tests`], already falling, with the astronaut at `start`.
+    /// Each `update()` advances `frame` seconds of game time.
+    pub(crate) fn play_app(start: Vec2, frame: Duration) -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, StatesPlugin))
+            .add_plugins((crate::config::ConfigPlugin, PhysicsPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(frame))
+            .insert_resource(ActiveLevel(Level::for_tests()));
+        add_play_rules(&mut app);
+        app.insert_state(LevelPhase::Falling);
+        app.world_mut()
+            .spawn((Astronaut, Motion::at_rest(start), Transform::default()));
+        app
+    }
+
+    #[derive(Resource, Default)]
+    struct Completions(usize);
+
+    fn count_completions(mut read: MessageReader<LevelCompleted>, mut count: ResMut<Completions>) {
+        count.0 += read.read().count();
+    }
+
+    #[test]
+    fn landing_on_the_beacon_completes_the_level_exactly_once() {
+        let level = Level::for_tests();
+        let radius = GameConfig::default().astronaut_radius;
+        let pad_top = level.beacon.center.y + level.beacon.size.y / 2.0;
+        // Just above the pad, and frames long enough for several physics
+        // steps each: the case where a second landing could slip in.
+        let start = Vec2::new(0.0, pad_top + radius + 1.0);
+        let mut app = play_app(start, Duration::from_millis(50));
+        app.init_resource::<Completions>()
+            .add_systems(Update, count_completions);
+        for _ in 0..30 {
+            app.update();
+        }
+        let world = app.world_mut();
+        assert_eq!(world.resource::<Completions>().0, 1);
+        assert_eq!(
+            *world.resource::<State<LevelPhase>>().get(),
+            LevelPhase::Landed
+        );
+        let body = world.query::<&Motion>().single(world).map(Motion::body);
+        let body = body.unwrap_or_default();
+        assert!(
+            (body.position.y - (pad_top + radius)).abs() < 1e-3,
+            "rests on top of the pad"
+        );
+        assert_eq!(body.velocity, Vec2::ZERO);
     }
 }

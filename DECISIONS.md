@@ -173,6 +173,13 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Scenery shares one set of meshes and materials** (`SceneryAssets`), so reloading never creates new assets.
 - **`LevelPhase` state** (`Loading` → `Falling`): gameplay systems run only once a valid level exists, using run conditions. A missing resource would otherwise stop Bevy with an error.
 
+## M2-3 · Landing, and the "still falling" run condition
+
+- **Collision** (`collision.rs`): pure circle-circle and circle-rectangle checks that compare squared distances (no square roots).
+- **Landing:** touching the beacon pad sets the astronaut at rest on top of it, sends `LevelCompleted` and switches to `LevelPhase::Landed`, where physics stops.
+- **`still_falling` run condition:** the phase must be `Falling` *and* no phase change may be pending. Several fixed steps can run in one frame, but state changes only apply between frames. Without the pending check, the step right after landing moved the astronaut again and completed the level twice. A test reproduces that failure when the check is weakened.
+- **`add_play_rules`:** the level's gameplay rules are registered separately from file loading, so tests run the real rules in a minimal app.
+
 ---
 
 ## Baseline measurements (M0)
