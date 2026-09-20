@@ -1,0 +1,18 @@
+// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+(
+    name: "Orbit",
+    theme: Twilight,
+    start: (540, 180),
+    beacon: (center: (540, 1870), size: (300, 40)),
+    stardust: [
+        (180, 700),
+        (940, 1150),
+        (420, 1650),
+    ],
+    objects: [
+        GravityOrb(center: (360, 850), radius: 55),
+        GravityOrb(center: (780, 1350), radius: 55),
+        StaticCloud(center: (540, 1150), radius: 85),
+    ],
+    target_time: 22.0,
+)

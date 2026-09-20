@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use super::{ActiveLevel, LevelPhase};
+use crate::app_state::AppState;
 use crate::astronaut::Astronaut;
 use crate::collision::circle_overlaps_rect;
 use crate::config::GameConfig;
@@ -20,6 +21,8 @@ pub(super) fn land_on_beacon(
     mut astronaut: Single<&mut Motion, With<Astronaut>>,
     mut completed: MessageWriter<LevelCompleted>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
+    // Optional: small test apps have no app state, and shouldn't need one.
+    mut next_screen: Option<ResMut<NextState<AppState>>>,
 ) {
     let radius = config.astronaut_radius;
     let beacon = level.beacon;
@@ -32,4 +35,7 @@ pub(super) fn land_on_beacon(
     astronaut.teleport(Body::at_rest(Vec2::new(position.x, pad_top + radius)));
     completed.write(LevelCompleted);
     next_phase.set(LevelPhase::Landed);
+    if let Some(next_screen) = next_screen.as_mut() {
+        next_screen.set(AppState::LevelComplete);
+    }
 }

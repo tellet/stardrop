@@ -7,6 +7,7 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
+mod app_state;
 mod astronaut;
 mod attempt;
 mod background;
@@ -17,6 +18,7 @@ pub mod config;
 pub mod debug;
 mod effects;
 pub mod level;
+mod menu;
 pub mod objects;
 pub mod physics;
 mod rng;
@@ -41,6 +43,7 @@ pub fn run() -> AppExit {
             ..default()
         }))
         .add_plugins((
+            app_state::AppStatePlugin,
             config::ConfigPlugin,
             level::LevelPlugin,
             physics::PhysicsPlugin,
@@ -52,6 +55,7 @@ pub fn run() -> AppExit {
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,
+            menu::MenuPlugin,
             ui::UiPlugin,
         ))
         .run()

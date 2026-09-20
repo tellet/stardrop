@@ -36,6 +36,7 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "x11",                   # Linux X11 support.
     # "wayland" is off: needs libwayland-dev; XWayland runs us fine (DECISIONS.md).
     "keyboard",              # Keyboard input.
+    "mouse",                 # Mouse input (menus).
     "gamepad",               # Gamepad input types.
     "bevy_gilrs",            # Gamepad backend (gilrs); needs libudev on Linux.
     # --- 2D rendering ---
@@ -55,6 +56,8 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "zstd_rust",             # ...which are zstd-compressed (pure-Rust decoder, no C toolchain).
     # --- UI & text (F1 overlay, later menus) ---
     "bevy_ui",               # UI layout.
+    "bevy_picking",          # Hover/click detection...
+    "ui_picking",            # ...for UI nodes (menu buttons).
     "bevy_ui_render",        # UI rendering.
     "bevy_text",             # Text rendering.
     "default_font",          # Built-in font so text works before we ship our own.

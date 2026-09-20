@@ -310,6 +310,28 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **`Outcome::Teleported`** exists so the astronaut *jumps*: the drawn position is reset too, instead of being smoothly blended across the screen.
 - **Cooldown** of 0.5 s in `Effects`, so you can't bounce straight back. Speed, direction and all other effects (spores, dives) carry through unchanged.
 
+## M5-1 · Menu input needs mouse and UI picking features
+
+- **What:** added Bevy's `mouse`, `bevy_picking` and `ui_picking` features so menu buttons respond to hover and clicks (the user chose keyboard + gamepad + mouse).
+- **Cost:** the release binary grew from 44.4 MB to 46.0 MB (+1.6 MB, 3.6 %).
+- **Alternative:** hand-written hit testing against UI rectangles with only the `mouse` feature. It avoids the growth but reimplements what Bevy already does, and would need redoing for every widget.
+
+## M5-2 · Packaging: one standalone binary, with an optional assets folder (planned for M9)
+
+- **What:** assets get embedded in the executable, so the game ships as a single file. If an `assets/` folder exists next to the binary, it takes priority.
+- **Why:** the user asked whether a standalone binary is possible. Embedding alone would break Section 4's rule that levels are editable without recompiling; the override keeps both.
+- **Cost:** binary grows by the embedded asset size (today ~1 KB of levels; sounds and music in M8 will add a few MB), plus one small crate for embedding.
+- **Unaffected:** the save file always lives in the OS's user-data folder, so the game never writes to its install directory.
+
+## M5-3 · Screens, and what pausing must not do
+
+- **`AppState`** (`MainMenu`, `LevelSelect`, `Journal`, `Playing`, `Paused`, `LevelComplete`) with per-screen power modes: only `Playing` renders continuously; menus wake on input or 4 times a second. That clears the M1 tech-debt item.
+- **The in-level phase stays its own state** rather than a sub-state of `Playing`, because pausing leaves `Playing` and would otherwise destroy and recreate the phase (reloading the level on resume).
+- **Loading and unloading hang off entering screens, not leaving `Playing`:** the level is loaded when play is entered (skipped if that same level is already loaded, so resuming keeps it) and freed when a menu is entered. Three bugs came from getting this wrong; a temporary autopilot that walked the whole flow without input found them all.
+- **Run conditions must include "a level exists":** between finishing one level and loading the next, systems that read `ActiveLevel` would stop the game. `playing` and `still_falling` now require it. In tests (no `AppState`) "no app state" counts as playing, so small test apps stay simple.
+- **`apply_level_changes` takes the level handle as optional:** leaving a level drops the handle while the asset system still delivers one last event.
+- **Menu navigation** is shared by every screen: a focused item, moved by keys, stick, or mouse hover, activated by Enter/Space/gamepad A or a click.
+
 ---
 
 ## Baseline measurements (M0)

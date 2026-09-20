@@ -1,0 +1,18 @@
+// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+(
+    name: "Storm Front",
+    theme: HighClouds,
+    start: (540, 180),
+    beacon: (center: (540, 1870), size: (300, 40)),
+    stardust: [
+        (150, 800),
+        (560, 1250),
+        (300, 1600),
+    ],
+    objects: [
+        CloudPuff(center: (700, 620), radius: 85),
+        StaticCloud(center: (330, 1050), radius: 100),
+        StaticCloud(center: (820, 1450), radius: 95),
+    ],
+    target_time: 18.0,
+)

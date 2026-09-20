@@ -1,0 +1,17 @@
+// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+(
+    name: "Soft Landing",
+    theme: SpaceClouds,
+    start: (540, 180),
+    beacon: (center: (540, 1870), size: (300, 40)),
+    stardust: [
+        (400, 500),
+        (820, 900),
+        (300, 1400),
+    ],
+    objects: [
+        CloudPuff(center: (400, 700), radius: 90),
+        CloudPuff(center: (760, 1150), radius: 80),
+    ],
+    target_time: 16.0,
+)

@@ -16,7 +16,7 @@ use bevy::prelude::*;
 
 use crate::astronaut::{Astronaut, AstronautSystems};
 use crate::config::GameConfig;
-use crate::level::{ActiveLevel, LevelPhase, LevelSystems, still_falling};
+use crate::level::{ActiveLevel, LevelPhase, LevelSystems, playing, still_falling};
 use crate::physics::movement::{AirInput, Body};
 use crate::physics::{AirControl, Motion};
 
@@ -46,6 +46,10 @@ pub(crate) struct AttemptFailed;
 #[derive(Message, Debug, Clone, Copy)]
 pub(crate) struct AttemptRestarted;
 
+/// Ask for a fresh attempt from somewhere else (a menu's "Retry").
+#[derive(Message, Debug, Clone, Copy)]
+pub(crate) struct RestartRequested;
+
 /// Progress of the current failed-attempt fade.
 #[derive(Resource, Debug, Default)]
 struct RestartFade {
@@ -70,6 +74,7 @@ impl Plugin for AttemptPlugin {
             .init_resource::<ReadyWait>()
             .add_message::<AttemptFailed>()
             .add_message::<AttemptRestarted>()
+            .add_message::<RestartRequested>()
             .add_systems(Startup, spawn_fade_overlay)
             .add_systems(
                 FixedUpdate,
@@ -88,12 +93,15 @@ impl Plugin for AttemptPlugin {
                         .after(AstronautSystems::Input)
                         .run_if(in_state(LevelPhase::Ready)),
                     run_fade.run_if(in_state(LevelPhase::Restarting)),
+                    start_over.run_if(on_message::<RestartRequested>),
                     (
                         retry.run_if(not(in_state(LevelPhase::Loading))),
                         restart_on_level_change.run_if(resource_exists_and_changed::<ActiveLevel>),
                     )
                         .before(bob_at_start),
-                ),
+                )
+                    // Nothing in a level ticks while paused or in a menu.
+                    .run_if(playing),
             );
     }
 }
@@ -226,6 +234,18 @@ fn run_fade(
 /// Also runs when a retry interrupts the fade: never leave the screen covered.
 fn clear_fade(mut overlay: Single<&mut BackgroundColor, With<FadeOverlay>>) {
     overlay.0.set_alpha(0.0);
+}
+
+/// A menu asked for a fresh attempt (its "Retry" item).
+fn start_over(
+    level: Res<ActiveLevel>,
+    mut astronaut: Single<&mut Motion, With<Astronaut>>,
+    mut waited: ResMut<ReadyWait>,
+    mut restarted: MessageWriter<AttemptRestarted>,
+    mut next_phase: ResMut<NextState<LevelPhase>>,
+) {
+    restart(&mut astronaut, &level, &mut waited, &mut restarted);
+    (*next_phase).set_if_neq(LevelPhase::Ready);
 }
 
 /// R: a fresh attempt, instantly. Reuses every existing entity (nothing is

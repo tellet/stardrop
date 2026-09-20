@@ -1,0 +1,15 @@
+// The ten levels, in order. Editing this changes the level select.
+(
+    levels: [
+        (name: "First Light", file: "01_first_light.level.ron"),
+        (name: "Soft Landing", file: "02_soft_landing.level.ron"),
+        (name: "Solar Breeze", file: "03_solar_breeze.level.ron"),
+        (name: "Glass Garden", file: "04_glass_garden.level.ron"),
+        (name: "Storm Front", file: "05_storm_front.level.ron"),
+        (name: "Slow Bloom", file: "06_slow_bloom.level.ron"),
+        (name: "Heavy Heart", file: "07_heavy_heart.level.ron"),
+        (name: "Pollen Drift", file: "08_pollen_drift.level.ron"),
+        (name: "Orbit", file: "09_orbit.level.ron"),
+        (name: "Homecoming", file: "10_homecoming.level.ron"),
+    ],
+)

@@ -79,6 +79,12 @@ pub enum LevelError {
     BadRibbonPath(usize),
     /// A pair of portals is too close together (they would overlap).
     PortalsTooClose(usize),
+    /// The level list has no levels in it.
+    EmptyLevelList,
+    /// A level list entry is missing its name or file.
+    BadLevelEntry(usize),
+    /// Two level list entries name the same file.
+    DuplicateLevelFile(usize),
     /// An object covers something it must not (e.g. the start, or a hazard
     /// on the beacon).
     Overlaps {
@@ -112,6 +118,11 @@ impl fmt::Display for LevelError {
                 "{}'s size must be between {min} and {max}",
                 Item::Object(*object)
             ),
+            Self::EmptyLevelList => write!(f, "the level list is empty"),
+            Self::BadLevelEntry(i) => write!(f, "level #{} needs a name and a file", i + 1),
+            Self::DuplicateLevelFile(i) => {
+                write!(f, "level #{} repeats an earlier level's file", i + 1)
+            }
             Self::PortalsTooClose(i) => write!(
                 f,
                 "{}'s two ends are too close together; leave at least three radii between them",
