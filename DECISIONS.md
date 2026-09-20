@@ -349,6 +349,13 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Shared object assets are built when the plugin is built,** not in a startup system, since the journal can open before startup systems have run.
 - **Notes** are the astronaut's guesses, never explanations (Section 3.6), and the journal never says what an object *does* mechanically.
 
+## M5-6 · Settings
+
+- **Stored** as `settings.ron` beside the save, written atomically through the same helper, and loaded at startup. Unreadable settings fall back to the defaults (they're not progress, so there's nothing to rescue).
+- **Applied immediately** when changed: fullscreen switches the window mode, "plain" graphics removes bloom from the camera, and reduce motion scales background drift and the waiting bob to a quarter.
+- **Rows are activated, not dragged:** Enter steps a row to its next value (volumes 0/25/50/75/100). That reuses the existing menu navigation instead of adding sliders with their own input handling. Sliders can come with the M7 visual pass.
+- **Volumes are stored but silent** until audio exists in M8; the screen says so.
+
 ---
 
 ## Baseline measurements (M0)

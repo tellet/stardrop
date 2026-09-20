@@ -25,6 +25,7 @@ pub mod physics;
 mod rng;
 pub mod save;
 pub mod scoring;
+pub mod settings;
 #[cfg(test)]
 mod soak_tests;
 mod ui;
@@ -62,6 +63,7 @@ pub fn run() -> AppExit {
         .add_plugins((
             journal::JournalPlugin,
             save::SavePlugin,
+            settings::SettingsPlugin,
             menu::MenuPlugin,
             ui::UiPlugin,
         ))

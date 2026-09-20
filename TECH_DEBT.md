@@ -5,6 +5,7 @@ Known shortcuts, and when we plan to deal with them.
 | Item | Why it's there | Plan |
 |---|---|---|
 | Wayland support is disabled. | It needs the `libwayland-dev` / `libxkbcommon-dev` system packages. | Re-enable the `wayland` feature once they're installed (decide by M9). |
+| Menu rows are centered individually, so setting values don't line up in a column. | Placeholder UI. | M7 visual pass: proper two-column rows and sliders. |
 | Nine of the ten levels are stubs. | They exist so level select, unlocking and saving can be tested. | M6 designs all ten properly. |
 | Window contents lag ~2 refreshes behind a live resize, so the view "jumps". | Presentation latency from vsync (DECISIONS.md M0-11). | Revisit with the M5 window/fullscreen settings. |
 | The window opens landscape (1280×720), so the portrait playfield uses only its middle third. | The default window was chosen before the portrait redesign. | M5 settings: choose a sensible default size (e.g. a taller window) and remember it. |

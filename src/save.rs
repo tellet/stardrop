@@ -188,6 +188,31 @@ fn read_valid(path: &Path) -> Result<Option<SaveData>, String> {
     SaveData::parse(&text).map(Some).map_err(|e| e.to_string())
 }
 
+/// Reads a text file from the save folder, if it exists.
+///
+/// # Errors
+/// Returns a message if the file exists but can't be read.
+pub fn read_file(folder: &Path, name: &str) -> Result<Option<String>, String> {
+    match fs::read_to_string(folder.join(name)) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// Writes `text` to `name` in the save folder, atomically: into a temporary
+/// file first, then renamed into place.
+///
+/// # Errors
+/// Returns a message if the folder or file can't be written.
+pub fn write_file(folder: &Path, name: &str, text: &str) -> Result<(), String> {
+    fs::create_dir_all(folder).map_err(|error| format!("{}: {error}", folder.display()))?;
+    let temp = folder.join(format!("{name}.writing"));
+    fs::write(&temp, text).map_err(|error| format!("{}: {error}", temp.display()))?;
+    let target = folder.join(name);
+    fs::rename(&temp, &target).map_err(|error| format!("{}: {error}", target.display()))
+}
+
 /// Writes the save file atomically, keeping the previous one as a backup.
 ///
 /// # Errors

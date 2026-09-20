@@ -15,6 +15,8 @@ pub(crate) enum AppState {
     LevelSelect,
     /// The field journal.
     Journal,
+    /// Sound, window and graphics settings.
+    Settings,
     /// Playing a level.
     Playing,
     /// Paused during play.

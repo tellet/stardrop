@@ -39,6 +39,14 @@ impl Plugin for CameraPlugin {
     }
 }
 
+/// The glow settings the game uses when graphics quality is "full".
+pub(crate) fn bloom() -> Bloom {
+    Bloom {
+        intensity: BLOOM_INTENSITY,
+        ..Bloom::NATURAL
+    }
+}
+
 /// The journal lives elsewhere in the world; every other screen shows the
 /// playfield. Writes only when the target actually changes.
 fn look_at_current_screen(
@@ -67,10 +75,7 @@ fn spawn_camera(mut commands: Commands) {
         // Maps HDR colors back to the screen. TonyMcMapface desaturates very
         // bright colors gracefully instead of clipping them (see DECISIONS.md).
         Tonemapping::TonyMcMapface,
-        Bloom {
-            intensity: BLOOM_INTENSITY,
-            ..Bloom::NATURAL
-        },
+        bloom(),
         Projection::Orthographic(OrthographicProjection {
             // Always show at least the whole playfield; extra space on the
             // longer side becomes scenery.

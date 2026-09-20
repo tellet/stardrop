@@ -14,6 +14,7 @@ use crate::collectibles::CurrentRun;
 use crate::level::{ActiveLevel, Levels, SelectedLevel};
 use crate::save::Progress;
 use crate::scoring::Stars;
+use crate::settings::{Settings, next_volume};
 
 const TITLE_SIZE: f32 = 64.0;
 const ITEM_SIZE: f32 = 30.0;
@@ -48,6 +49,27 @@ enum MenuAction {
     NextLevel,
     /// A level that hasn't been unlocked yet: does nothing.
     Locked,
+    /// Open the settings screen.
+    OpenSettings,
+    /// Change one setting.
+    Change(Setting),
+}
+
+/// The settings a row can change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Setting {
+    MasterVolume,
+    MusicVolume,
+    SfxVolume,
+    AmbienceVolume,
+    Fullscreen,
+    Quality,
+    ReduceMotion,
+}
+
+/// "on" or "off", for a setting row.
+fn on_off(value: bool) -> &'static str {
+    if value { "on" } else { "off" }
 }
 
 /// Three slots, filled in as the stars are earned: `*` earned, `-` not.
@@ -57,6 +79,10 @@ fn star_marks(stars: Stars) -> String {
         .iter()
         .collect()
 }
+
+/// The root of a menu screen.
+#[derive(Component)]
+struct MenuScreen;
 
 /// A menu item, by its position in the screen's list.
 #[derive(Component, Debug, Clone, Copy)]
@@ -94,6 +120,13 @@ impl Plugin for MenuPlugin {
             .add_systems(OnEnter(AppState::MainMenu), spawn_main_menu)
             .add_systems(OnEnter(AppState::LevelSelect), spawn_level_select)
             .add_systems(OnEnter(AppState::Paused), spawn_pause_menu)
+            .add_systems(OnEnter(AppState::Settings), spawn_settings_menu)
+            // Changing a setting redraws the rows, keeping the focus put.
+            .add_systems(
+                Update,
+                rebuild_settings
+                    .run_if(in_state(AppState::Settings).and_then(resource_changed::<Settings>)),
+            )
             .add_systems(OnEnter(AppState::LevelComplete), spawn_level_complete)
             .add_systems(
                 Update,
@@ -124,6 +157,7 @@ fn spawn_screen(
     };
     commands
         .spawn((
+            MenuScreen,
             DespawnOnExit(state),
             Node {
                 position_type: PositionType::Absolute,
@@ -183,6 +217,7 @@ fn spawn_main_menu(mut commands: Commands, mut focus: ResMut<Focus>) {
         vec![
             ("Descend".to_owned(), MenuAction::ChooseLevel),
             ("Journal".to_owned(), MenuAction::OpenJournal),
+            ("Settings".to_owned(), MenuAction::OpenSettings),
             ("Quit".to_owned(), MenuAction::Quit),
         ],
     );
@@ -246,9 +281,65 @@ fn spawn_pause_menu(mut commands: Commands, mut focus: ResMut<Focus>) {
             ("Resume".to_owned(), MenuAction::Resume),
             ("Retry".to_owned(), MenuAction::RetryLevel),
             ("Journal".to_owned(), MenuAction::OpenJournal),
+            ("Settings".to_owned(), MenuAction::OpenSettings),
             ("Level select".to_owned(), MenuAction::BackToLevels),
         ],
     );
+}
+
+fn spawn_settings_menu(mut commands: Commands, mut focus: ResMut<Focus>, settings: Res<Settings>) {
+    let keep = focus.index;
+    spawn_screen(
+        &mut commands,
+        &mut focus,
+        AppState::Settings,
+        "Settings",
+        Some("Enter changes a setting; sound arrives in a later milestone".to_owned()),
+        vec![
+            (
+                format!("Master volume   {}%", settings.master_volume),
+                MenuAction::Change(Setting::MasterVolume),
+            ),
+            (
+                format!("Music           {}%", settings.music_volume),
+                MenuAction::Change(Setting::MusicVolume),
+            ),
+            (
+                format!("Sound effects   {}%", settings.sfx_volume),
+                MenuAction::Change(Setting::SfxVolume),
+            ),
+            (
+                format!("Ambience        {}%", settings.ambience_volume),
+                MenuAction::Change(Setting::AmbienceVolume),
+            ),
+            (
+                format!("Fullscreen      {}", on_off(settings.fullscreen)),
+                MenuAction::Change(Setting::Fullscreen),
+            ),
+            (
+                format!("Graphics        {}", settings.quality.label()),
+                MenuAction::Change(Setting::Quality),
+            ),
+            (
+                format!("Reduce motion   {}", on_off(settings.reduce_motion)),
+                MenuAction::Change(Setting::ReduceMotion),
+            ),
+        ],
+    );
+    focus.index = keep.min(focus.count.saturating_sub(1));
+}
+
+/// Redraws the settings rows after a change, keeping the focused row.
+fn rebuild_settings(
+    mut commands: Commands,
+    focus: ResMut<Focus>,
+    settings: Res<Settings>,
+    screens: Query<Entity, With<MenuScreen>>,
+) {
+    for screen in &screens {
+        commands.entity(screen).despawn();
+    }
+    spawn_settings_menu(commands, focus, settings);
 }
 
 fn spawn_level_complete(
@@ -361,6 +452,7 @@ fn activate(
     mut next_state: ResMut<NextState<AppState>>,
     mut selected: ResMut<SelectedLevel>,
     mut restart: MessageWriter<RestartRequested>,
+    mut settings: ResMut<Settings>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let clicked = clicks
@@ -389,6 +481,8 @@ fn activate(
             next_state.set(AppState::LevelSelect);
         }
         MenuAction::OpenJournal => next_state.set(AppState::Journal),
+        MenuAction::OpenSettings => next_state.set(AppState::Settings),
+        MenuAction::Change(setting) => change_setting(setting, &mut settings),
         MenuAction::Quit => {
             exit.write(AppExit::Success);
         }
@@ -411,6 +505,19 @@ fn activate(
     }
 }
 
+/// Activating a settings row steps it to its next value.
+fn change_setting(setting: Setting, settings: &mut Settings) {
+    match setting {
+        Setting::MasterVolume => settings.master_volume = next_volume(settings.master_volume),
+        Setting::MusicVolume => settings.music_volume = next_volume(settings.music_volume),
+        Setting::SfxVolume => settings.sfx_volume = next_volume(settings.sfx_volume),
+        Setting::AmbienceVolume => settings.ambience_volume = next_volume(settings.ambience_volume),
+        Setting::Fullscreen => settings.fullscreen = !settings.fullscreen,
+        Setting::Quality => settings.quality = settings.quality.next(),
+        Setting::ReduceMotion => settings.reduce_motion = !settings.reduce_motion,
+    }
+}
+
 /// Esc (or gamepad B) leaves the current screen.
 fn go_back(
     keys: Res<ButtonInput<KeyCode>>,
@@ -426,7 +533,9 @@ fn go_back(
         return;
     }
     match state.get() {
-        AppState::LevelSelect | AppState::Journal => next_state.set(AppState::MainMenu),
+        AppState::LevelSelect | AppState::Journal | AppState::Settings => {
+            next_state.set(AppState::MainMenu);
+        }
         AppState::Paused => next_state.set(AppState::Playing),
         AppState::LevelComplete => next_state.set(AppState::LevelSelect),
         AppState::MainMenu | AppState::Playing => {}

@@ -345,6 +345,8 @@ pub(crate) mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, StatesPlugin))
             .add_plugins((crate::config::ConfigPlugin, PhysicsPlugin))
+            // Systems read settings (reduce motion, quality) even in a level.
+            .init_resource::<crate::settings::Settings>()
             .insert_resource(TimeUpdateStrategy::ManualDuration(frame))
             .insert_resource(ActiveLevel(level));
         add_play_rules(&mut app);

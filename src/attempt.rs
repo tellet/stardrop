@@ -19,6 +19,7 @@ use crate::config::GameConfig;
 use crate::level::{ActiveLevel, LevelPhase, LevelSystems, playing, still_falling};
 use crate::physics::movement::{AirInput, Body};
 use crate::physics::{AirControl, Motion};
+use crate::settings::Settings;
 
 /// Failed-attempt fade timing, in seconds: out, a short hold while hidden,
 /// then in.
@@ -146,11 +147,12 @@ fn restart(
 fn bob_at_start(
     time: Res<Time>,
     level: Res<ActiveLevel>,
+    settings: Res<Settings>,
     mut waited: ResMut<ReadyWait>,
     mut astronaut: Single<&mut Motion, With<Astronaut>>,
 ) {
     waited.0 += time.delta_secs();
-    let position = level.start + Vec2::Y * bob_offset(waited.0);
+    let position = level.start + Vec2::Y * bob_offset(waited.0) * settings.motion_scale();
     astronaut.teleport(Body::at_rest(position));
 }
 

@@ -11,6 +11,7 @@ use bevy::prelude::*;
 
 use crate::camera::{MainCamera, PLAYFIELD, PLAYFIELD_CENTER};
 use crate::rng::SplitMix64;
+use crate::settings::Settings;
 
 /// Gradient color stops from the top of the screen to the bottom (deep space).
 const SKY_STOPS: [Color; 3] = [
@@ -168,8 +169,16 @@ fn spawn_dot_layers(
 
 /// Drifts each layer upward at its own speed, wrapping the tile. Only the few
 /// layer parents move; their dots follow as children.
-fn drift_layers(time: Res<Time>, mut layers: Query<(&ParallaxLayer, &mut Transform)>) {
-    let drifted = time.elapsed_secs() * DRIFT_SPEED;
+fn drift_layers(
+    time: Res<Time>,
+    settings: Res<Settings>,
+    mut drifted: Local<f32>,
+    mut layers: Query<(&ParallaxLayer, &mut Transform)>,
+) {
+    // Accumulated rather than read from the clock, so changing "reduce
+    // motion" slows the drift instead of jumping it.
+    *drifted += time.delta_secs() * DRIFT_SPEED * settings.motion_scale();
+    let drifted = *drifted;
     for (layer, mut transform) in &mut layers {
         transform.translation.y = layer_origin(PLAYFIELD_CENTER.y, drifted * layer.parallax);
     }
