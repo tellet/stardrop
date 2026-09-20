@@ -31,14 +31,6 @@ use crate::physics::movement::{Body, Drift};
 #[derive(Message, Debug, Clone, Copy)]
 pub(crate) struct ObjectTouched {
     /// The object's type.
-    // Tests read it already; the game will from M5 on.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read by the journal (M5), sounds (M8) and effects (M7)"
-        )
-    )]
     pub kind: ObjectKind,
     /// The object that was touched.
     pub entity: Entity,

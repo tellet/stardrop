@@ -12,6 +12,8 @@ use crate::app_state::AppState;
 use crate::attempt::RestartRequested;
 use crate::collectibles::CurrentRun;
 use crate::level::{ActiveLevel, Levels, SelectedLevel};
+use crate::save::Progress;
+use crate::scoring::Stars;
 
 const TITLE_SIZE: f32 = 64.0;
 const ITEM_SIZE: f32 = 30.0;
@@ -44,6 +46,16 @@ enum MenuAction {
     BackToLevels,
     /// Play the next level.
     NextLevel,
+    /// A level that hasn't been unlocked yet: does nothing.
+    Locked,
+}
+
+/// Three slots, filled in as the stars are earned: `*` earned, `-` not.
+fn star_marks(stars: Stars) -> String {
+    [stars.landed, stars.all_stardust, stars.fast]
+        .map(|earned| if earned { '*' } else { '-' })
+        .iter()
+        .collect()
 }
 
 /// A menu item, by its position in the screen's list.
@@ -180,17 +192,33 @@ fn spawn_level_select(
     mut commands: Commands,
     mut focus: ResMut<Focus>,
     levels: Option<Res<Levels>>,
+    progress: Res<Progress>,
 ) {
     let items = levels.map_or_else(Vec::new, |levels| {
+        let order: Vec<String> = levels
+            .levels
+            .iter()
+            .map(|entry| entry.file.clone())
+            .collect();
         levels
             .levels
             .iter()
             .enumerate()
             .map(|(index, entry)| {
-                (
-                    format!("{}. {}", index + 1, entry.name),
-                    MenuAction::StartLevel(index),
-                )
+                if progress.is_unlocked(index, &order) {
+                    let record = progress.level(&entry.file);
+                    (
+                        format!(
+                            "{}. {}  {}",
+                            index + 1,
+                            entry.name,
+                            star_marks(record.stars())
+                        ),
+                        MenuAction::StartLevel(index),
+                    )
+                } else {
+                    (format!("{}. locked", index + 1), MenuAction::Locked)
+                }
             })
             .collect()
     });
@@ -230,10 +258,22 @@ fn spawn_level_complete(
     level: Option<Res<ActiveLevel>>,
     levels: Option<Res<Levels>>,
     selected: Res<SelectedLevel>,
+    progress: Res<Progress>,
 ) {
-    let total_stardust = level.map_or(0, |level| level.stardust.len());
+    let total_stardust = level.as_ref().map_or(0, |level| level.stardust.len());
+    let target = level.map_or(0.0, |level| level.target_time);
+    let earned = Stars::earned(run.0, total_stardust, target);
+    let record = levels
+        .as_ref()
+        .and_then(|levels| levels.entry(*selected))
+        .map(|entry| progress.level(&entry.file))
+        .unwrap_or_default();
+    let best = record
+        .best_time
+        .map_or_else(|| "-".to_owned(), |best| format!("{best:.1} s"));
     let note = format!(
-        "time {:.1} s\nstardust {}/{}",
+        "{}\ntime {:.1} s   (best {best})\nstardust {}/{}   target {target:.0} s",
+        star_marks(earned),
         run.elapsed,
         run.stardust.count(),
         total_stardust
@@ -366,6 +406,8 @@ fn activate(
             selected.0 += 1;
             next_state.set(AppState::Playing);
         }
+        // Locked levels stay put until the one before them is finished.
+        MenuAction::Locked => {}
     }
 }
 

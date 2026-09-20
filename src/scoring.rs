@@ -53,6 +53,47 @@ pub struct RunStats {
     pub stardust: StardustSet,
 }
 
+/// The three stars a level can award (Section 3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Stars {
+    /// Reached the beacon.
+    pub landed: bool,
+    /// Collected every stardust mote in one attempt.
+    pub all_stardust: bool,
+    /// Landed within the level's target time.
+    pub fast: bool,
+}
+
+impl Stars {
+    /// What an attempt earned. Only a landed attempt earns anything: the
+    /// other two stars are for *how* you landed.
+    #[must_use]
+    pub fn earned(run: RunStats, stardust_in_level: usize, target_time: f32) -> Self {
+        Self {
+            landed: true,
+            all_stardust: run.stardust.count() >= stardust_in_level,
+            fast: run.elapsed <= target_time,
+        }
+    }
+
+    /// How many stars, 0 to 3.
+    #[must_use]
+    pub fn count(self) -> u8 {
+        u8::from(self.landed) + u8::from(self.all_stardust) + u8::from(self.fast)
+    }
+
+    /// The best of two results, star by star: stars from different attempts
+    /// add up (Section 3.5 counts a level's best, not one perfect run).
+    #[must_use]
+    pub fn merged(self, other: Self) -> Self {
+        Self {
+            landed: self.landed || other.landed,
+            all_stardust: self.all_stardust || other.all_stardust,
+            fast: self.fast || other.fast,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,5 +117,41 @@ mod tests {
         assert_eq!(set.count(), MAX_STARDUST);
         assert!(!set.insert(MAX_STARDUST));
         assert!(!set.contains(1000));
+    }
+
+    fn run(elapsed: f32, collected: usize) -> RunStats {
+        let mut stardust = StardustSet::default();
+        for index in 0..collected {
+            stardust.insert(index);
+        }
+        RunStats { elapsed, stardust }
+    }
+
+    #[test]
+    fn landing_earns_one_star_and_the_others_are_for_how_you_landed() {
+        let slow_partial = Stars::earned(run(30.0, 1), 3, 20.0);
+        assert_eq!(
+            slow_partial,
+            Stars {
+                landed: true,
+                all_stardust: false,
+                fast: false
+            }
+        );
+        assert_eq!(slow_partial.count(), 1);
+
+        let perfect = Stars::earned(run(12.0, 3), 3, 20.0);
+        assert_eq!(perfect.count(), 3);
+        // A level with no stardust gives that star to anyone who lands.
+        assert!(Stars::earned(run(30.0, 0), 0, 20.0).all_stardust);
+        // Exactly on target still counts as fast.
+        assert!(Stars::earned(run(20.0, 0), 3, 20.0).fast);
+    }
+
+    #[test]
+    fn stars_from_different_attempts_add_up() {
+        let fast_run = Stars::earned(run(10.0, 0), 3, 20.0);
+        let thorough_run = Stars::earned(run(40.0, 3), 3, 20.0);
+        assert_eq!(fast_run.merged(thorough_run).count(), 3);
     }
 }

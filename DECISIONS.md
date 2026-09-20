@@ -332,6 +332,15 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **`apply_level_changes` takes the level handle as optional:** leaving a level drops the handle while the asset system still delivers one last event.
 - **Menu navigation** is shared by every screen: a focused item, moved by keys, stick, or mouse hover, activated by Enter/Space/gamepad A or a click.
 
+## M5-4 · Saving progress
+
+- **Where:** the OS's data folder via `dirs = "=7.0.0"` (e.g. `~/.local/share/stardrop/`). It pulls in only `dirs-sys`, `option-ext` and `libc` (already present). The game never writes to its own folder, so it still works installed read-only.
+- **Atomic writes:** the save is written to `save.writing.ron` and then renamed over `save.ron`. A rename is atomic, so a crash mid-write can't leave half a file. The previous save is kept as `save.backup.ron`.
+- **Never lose progress silently:** an unreadable save is *renamed* to `save.unreadable.ron` (not overwritten), the backup is tried next, and only then does the game start fresh. Tests cover a missing save, a broken save with a good backup, and both broken.
+- **Keyed by file name, not position:** reordering levels or inserting one can't move someone's progress onto the wrong level.
+- **Stars merge across attempts** (Section 3.5's "best"): a fast run and a thorough run together earn both stars.
+- **Written when leaving play** (entering a menu or the complete screen) and on quit, not on every change.
+
 ---
 
 ## Baseline measurements (M0)

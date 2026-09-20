@@ -17,11 +17,13 @@ pub mod collision;
 pub mod config;
 pub mod debug;
 mod effects;
+mod journal;
 pub mod level;
 mod menu;
 pub mod objects;
 pub mod physics;
 mod rng;
+pub mod save;
 pub mod scoring;
 #[cfg(test)]
 mod soak_tests;
@@ -55,6 +57,11 @@ pub fn run() -> AppExit {
             camera::CameraPlugin,
             background::BackgroundPlugin,
             debug::DebugPlugin,
+        ))
+        // A second group: Bevy's `add_plugins` takes at most 15 at a time.
+        .add_plugins((
+            journal::JournalPlugin,
+            save::SavePlugin,
             menu::MenuPlugin,
             ui::UiPlugin,
         ))
