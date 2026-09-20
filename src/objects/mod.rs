@@ -18,7 +18,7 @@ pub use kind::{
     MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig,
     StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
 };
-use visuals::ObjectAssets;
+pub(crate) use visuals::ObjectAssets;
 
 use crate::astronaut::Astronaut;
 use crate::attempt::{AttemptFailed, AttemptRestarted, fail};
@@ -54,10 +54,10 @@ pub(crate) struct ObjectsPlugin;
 
 impl Plugin for ObjectsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<ObjectTouched>()
-            .add_systems(Startup, |mut commands: Commands| {
-                commands.init_resource::<ObjectAssets>();
-            })
+        // Built here, not in a startup system: the journal can open on the
+        // very first frame, before startup systems have run.
+        app.init_resource::<ObjectAssets>()
+            .add_message::<ObjectTouched>()
             .add_systems(
                 FixedUpdate,
                 touch_objects
@@ -72,6 +72,25 @@ impl Plugin for ObjectsPlugin {
                 ),
             );
     }
+}
+
+/// Spawns only what an object *looks* like, with no behavior: used by the
+/// journal, which shows the real shapes rather than separate pictures.
+pub(crate) fn spawn_preview(
+    commands: &mut Commands,
+    assets: &ObjectAssets,
+    meshes: &mut Assets<Mesh>,
+    config: &ObjectsConfig,
+    placement: &Placement,
+    marker: impl Bundle,
+) {
+    commands
+        .spawn((
+            marker,
+            visuals::transform_for(placement),
+            Visibility::default(),
+        ))
+        .with_children(|parent| visuals::spawn_look(parent, assets, meshes, config, placement));
 }
 
 /// Replaces the object entities whenever the level (re)loads.

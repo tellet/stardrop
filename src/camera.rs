@@ -9,6 +9,8 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
+use crate::app_state::AppState;
+use crate::journal::JOURNAL_ORIGIN;
 use crate::level::{LEVEL_HEIGHT, LEVEL_WIDTH};
 
 /// The playfield, in world units: what must always be visible.
@@ -30,7 +32,27 @@ pub(crate) struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera);
+        app.add_systems(Startup, spawn_camera)
+            // Where the camera looks depends only on the current screen, so
+            // it can't get out of step (and doesn't care what exists yet).
+            .add_systems(Update, look_at_current_screen);
+    }
+}
+
+/// The journal lives elsewhere in the world; every other screen shows the
+/// playfield. Writes only when the target actually changes.
+fn look_at_current_screen(
+    state: Res<State<AppState>>,
+    mut camera: Single<&mut Transform, With<MainCamera>>,
+) {
+    let target = if *state.get() == AppState::Journal {
+        JOURNAL_ORIGIN
+    } else {
+        PLAYFIELD_CENTER
+    };
+    let wanted = target.extend(camera.translation.z);
+    if camera.translation != wanted {
+        camera.translation = wanted;
     }
 }
 

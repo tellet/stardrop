@@ -341,6 +341,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Stars merge across attempts** (Section 3.5's "best"): a fast run and a thorough run together earn both stars.
 - **Written when leaving play** (entering a menu or the complete screen) and on quit, not on every change.
 
+## M5-5 · The journal shows the real objects
+
+- **What:** the journal's pages are laid out in a grid far away in the world (y = 40 000), and the camera simply looks there while the journal is open. Discovered types are drawn by the *same* code that draws them in play; undiscovered ones are dark discs with "???".
+- **Why:** no second set of pictures to draw or keep in step with the real objects. Rendering meshes into UI images would have cost a render target per page.
+- **The camera follows the screen, not the other way round:** `look_at_current_screen` derives the camera's position from `AppState` every frame and writes only on change. The first version had the journal move the camera, and because the camera doesn't exist on the very first frame, Bevy skipped that whole system, including building the pages.
+- **Shared object assets are built when the plugin is built,** not in a startup system, since the journal can open before startup systems have run.
+- **Notes** are the astronaut's guesses, never explanations (Section 3.6), and the journal never says what an object *does* mechanically.
+
 ---
 
 ## Baseline measurements (M0)

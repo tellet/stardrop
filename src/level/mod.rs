@@ -97,6 +97,8 @@ impl Plugin for LevelPlugin {
             .init_asset::<LevelListAsset>()
             .init_asset_loader::<LevelListLoader>()
             .init_resource::<LevelProblem>()
+            // Shared meshes and materials, built up front like the objects'.
+            .init_resource::<SceneryAssets>()
             .init_resource::<SelectedLevel>()
             .add_systems(Startup, start_loading)
             .add_systems(OnEnter(AppState::Playing), load_selected_level)
@@ -182,7 +184,6 @@ pub(crate) fn still_falling(
 }
 
 fn start_loading(mut commands: Commands, server: Res<AssetServer>) {
-    commands.init_resource::<SceneryAssets>();
     commands.insert_resource(LevelListHandle(server.load(LEVEL_LIST_PATH)));
 }
 
