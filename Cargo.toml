@@ -68,6 +68,11 @@ ron = { version = "=0.12.2", default-features = false }   # Reads the RON level 
 serde = { version = "=1.0.229", features = ["derive"] }    # Turns parsed text into our structs.
 # Finds the per-OS folder for the save file (DECISIONS.md M5-4).
 dirs = "=7.0.0"
+# Bakes `assets/` into the binary so the game ships as one file (M5-7).
+# Switched off by the `dev` feature, which keeps the folder and hot reload.
+bevy_embedded_assets = { version = "=0.16.0", default-features = false, features = [
+    "default-source",
+] }
 
 [dev-dependencies]
 # Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.

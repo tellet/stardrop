@@ -36,36 +36,46 @@ const INITIAL_WINDOW_SIZE: (u32, u32) = (1280, 720);
 /// Builds and runs the game until the window is closed.
 #[must_use]
 pub fn run() -> AppExit {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Stardrop".into(),
-                resolution: WindowResolution::from(INITIAL_WINDOW_SIZE),
-                ..default()
-            }),
+    let mut app = App::new();
+    // Shipped builds carry their assets inside the executable, so the game is
+    // a single file. Files that aren't embedded (a level someone drops next
+    // to the binary) still load from an `assets/` folder beside it.
+    // With `--features dev` this is skipped, keeping hot reload working.
+    #[cfg(not(feature = "dev"))]
+    app.add_plugins(bevy_embedded_assets::EmbeddedAssetPlugin {
+        mode: bevy_embedded_assets::PluginMode::ReplaceAndFallback {
+            path: "assets".to_owned(),
+        },
+    });
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "Stardrop".into(),
+            resolution: WindowResolution::from(INITIAL_WINDOW_SIZE),
             ..default()
-        }))
-        .add_plugins((
-            app_state::AppStatePlugin,
-            config::ConfigPlugin,
-            level::LevelPlugin,
-            physics::PhysicsPlugin,
-            astronaut::AstronautPlugin,
-            attempt::AttemptPlugin,
-            collectibles::CollectiblesPlugin,
-            objects::ObjectsPlugin,
-            effects::EffectsPlugin,
-            camera::CameraPlugin,
-            background::BackgroundPlugin,
-            debug::DebugPlugin,
-        ))
-        // A second group: Bevy's `add_plugins` takes at most 15 at a time.
-        .add_plugins((
-            journal::JournalPlugin,
-            save::SavePlugin,
-            settings::SettingsPlugin,
-            menu::MenuPlugin,
-            ui::UiPlugin,
-        ))
-        .run()
+        }),
+        ..default()
+    }))
+    .add_plugins((
+        app_state::AppStatePlugin,
+        config::ConfigPlugin,
+        level::LevelPlugin,
+        physics::PhysicsPlugin,
+        astronaut::AstronautPlugin,
+        attempt::AttemptPlugin,
+        collectibles::CollectiblesPlugin,
+        objects::ObjectsPlugin,
+        effects::EffectsPlugin,
+        camera::CameraPlugin,
+        background::BackgroundPlugin,
+        debug::DebugPlugin,
+    ))
+    // A second group: Bevy's `add_plugins` takes at most 15 at a time.
+    .add_plugins((
+        journal::JournalPlugin,
+        save::SavePlugin,
+        settings::SettingsPlugin,
+        menu::MenuPlugin,
+        ui::UiPlugin,
+    ))
+    .run()
 }

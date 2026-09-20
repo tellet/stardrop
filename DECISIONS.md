@@ -316,7 +316,7 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Cost:** the release binary grew from 44.4 MB to 46.0 MB (+1.6 MB, 3.6 %).
 - **Alternative:** hand-written hit testing against UI rectangles with only the `mouse` feature. It avoids the growth but reimplements what Bevy already does, and would need redoing for every widget.
 
-## M5-2 · Packaging: one standalone binary, with an optional assets folder (planned for M9)
+## M5-2 · Packaging: one standalone binary, with an optional assets folder (done in M5-7)
 
 - **What:** assets get embedded in the executable, so the game ships as a single file. If an `assets/` folder exists next to the binary, it takes priority.
 - **Why:** the user asked whether a standalone binary is possible. Embedding alone would break Section 4's rule that levels are editable without recompiling; the override keeps both.
@@ -355,6 +355,14 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Applied immediately** when changed: fullscreen switches the window mode, "plain" graphics removes bloom from the camera, and reduce motion scales background drift and the waiting bob to a quarter.
 - **Rows are activated, not dragged:** Enter steps a row to its next value (volumes 0/25/50/75/100). That reuses the existing menu navigation instead of adding sliders with their own input handling. Sliders can come with the M7 visual pass.
 - **Volumes are stored but silent** until audio exists in M8; the screen says so.
+
+## M5-7 · The shipped game is one file
+
+- **What:** `bevy_embedded_assets = "=0.16.0"` bakes `assets/` into release builds (`ReplaceAndFallback`), so the game ships as a single executable. Files that aren't embedded still load from an `assets/` folder beside the binary, so players can drop in *new* levels; replacing a shipped one would need our own asset reader, which isn't worth the code today.
+- **Off during development:** `--features dev` skips the plugin entirely, so the folder is used and hot reload keeps working. Verified by grepping both binaries: the release one contains the level text, the dev one doesn't.
+- **Cost:** +0.09 MB (46.57 → 46.66 MB) for 72 KB of assets. Sounds and music in M8 will add their own size.
+- **Verified** by copying only the binary into an empty folder: it started and found all ten levels.
+- Saves and settings still live in the OS data folder, so the game never writes where it's installed.
 
 ---
 
