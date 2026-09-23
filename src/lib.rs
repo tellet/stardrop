@@ -26,8 +26,10 @@ mod rng;
 pub mod save;
 pub mod scoring;
 pub mod settings;
+pub mod sim;
 #[cfg(test)]
 mod soak_tests;
+pub mod solver;
 mod ui;
 
 /// Window size on first launch, in physical pixels. 16:9, the aspect ratio the game is designed for.

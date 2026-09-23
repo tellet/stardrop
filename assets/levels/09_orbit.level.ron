@@ -1,18 +1,20 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: one orb pulls you as you pass.
+// Test: swing around a second orb to reach the far mote.
+// Twist: the swing passes close to a dark cloud.
 (
     name: "Orbit",
     theme: Twilight,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (700, 1870), size: (300, 40)),
     stardust: [
-        (180, 700),
-        (940, 1150),
-        (420, 1650),
+        (540, 880),
+        (900, 1200),
+        (640, 1700),
     ],
     objects: [
-        GravityOrb(center: (360, 850), radius: 55),
-        GravityOrb(center: (780, 1350), radius: 55),
-        StaticCloud(center: (540, 1150), radius: 85),
+        GravityOrb(center: (540, 700), radius: 55),
+        GravityOrb(center: (720, 1160), radius: 50),
+        StaticCloud(center: (280, 1460), radius: 90),
     ],
-    target_time: 22.0,
+    target_time: 5.5,
 )

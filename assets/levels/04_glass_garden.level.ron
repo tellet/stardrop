@@ -1,18 +1,20 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: a crystal below the start turns your drift around.
+// Test: a crystal on the right sends you back for the left mote.
+// Twist: a puff and a crystal together aim you at the pad.
 (
     name: "Glass Garden",
     theme: CrystalAurora,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (760, 1870), size: (300, 40)),
     stardust: [
-        (200, 900),
-        (900, 1250),
-        (540, 1650),
+        (720, 1000),
+        (300, 1180),
+        (760, 1660),
     ],
     objects: [
-        Crystal(center: (350, 750), size: 55),
-        Crystal(center: (720, 1150), size: 55),
-        CloudPuff(center: (450, 1500), radius: 80),
+        Crystal(center: (540, 620), size: 60),
+        Crystal(center: (860, 1080), size: 55),
+        CloudPuff(center: (520, 1520), radius: 85),
     ],
-    target_time: 18.0,
+    target_time: 6.0,
 )

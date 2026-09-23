@@ -364,6 +364,18 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 - **Verified** by copying only the binary into an empty folder: it started and found all ten levels.
 - Saves and settings still live in the OS data folder, so the game never writes where it's installed.
 
+## M6-1 · A solver proves every level is beatable
+
+- **What:** `sim.rs` plays a level without Bevy, using the same pure rules; `solver.rs` beam-searches steering inputs over it. A test requires every shipped level to be landable *and* to have all its stardust reachable in one attempt; another test replays identical inputs through the real game and the simulator and requires the same result, so the two can't drift.
+- **Target times** come from the measured fastest route x1.4 (the user's choice), rounded to half a second, instead of being guessed.
+- **The solver found real faults:** one stub level whose stardust could not all be collected, and after each fix a further level that was outright unbeatable.
+- **It also had three of its own,** each of which made it report "no route" for levels that are easy by hand:
+  1. pruning purely by depth threw away lines that rise (a bubble lift);
+  2. without spreading the beam sideways it collapsed onto one line and never met objects elsewhere;
+  3. treating two astronauts in the same spot as the same state merged "drifting right" into "falling straight" on the very first branch, killing the right-hand half of the search.
+  The cell now covers position *and* velocity.
+- **`examples/probe.rs`** is the design tool: it prints a level's routes, where they pass, and how far each missed mote was.
+
 ---
 
 ## Baseline measurements (M0)

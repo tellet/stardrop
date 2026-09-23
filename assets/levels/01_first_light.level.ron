@@ -1,13 +1,15 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: the fall itself, and the beacon straight below.
+// Test: three motes on a gentle zigzag teach steering.
+// Twist: the last mote sits off to the side of the pad.
 (
     name: "First Light",
     theme: DeepSpace,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (540, 1870), size: (320, 40)),
     stardust: [
-        (300, 600),
-        (800, 1100),
-        (420, 1500),
+        (400, 650),
+        (660, 1080),
+        (430, 1520),
     ],
-    target_time: 14.0,
+    target_time: 6.0,
 )

@@ -1,17 +1,20 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: a ribbon flowing right, straight across the fall.
+// Test: a second ribbon flows back left toward a mote.
+// Twist: a puff at the end sends you over the pad.
 (
     name: "Solar Breeze",
     theme: UpperAtmosphere,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (620, 1870), size: (300, 40)),
     stardust: [
-        (250, 600),
-        (700, 1000),
-        (880, 1450),
+        (850, 880),
+        (330, 1430),
+        (620, 1700),
     ],
     objects: [
-        WindRibbon(path: [(200, 800), (500, 900), (850, 1050)], width: 90),
-        CloudPuff(center: (300, 1350), radius: 80),
+        WindRibbon(path: [(240, 700), (600, 780), (860, 860)], width: 90),
+        WindRibbon(path: [(880, 1240), (520, 1330), (320, 1400)], width: 85),
+        CloudPuff(center: (300, 1620), radius: 80),
     ],
-    target_time: 18.0,
+    target_time: 6.0,
 )

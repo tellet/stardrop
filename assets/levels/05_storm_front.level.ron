@@ -1,18 +1,21 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: one dark cloud, well off the open path.
+// Test: two dark clouds leave a clear gap to thread.
+// Twist: a puff bounces you close to a dark cloud.
 (
     name: "Storm Front",
     theme: HighClouds,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (420, 1870), size: (300, 40)),
     stardust: [
-        (150, 800),
-        (560, 1250),
-        (300, 1600),
+        (620, 820),
+        (540, 1180),
+        (350, 1660),
     ],
     objects: [
-        CloudPuff(center: (700, 620), radius: 85),
-        StaticCloud(center: (330, 1050), radius: 100),
-        StaticCloud(center: (820, 1450), radius: 95),
+        StaticCloud(center: (260, 700), radius: 100),
+        StaticCloud(center: (280, 1180), radius: 95),
+        StaticCloud(center: (820, 1180), radius: 95),
+        CloudPuff(center: (600, 1540), radius: 80),
     ],
-    target_time: 18.0,
+    target_time: 6.0,
 )

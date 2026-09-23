@@ -1,18 +1,20 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: a bubble on the path lifts you, then lets go.
+// Test: a second bubble lifts you to a mote above it.
+// Twist: that lift stops just short of a dark cloud.
 (
     name: "Slow Bloom",
     theme: CloudSea,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (700, 1870), size: (300, 40)),
     stardust: [
-        (420, 480),
-        (650, 1000),
-        (180, 1700),
+        (540, 620),
+        (300, 980),
+        (700, 1720),
     ],
     objects: [
-        Bubble(center: (420, 900), radius: 75),
-        StaticCloud(center: (800, 1250), radius: 90),
-        Bubble(center: (250, 1450), radius: 70),
+        Bubble(center: (540, 820), radius: 75),
+        Bubble(center: (300, 1200), radius: 70),
+        StaticCloud(center: (300, 760), radius: 85),
     ],
-    target_time: 20.0,
+    target_time: 6.0,
 )

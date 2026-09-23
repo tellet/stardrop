@@ -377,6 +377,22 @@ pub(crate) mod tests {
         world.flush();
     }
 
+    /// Every level in the shipped list: (name, file, parsed level).
+    pub(crate) fn shipped_levels() -> Vec<(String, String, Level)> {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/levels");
+        let text = std::fs::read_to_string(format!("{dir}/levels.list.ron")).unwrap();
+        let list = LevelList::parse(&text).unwrap();
+        list.levels
+            .iter()
+            .map(|entry| {
+                let text = std::fs::read_to_string(format!("{dir}/{}", entry.file)).unwrap();
+                let level =
+                    Level::parse(&text).unwrap_or_else(|error| panic!("{}: {error}", entry.file));
+                (entry.name.clone(), entry.file.clone(), level)
+            })
+            .collect()
+    }
+
     #[derive(Resource, Default)]
     struct Completions(usize);
 

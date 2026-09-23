@@ -1,18 +1,21 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: a comet stone drops you fast, in open sky.
+// Test: the dive carries you through a gap between dark clouds.
+// Twist: a puff catches the dive and turns it toward the pad.
 (
     name: "Heavy Heart",
     theme: Sunset,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (820, 1870), size: (300, 40)),
     stardust: [
-        (640, 900),
-        (150, 1350),
-        (880, 1750),
+        (540, 900),
+        (560, 1260),
+        (840, 1700),
     ],
     objects: [
-        CometStone(center: (620, 650), radius: 60),
-        StaticCloud(center: (300, 1150), radius: 95),
-        CloudPuff(center: (820, 1500), radius: 85),
+        CometStone(center: (540, 560), radius: 60),
+        StaticCloud(center: (260, 1120), radius: 90),
+        StaticCloud(center: (860, 1120), radius: 90),
+        CloudPuff(center: (620, 1520), radius: 85),
     ],
-    target_time: 16.0,
+    target_time: 3.5,
 )

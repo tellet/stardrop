@@ -1,17 +1,20 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: a puff right under the start; you cannot miss it.
+// Test: a puff off to the left is the way to the second mote.
+// Twist: a puff near the bottom throws you across to the pad.
 (
     name: "Soft Landing",
     theme: SpaceClouds,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (420, 1870), size: (300, 40)),
     stardust: [
-        (400, 500),
-        (820, 900),
-        (300, 1400),
+        (540, 840),
+        (300, 1240),
+        (760, 1560),
     ],
     objects: [
-        CloudPuff(center: (400, 700), radius: 90),
-        CloudPuff(center: (760, 1150), radius: 80),
+        CloudPuff(center: (540, 560), radius: 90),
+        CloudPuff(center: (300, 1120), radius: 80),
+        CloudPuff(center: (780, 1660), radius: 80),
     ],
-    target_time: 16.0,
+    target_time: 6.0,
 )

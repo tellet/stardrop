@@ -1,19 +1,21 @@
-// Stub level for Milestone 5: replaced by the designed level in Milestone 6.
+// Introduce: two rings; step in one and out of the other.
+// Test: a ribbon past the exit carries you back across.
+// Twist: spores and a puff between you and home.
 (
     name: "Homecoming",
     theme: Homecoming,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (300, 40)),
+    beacon: (center: (540, 1870), size: (320, 40)),
     stardust: [
-        (220, 480),
-        (560, 1300),
-        (180, 1750),
+        (260, 560),
+        (860, 1160),
+        (440, 1520),
     ],
     objects: [
-        TwinPortals(a: (220, 700), b: (880, 1150), radius: 60),
-        SporeFlower(center: (560, 900), radius: 55),
-        WindRibbon(path: [(700, 1500), (450, 1620), (300, 1700)], width: 85),
-        CloudPuff(center: (860, 1650), radius: 80),
+        TwinPortals(a: (260, 760), b: (860, 1060), radius: 60),
+        WindRibbon(path: [(900, 1260), (620, 1380), (420, 1460)], width: 85),
+        SporeFlower(center: (500, 1620), radius: 55),
+        CloudPuff(center: (820, 1700), radius: 80),
     ],
-    target_time: 24.0,
+    target_time: 4.5,
 )
