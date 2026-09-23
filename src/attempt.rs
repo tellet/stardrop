@@ -94,7 +94,7 @@ impl Plugin for AttemptPlugin {
                         .after(AstronautSystems::Input)
                         .run_if(in_state(LevelPhase::Ready)),
                     run_fade.run_if(in_state(LevelPhase::Restarting)),
-                    start_over.run_if(on_message::<RestartRequested>),
+                    start_over,
                     (
                         retry.run_if(not(in_state(LevelPhase::Loading))),
                         restart_on_level_change.run_if(resource_exists_and_changed::<ActiveLevel>),
@@ -239,13 +239,22 @@ fn clear_fade(mut overlay: Single<&mut BackgroundColor, With<FadeOverlay>>) {
 }
 
 /// A menu asked for a fresh attempt (its "Retry" item).
+///
+/// The request is read inside the system, not in a run condition: Bevy
+/// evaluates a system's own conditions even when the paused game skips it,
+/// so a condition here would eat the request before play resumes.
 fn start_over(
+    mut requests: MessageReader<RestartRequested>,
     level: Res<ActiveLevel>,
     mut astronaut: Single<&mut Motion, With<Astronaut>>,
     mut waited: ResMut<ReadyWait>,
     mut restarted: MessageWriter<AttemptRestarted>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
 ) {
+    if requests.is_empty() {
+        return;
+    }
+    requests.clear();
     restart(&mut astronaut, &level, &mut waited, &mut restarted);
     (*next_phase).set_if_neq(LevelPhase::Ready);
 }
@@ -397,6 +406,27 @@ mod tests {
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .clear();
+        app.update();
+        assert_eq!(phase(&app), LevelPhase::Ready);
+        assert!(astronaut_body(&mut app).position.distance(level.start) <= BOB_AMPLITUDE + 1e-3);
+    }
+
+    /// The pause menu's "Retry": the request is written while the game is
+    /// paused, and play resumes a frame later. The attempt must start over.
+    #[test]
+    fn a_retry_asked_for_while_paused_restarts_the_attempt() {
+        let level = Level::for_tests();
+        let mut app = attempt_app(Vec2::new(0.0, -1000.0));
+        app.insert_state(crate::app_state::AppState::Paused);
+        app.update();
+        // What the menu item does: ask for a fresh attempt...
+        app.world_mut().write_message(RestartRequested);
+        app.update();
+        // ...and resume play, which takes effect the next frame.
+        app.world_mut()
+            .resource_mut::<NextState<crate::app_state::AppState>>()
+            .set(crate::app_state::AppState::Playing);
+        app.update();
         app.update();
         assert_eq!(phase(&app), LevelPhase::Ready);
         assert!(astronaut_body(&mut app).position.distance(level.start) <= BOB_AMPLITUDE + 1e-3);
