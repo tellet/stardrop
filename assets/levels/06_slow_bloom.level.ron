@@ -1,15 +1,16 @@
 // Introduce: a bubble on the path lifts you, then lets go.
 // Test: a second bubble lifts you to a mote above it.
 // Twist: that lift stops just short of a dark cloud.
+// Letting go drops you past the beacon, off to its left.
 (
     name: "Slow Bloom",
     theme: CloudSea,
     start: (540, 180),
-    beacon: (center: (700, 1870), size: (300, 40)),
+    beacon: (center: (790, 1870), size: (300, 40)),
     stardust: [
         (540, 620),
         (300, 980),
-        (700, 1720),
+        (790, 1720),
     ],
     objects: [
         Bubble(center: (540, 820), radius: 75),

@@ -232,6 +232,27 @@ mod tests {
         }
     }
 
+    /// Letting go must not beat a level. The first two teach the controls,
+    /// so a straight drop may land there; from the third on it must miss.
+    #[test]
+    fn a_plain_fall_misses_from_the_third_level_on() {
+        let config = GameConfig::default();
+        for (number, (name, _, level)) in crate::level::tests::shipped_levels()
+            .into_iter()
+            .enumerate()
+            .skip(2)
+        {
+            let inputs = [AirInput::NONE; MAX_STEPS];
+            let (_, progress) = crate::sim::play(&level, &config, &inputs);
+            assert_ne!(
+                progress,
+                Progress::Landed,
+                "level {}, {name}: a straight drop lands on the beacon",
+                number + 1
+            );
+        }
+    }
+
     /// Prints where the fastest route goes, to place stardust along it.
     /// Run on demand: `cargo test --release print_routes -- --ignored --nocapture`.
     #[test]

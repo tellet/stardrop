@@ -1,15 +1,16 @@
 // Introduce: a flower swaps your controls in open sky.
 // Test: the next mote is to the left, while left means right.
 // Twist: a crystal turns you around while the spores still hold.
+// Letting go drops you past the beacon, off to its left.
 (
     name: "Pollen Drift",
     theme: WarmEvening,
     start: (540, 180),
-    beacon: (center: (500, 1870), size: (300, 40)),
+    beacon: (center: (760, 1870), size: (300, 40)),
     stardust: [
         (300, 1020),
         (780, 1480),
-        (500, 1740),
+        (700, 1740),
     ],
     objects: [
         SporeFlower(center: (540, 600), radius: 60),

@@ -89,3 +89,11 @@ A level that breaks any of these rules is rejected, and the message says what's 
 - Objects are inside the level, sized 20–300, and never overlap the start (the astronaut would begin inside them).
 - Static clouds don't cover the beacon or any stardust.
 
+
+## Rules the tests check
+
+These aren't part of the file format; the solver checks them for every shipped level (`src/solver.rs`):
+
+- Every level is beatable, and all of its stardust is reachable in one attempt.
+- `target_time` is no tighter than the fastest route × 1.4.
+- From the third level on, letting go must miss: a straight drop with no steering never lands on the beacon. The first two levels teach the controls, so there a straight drop may land.
