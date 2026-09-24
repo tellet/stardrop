@@ -33,6 +33,20 @@ pub enum ObjectKind {
 }
 
 impl ObjectKind {
+    /// Every kind, in the order the journal lists them. Tests walk this, so
+    /// a new kind can't be added without the look and feel to go with it.
+    pub const ALL: [Self; 9] = [
+        Self::CloudPuff,
+        Self::WindRibbon,
+        Self::Crystal,
+        Self::TwinPortals,
+        Self::GravityOrb,
+        Self::Bubble,
+        Self::SporeFlower,
+        Self::CometStone,
+        Self::StaticCloud,
+    ];
+
     /// Allowed values for [`Placement::size`], so every object stays readable
     /// and touchable.
     #[must_use]

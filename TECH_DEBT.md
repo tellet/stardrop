@@ -5,10 +5,7 @@ Known shortcuts, and when we plan to deal with them.
 | Item | Why it's there | Plan |
 |---|---|---|
 | Wayland support is disabled. | It needs the `libwayland-dev` / `libxkbcommon-dev` system packages. | Re-enable the `wayland` feature once they're installed (decide by M9). |
-| Menu rows are centered individually, so setting values don't line up in a column. | Placeholder UI. | M7 visual pass: proper two-column rows and sliders. |
-| Nine of the ten levels are stubs. | They exist so level select, unlocking and saving can be tested. | M6 designs all ten properly. |
-| Window contents lag ~2 refreshes behind a live resize, so the view "jumps". | Presentation latency from vsync (DECISIONS.md M0-11). | Revisit with the M5 window/fullscreen settings. |
-| The window opens landscape (1280×720), so the portrait playfield uses only its middle third. | The default window was chosen before the portrait redesign. | M5 settings: choose a sensible default size (e.g. a taller window) and remember it. |
-| RSS still creeps slightly: about +300 KB between minutes 2 and 4.5 of a respawn loop (~30 respawns), and slowing. Our entities, meshes and materials are proven constant (`soak_tests.rs`). | Likely allocator/driver caches; not our objects. | Re-measure in a 30-min soak at M7 (more assets), with the `dist` build. |
-| Running the binary directly looks for `assets/` next to the executable (Bevy default). `cargo run` sets the right folder; otherwise use `BEVY_ASSET_ROOT=<project dir>`. | Normal during development. | M9: the release package puts `assets/` next to the binary. |
-| Wind ribbon chevrons are small and faint at normal window sizes; the ribbon's contact squish scales the whole path around its middle. | Placeholder visuals. | M7: final ribbon look with a readable flow animation and a proper contact ripple. |
+| Window contents lag ~2 refreshes behind a live resize, so the view "jumps". | Presentation latency from vsync (DECISIONS.md M0-11). | Live with it, or revisit at M9. |
+| The long-session memory measurement is headless: it exercises our own allocations, not the GPU driver's. 400 play/fail/retry/reload rounds move RSS by +44 KB and then flatten (DECISIONS.md M7). | A windowed 30-minute soak takes the machine over for half an hour. | Run one on the `dist` build at M9, when the game also has audio to soak. |
+| A glowing object doesn't cast coloured light on the astronaut passing it. | Section 5 asks for it "if affordable"; it needs a light pass we don't have. | Reconsider at M9 if there's room. |
+| A `--features dev` build reads `assets/` from the working folder, so running that binary from elsewhere needs `BEVY_ASSET_ROOT=<project dir>`. Release builds carry their assets inside (M5-7). | Hot reload needs the folder. | Nothing to do: it only affects development. |

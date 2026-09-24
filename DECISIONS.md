@@ -376,6 +376,44 @@ What we decided, why, and what we considered instead. Newest at the bottom.
   The cell now covers position *and* velocity.
 - **`examples/probe.rs`** is the design tool: it prints a level's routes, where they pass, and how far each missed mote was.
 
+## M7-1 · The art is drawn in code, not painted
+
+- **What:** every shape is a mesh built at runtime (`soft_mesh.rs`), with its colours baked into its vertices. No textures ship with the game.
+- **Why:** it keeps the single-file binary, stays sharp at any window size, costs no texture memory, and a whole altitude is a handful of colour constants I can change and see immediately. The user chose this over painted sprites.
+- **The one rule that makes it work:** every shape fades out at its rim instead of ending in a hard edge. A soft falloff is the difference between "painted" and "cut out".
+- **Learned the hard way:** a big quad with transparent corners does *not* look soft. The GPU interpolates across each triangle, so a four-corner shape shows a hard crease along the diagonal. Aurora curtains and meteor streaks are now stacks of overlapping soft discs instead, and wind ribbons carry four lines of vertices across their width (clear, solid, solid, clear).
+
+## M7-2 · One baked mesh per background layer
+
+- **What:** a layer's 150 stars (or 12 clouds, or 7 curtains) are baked into a single mesh, drawn as two stacked copies that scroll. A theme's meshes are built the first time that theme is shown and kept.
+- **Why:** the obvious way — one entity per star — cost ~1000 entities and a transform each frame. Baking makes a layer 2 entities and 1 draw call, and moving the layer moves one parent.
+- **Cost:** ten themes of meshes if a player visits them all, a couple of hundred kilobytes. Level changes then rebuild nothing.
+
+## M7-3 · Effects come from a pool, never from spawning
+
+- **What:** `particles.rs` spawns 192 spark entities at startup and reuses them forever. Anything wanting an effect writes a `Burst` message; nothing else spawns, and asking for more sparks than the pool holds recycles the oldest.
+- **Why:** Section 7.2 asks for pooled, capped effects. It also means a burst can never allocate mid-frame or leak.
+- **Sparks fade by shrinking,** not by changing their colour: they share one material per colour, so a per-spark fade would mean a material per spark.
+- **A subtlety the soak test caught:** the pool's starting material was freed once every slot had been recoloured, so the asset count *dropped* during a long run. The material now lives in the colour cache, and the pool creates and frees nothing after startup.
+
+## M7-4 · The window opens portrait
+
+- **What:** the game opens a 9:16 window about two-thirds of the monitor's height, centred, and remembers a size the player sets (written to the settings file a second after they stop dragging).
+- **Why:** the playfield is portrait. A landscape window showed the game in its middle third, which was the oldest thing on the debt list.
+- **The monitor's size isn't known until the window exists,** so the fitting happens on the first frame a monitor is reported, not in the window's opening settings.
+
+## Measurements (M7)
+
+Measured 2026-09-24, same machine as the M0 baseline.
+
+| Metric | Value | Notes |
+|---|---|---|
+| Our own systems, per frame | **0.110 ms** | Busiest shipped level, headless, release. Budget: 1 ms. `cargo test --release --lib -- --ignored frame_cost --nocapture` |
+| Whole frame, full quality (bloom) | **0.93 ms** avg, 4.98 ms worst | Vsync off. 60 FPS needs 16.7 ms. |
+| Whole frame, plain quality (no bloom) | **0.51 ms** avg, 1.56 ms worst | Bloom costs about 0.4 ms a frame here. |
+| Memory over 400 play/fail/retry/reload rounds | 24812 KB → **24856 KB** (+44 KB) | Headless, release; the growth is in the first 100 rounds and then flat. `--ignored long_session` |
+| Entities in play | 1024 | Including the 192-spark pool and the background. |
+
 ---
 
 ## Baseline measurements (M0)

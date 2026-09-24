@@ -84,7 +84,7 @@ pub(super) struct LevelFile {
 }
 
 /// The altitude theme: which palette and scenery a level uses (Section 4).
-/// Visuals arrive in Milestone 7; for now every theme looks like deep space.
+/// Each one's art lives in `theme.rs`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum Theme {
     /// Starfield and distant nebula.
@@ -107,6 +107,23 @@ pub enum Theme {
     Twilight,
     /// Night-to-dawn over the landscape.
     Homecoming,
+}
+
+impl Theme {
+    /// Every theme, top of the sky down to home. Tests walk this, so a new
+    /// theme can't be added without art to go with it.
+    pub const ALL: [Self; 10] = [
+        Self::DeepSpace,
+        Self::SpaceClouds,
+        Self::UpperAtmosphere,
+        Self::CrystalAurora,
+        Self::HighClouds,
+        Self::CloudSea,
+        Self::Sunset,
+        Self::WarmEvening,
+        Self::Twilight,
+        Self::Homecoming,
+    ];
 }
 
 /// The landing pad, in world coordinates.

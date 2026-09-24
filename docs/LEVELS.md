@@ -90,6 +90,10 @@ A level that breaks any of these rules is rejected, and the message says what's 
 - Static clouds don't cover the beacon or any stardust.
 
 
+## Themes
+
+`theme` picks the altitude a level falls through: its sky colours, its background layers and how much its lights glow. The ten themes run from `DeepSpace` down to `Homecoming`, and each one's art is a block of constants in `src/theme.rs` — change a colour there and every level using that theme changes with it. A level file can only *pick* a theme, never describe one, for the same reason it can't change how objects behave.
+
 ## Rules the tests check
 
 These aren't part of the file format; the solver checks them for every shipped level (`src/solver.rs`):

@@ -14,14 +14,14 @@ mod loader;
 mod scenery;
 mod validate;
 
-pub use data::{LEVEL_HEIGHT, LEVEL_WIDTH, Level};
+pub use data::{LEVEL_HEIGHT, LEVEL_WIDTH, Level, Theme};
 pub(crate) use goal::LevelCompleted;
 pub(crate) use list::{LevelEntry, LevelList};
 use list::{LevelListAsset, LevelListLoader};
 use loader::{LevelAsset, LevelLoader};
-use scenery::LevelEntity;
+pub(crate) use scenery::LevelEntity;
 use scenery::SceneryAssets;
-pub(crate) use scenery::{MOTE_RADIUS, StardustMote};
+pub(crate) use scenery::{BeaconHalo, MOTE_RADIUS, StardustMote, Twinkle};
 pub use validate::LevelError;
 
 use crate::app_state::AppState;
@@ -213,7 +213,7 @@ fn load_selected_level(
     commands.insert_resource(LoadedLevel(*selected));
 }
 
-/// Going back to a menu frees the level and its scenery.
+/// Going back to a menu frees the level, its scenery and its objects.
 fn unload_level(mut commands: Commands, scenery: Query<Entity, With<LevelEntity>>) {
     for entity in &scenery {
         commands.entity(entity).despawn();
@@ -426,6 +426,7 @@ pub(crate) mod tests {
                 crate::collectibles::CollectiblesPlugin,
                 crate::objects::ObjectsPlugin,
                 crate::effects::EffectsPlugin,
+                crate::particles::ParticlesPlugin,
             ));
         app
     }
@@ -530,6 +531,52 @@ pub(crate) mod tests {
             run.elapsed < 1e-3,
             "the clock carried over: {}",
             run.elapsed
+        );
+    }
+
+    /// What our own systems cost per frame, away from the renderer and its
+    /// vsync (Section 7.1's 1 ms budget). A measurement, not a check:
+    /// `cargo test --release --lib -- --ignored frame_cost --nocapture`.
+    #[test]
+    #[ignore = "a measurement, not a check"]
+    #[expect(clippy::print_stdout, reason = "this test reports a measurement")]
+    fn frame_cost_of_the_busiest_level() {
+        let busiest = shipped_levels()
+            .into_iter()
+            .max_by_key(|(_, _, level)| level.objects.len() + level.stardust.len())
+            .expect("levels are shipped");
+        let mut app = game_app();
+        run_until(&mut app, "the level list loaded", |app| {
+            app.world().contains_resource::<Levels>()
+        });
+        let index = shipped_levels()
+            .iter()
+            .position(|(name, _, _)| *name == busiest.0)
+            .unwrap_or(0);
+        start_level(&mut app, index);
+        app.world_mut()
+            .resource_mut::<NextState<LevelPhase>>()
+            .set(LevelPhase::Falling);
+        // Warm up: first frames allocate and spawn.
+        for _ in 0..120 {
+            app.update();
+        }
+        let frames = 600;
+        let started = std::time::Instant::now();
+        for _ in 0..frames {
+            app.update();
+        }
+        let per_frame = started.elapsed() / frames;
+        println!(
+            "{}: {} objects, {} stardust, {:.3} ms of our own work per frame",
+            busiest.0,
+            busiest.2.objects.len(),
+            busiest.2.stardust.len(),
+            per_frame.as_secs_f64() * 1000.0
+        );
+        assert!(
+            per_frame.as_secs_f64() * 1000.0 < 1.0,
+            "over the 1 ms budget: {per_frame:?}"
         );
     }
 

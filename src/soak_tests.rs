@@ -85,10 +85,63 @@ fn reload_level(app: &mut App) {
     app.update();
 }
 
+/// Memory over a long session, the thing entity counts can't show: does the
+/// process itself keep growing? A measurement, not a check:
+/// `cargo test --release --lib -- --ignored long_session --nocapture`.
 #[test]
-fn twenty_retries_failures_and_reloads_leave_no_trace() {
+#[ignore = "a measurement, not a check"]
+#[expect(clippy::print_stdout, reason = "this test reports a measurement")]
+fn long_session_memory() {
+    /// Resident memory of this process, in kilobytes.
+    fn resident_kb() -> u64 {
+        let text = std::fs::read_to_string("/proc/self/statm").unwrap_or_default();
+        let pages: u64 = text
+            .split_whitespace()
+            .nth(1)
+            .and_then(|pages| pages.parse().ok())
+            .unwrap_or(0);
+        pages * 4
+    }
+
+    let mut app = object_app(busy_level(), Vec2::new(0.0, -200.0));
+    app.add_plugins(CollectiblesPlugin);
+    reload_scenery(app.world_mut());
+    // The same warm-up as the footprint soak: one of each flow, so one-time
+    // allocations are behind us before the first measurement.
+    for _ in 0..30 {
+        app.update();
+    }
+    press(&mut app, KeyCode::KeyR);
+    drop(&mut app);
+    fall_out_and_restart(&mut app);
+    reload_level(&mut app);
+    let start = resident_kb();
+    let rounds = 400;
+    for round in 0..rounds {
+        drop(&mut app);
+        for _ in 0..40 {
+            app.update();
+        }
+        press(&mut app, KeyCode::KeyR);
+        drop(&mut app);
+        fall_out_and_restart(&mut app);
+        reload_level(&mut app);
+        if round % 100 == 0 {
+            println!("round {round}: {} KB", resident_kb());
+        }
+    }
+    let end = resident_kb();
+    println!(
+        "{rounds} rounds of play, failure, retry and reload: {start} KB -> {end} KB ({:+} KB)",
+        i64::try_from(end).unwrap_or(0) - i64::try_from(start).unwrap_or(0)
+    );
+    // Entities are covered by the footprint soak; this one is about memory.
+    assert_eq!(phase(&app), LevelPhase::Ready);
+}
+
+/// A level with something of every kind, for the soaks.
+fn busy_level() -> Level {
     let mut level = Level::for_tests();
-    // A ribbon owns its own meshes: reloads must free them, not pile them up.
     level.objects = vec![
         Placement::StaticCloud {
             center: Vec2::new(300.0, -900.0),
@@ -99,7 +152,13 @@ fn twenty_retries_failures_and_reloads_leave_no_trace() {
             width: 80.0,
         },
     ];
-    let mut app = object_app(level, Vec2::new(0.0, -200.0));
+    level
+}
+
+#[test]
+fn twenty_retries_failures_and_reloads_leave_no_trace() {
+    // A ribbon owns its own meshes: reloads must free them, not pile them up.
+    let mut app = object_app(busy_level(), Vec2::new(0.0, -200.0));
     app.add_plugins(CollectiblesPlugin);
     reload_scenery(app.world_mut());
     // Warm up: a few frames of falling, one of each flow, so one-time

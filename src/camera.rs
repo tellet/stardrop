@@ -10,8 +10,10 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
 use crate::app_state::AppState;
+use crate::background::CurrentTheme;
 use crate::journal::JOURNAL_ORIGIN;
 use crate::level::{LEVEL_HEIGHT, LEVEL_WIDTH};
+use crate::settings::{Quality, Settings};
 
 /// The playfield, in world units: what must always be visible.
 pub(crate) const PLAYFIELD: Vec2 = Vec2::new(LEVEL_WIDTH, LEVEL_HEIGHT);
@@ -19,9 +21,8 @@ pub(crate) const PLAYFIELD: Vec2 = Vec2::new(LEVEL_WIDTH, LEVEL_HEIGHT);
 /// The playfield's center in world coordinates (the top edge is y = 0).
 pub(crate) const PLAYFIELD_CENTER: Vec2 = Vec2::new(0.0, -LEVEL_HEIGHT / 2.0);
 
-/// Bloom strength. Bevy's `NATURAL` preset (0.15) is too subtle for our glowing
-/// look; tuned per level from Milestone 7.
-const BLOOM_INTENSITY: f32 = 0.3;
+// Bloom strength is per theme (`theme.rs`): Bevy's `NATURAL` preset (0.15) is
+// too subtle for our glowing look, and hazier skies want more than clear ones.
 
 /// Marks the one gameplay camera.
 #[derive(Component)]
@@ -35,15 +36,42 @@ impl Plugin for CameraPlugin {
         app.add_systems(Startup, spawn_camera)
             // Where the camera looks depends only on the current screen, so
             // it can't get out of step (and doesn't care what exists yet).
-            .add_systems(Update, look_at_current_screen);
+            .add_systems(Update, look_at_current_screen)
+            .add_systems(
+                Update,
+                apply_glow.run_if(
+                    resource_changed::<CurrentTheme>.or_eager(resource_changed::<Settings>),
+                ),
+            );
     }
 }
 
-/// The glow settings the game uses when graphics quality is "full".
-pub(crate) fn bloom() -> Bloom {
+/// The glow the game uses at "full" quality, at this theme's strength.
+pub(crate) fn bloom(intensity: f32) -> Bloom {
     Bloom {
-        intensity: BLOOM_INTENSITY,
+        intensity,
         ..Bloom::NATURAL
+    }
+}
+
+/// Glow follows the sky, and switches off entirely at "plain" quality, where
+/// bloom is the expensive part of our look.
+fn apply_glow(
+    theme: Res<CurrentTheme>,
+    settings: Res<Settings>,
+    mut commands: Commands,
+    cameras: Query<Entity, With<Camera2d>>,
+) {
+    for camera in &cameras {
+        let mut entity = commands.entity(camera);
+        match settings.quality {
+            Quality::Full => {
+                entity.insert(bloom(crate::theme::art(**theme).bloom));
+            }
+            Quality::Plain => {
+                entity.remove::<Bloom>();
+            }
+        }
     }
 }
 
@@ -75,7 +103,7 @@ fn spawn_camera(mut commands: Commands) {
         // Maps HDR colors back to the screen. TonyMcMapface desaturates very
         // bright colors gracefully instead of clipping them (see DECISIONS.md).
         Tonemapping::TonyMcMapface,
-        bloom(),
+        bloom(crate::theme::art(crate::theme::MENU_THEME).bloom),
         Projection::Orthographic(OrthographicProjection {
             // Always show at least the whole playfield; extra space on the
             // longer side becomes scenery.

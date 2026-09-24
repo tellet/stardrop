@@ -192,7 +192,18 @@ fn open_journal(
     let silhouette = materials.add(SILHOUETTE);
     for (index, kind) in PAGES.into_iter().enumerate() {
         let at = page_position(index);
-        let marker = (PageEntity, DespawnOnExit(AppState::Journal));
+        // The same idle motion as in play, so a page looks alive and shows
+        // exactly what the player will meet.
+        let marker = (
+            PageEntity,
+            DespawnOnExit(AppState::Journal),
+            crate::effects::ContactPulse::default(),
+            #[expect(clippy::cast_precision_loss, reason = "nine pages")]
+            crate::effects::Idle {
+                kind,
+                phase: index as f32 * 1.3,
+            },
+        );
         if progress.has_discovered(kind) {
             spawn_preview(
                 &mut commands,

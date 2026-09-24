@@ -18,7 +18,7 @@ pub use kind::{
     MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig,
     StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
 };
-pub(crate) use visuals::ObjectAssets;
+pub(crate) use visuals::{CHEVRON_SIZE, ObjectAssets, spark_color};
 
 use crate::astronaut::Astronaut;
 use crate::attempt::{AttemptFailed, AttemptRestarted, fail};
@@ -109,9 +109,18 @@ fn spawn_objects(
         commands
             .spawn((
                 ObjectIndex(index),
+                // Part of the level: it goes when the level goes.
+                crate::level::LevelEntity,
                 Contact::default(),
                 Used::default(),
                 crate::effects::ContactPulse::default(),
+                // A different phase per object, so two of a kind never
+                // breathe in step.
+                crate::effects::Idle {
+                    kind: placement.kind(),
+                    #[expect(clippy::cast_precision_loss, reason = "at most 64 objects")]
+                    phase: index as f32 * 1.3,
+                },
                 visuals::transform_for(placement),
                 Visibility::default(),
             ))
@@ -231,7 +240,12 @@ pub(crate) mod tests {
             .init_asset::<Mesh>()
             .init_asset::<ColorMaterial>()
             .init_resource::<ButtonInput<KeyCode>>()
-            .add_plugins((AttemptPlugin, ObjectsPlugin, EffectsPlugin));
+            .add_plugins((
+                AttemptPlugin,
+                ObjectsPlugin,
+                EffectsPlugin,
+                crate::particles::ParticlesPlugin,
+            ));
         app
     }
 

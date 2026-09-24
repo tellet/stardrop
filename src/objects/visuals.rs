@@ -1,5 +1,5 @@
-//! Placeholder looks for objects: distinct silhouettes and colors per type.
-//! Final art arrives in Milestone 7.
+//! What each object looks like: a distinct silhouette and colour per type,
+//! readable by shape alone (Section 5's accessibility rule).
 //!
 //! Meshes are unit-sized (radius 1) and scaled per object, and every object
 //! of a type shares them. Wind ribbons are the exception: each one's mesh
@@ -11,7 +11,8 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
-use super::kind::{ObjectsConfig, Placement};
+use super::kind::{ObjectKind, ObjectsConfig, Placement};
+use crate::effects::FlowMark;
 
 /// Cloud puffs: three overlapping soft circles (offsets and sizes relative to
 /// the radius). Pastel, not glowing: clouds are soft, not light sources.
@@ -23,10 +24,13 @@ const PUFF_LOBES: [(Vec2, f32); 3] = [
 const PUFF_COLOR: Color = Color::srgb(0.96, 0.86, 0.95);
 /// Wind ribbons: a translucent glowing strip, with brighter chevrons every
 /// `CHEVRON_SPACING` units pointing along the flow.
-const RIBBON_GLOW: Color = Color::linear_rgba(0.3, 1.3, 1.2, 0.28);
+const RIBBON_GLOW: Color = Color::linear_rgba(0.35, 1.5, 1.4, 0.42);
 const CHEVRON_GLOW: Color = Color::linear_rgba(0.6, 2.2, 1.9, 0.8);
-const CHEVRON_SPACING: f32 = 90.0;
-const CHEVRON_SIZE: f32 = 16.0;
+/// How much of a ribbon's width is at full strength; the rest fades out to
+/// its edges.
+const RIBBON_CORE: f32 = 0.55;
+const CHEVRON_SPACING: f32 = 115.0;
+pub(crate) const CHEVRON_SIZE: f32 = 30.0;
 /// Crystals: a tall diamond with a cool glow (slightly above 1.0: a hint of bloom).
 const CRYSTAL_GLOW: Color = Color::linear_rgb(0.55, 1.5, 1.9);
 /// Twin portals: two matching rings with a bright rim.
@@ -70,6 +74,8 @@ pub(crate) struct ObjectAssets {
     thin_ring: Handle<Mesh>,
     /// A 1x1 triangle pointing down (the comet stone's flame).
     down_triangle: Handle<Mesh>,
+    /// A unit arrow pointing along +x: one chevron of a wind ribbon.
+    chevron_arrow: Handle<Mesh>,
     diamond: Handle<Mesh>,
     spiky_star: Handle<Mesh>,
     puff: Handle<ColorMaterial>,
@@ -100,6 +106,11 @@ impl FromWorld for ObjectAssets {
         let spiky_star = meshes.add(star_mesh(STATIC_SPIKES, 0.82, 1.0));
         // Narrower than tall, tips at distance 1 from the center.
         let diamond = meshes.add(Rhombus::new(1.3, 2.0));
+        let chevron_arrow = meshes.add(Triangle2d::new(
+            Vec2::new(0.5, 0.0),
+            Vec2::new(-0.5, 0.6),
+            Vec2::new(-0.5, -0.6),
+        ));
         let down_triangle = meshes.add(Triangle2d::new(
             Vec2::new(-0.5, 0.5),
             Vec2::new(0.5, 0.5),
@@ -111,6 +122,7 @@ impl FromWorld for ObjectAssets {
             unit_ring,
             thin_ring,
             down_triangle,
+            chevron_arrow,
             diamond,
             spiky_star,
             puff: materials.add(PUFF_COLOR),
@@ -188,11 +200,16 @@ pub(super) fn spawn_look(
                 Mesh2d(meshes.add(ribbon_mesh(&local, *width))),
                 MeshMaterial2d(assets.ribbon.clone()),
             ));
-            parent.spawn((
-                Mesh2d(meshes.add(chevron_mesh(&local))),
-                MeshMaterial2d(assets.chevron.clone()),
-                Transform::from_xyz(0.0, 0.0, 0.1),
-            ));
+            for (at, along, distance) in chevrons(&local) {
+                parent.spawn((
+                    FlowMark { distance },
+                    Mesh2d(assets.chevron_arrow.clone()),
+                    MeshMaterial2d(assets.chevron.clone()),
+                    Transform::from_translation(at.extend(0.1))
+                        .with_rotation(Quat::from_rotation_z(along.to_angle()))
+                        .with_scale(Vec3::splat(CHEVRON_SIZE)),
+                ));
+            }
         }
         Placement::CloudPuff { radius, .. } => {
             for (offset, scale) in PUFF_LOBES {
@@ -281,7 +298,13 @@ pub(super) fn transform_for(placement: &Placement) -> Transform {
 /// A strip `width` wide along `path`: two vertices per point, offset along
 /// the averaged normal of the neighboring segments so joints stay closed.
 fn ribbon_mesh(path: &[Vec2], width: f32) -> Mesh {
-    let mut positions = Vec::with_capacity(path.len() * 2);
+    // Four lines of vertices across the strip: see-through at both edges,
+    // full strength through the middle. A flat-edged band looks like a cut-out
+    // plank; this one looks like flowing light.
+    let across = [-0.5, -RIBBON_CORE * 0.5, RIBBON_CORE * 0.5, 0.5];
+    let alphas = [0.0, 1.0, 1.0, 0.0];
+    let mut positions = Vec::with_capacity(path.len() * across.len());
+    let mut colors = Vec::with_capacity(path.len() * across.len());
     for (i, &point) in path.iter().enumerate() {
         let before = if i > 0 {
             point - path[i - 1]
@@ -291,50 +314,55 @@ fn ribbon_mesh(path: &[Vec2], width: f32) -> Mesh {
         let after = path.get(i + 1).map_or(Vec2::ZERO, |&next| next - point);
         let tangent =
             (before.normalize_or_zero() + after.normalize_or_zero()).normalize_or(Vec2::X);
-        let side = tangent.perp() * (width / 2.0);
-        positions.push((point + side).extend(0.0).to_array());
-        positions.push((point - side).extend(0.0).to_array());
+        let side = tangent.perp() * width;
+        for (offset, alpha) in across.iter().zip(alphas) {
+            positions.push((point + side * *offset).extend(0.0).to_array());
+            // White: the ribbon's own colour comes from its material, and
+            // only the transparency varies across the strip.
+            colors.push([1.0, 1.0, 1.0, alpha]);
+        }
     }
-    let mut indices = Vec::with_capacity(path.len().saturating_sub(1) * 6);
-    // `u16` counting: a ribbon has at most 16 points (32 vertices).
+    // Four lines across, written out so the index arithmetic stays honest.
+    let lines: u16 = 4;
+    debug_assert_eq!(usize::from(lines), across.len());
+    let mut indices = Vec::with_capacity(path.len().saturating_sub(1) * 18);
+    // `u16` counting: a ribbon has at most 16 points.
     for (segment, _) in (0_u16..).zip(path.windows(2)) {
-        let a = segment * 2;
-        indices.extend([a, a + 2, a + 1, a + 1, a + 2, a + 3]);
+        let start = segment * lines;
+        for line in 0..lines - 1 {
+            let a = start + line;
+            let b = a + lines;
+            indices.extend([a, b, a + 1, a + 1, b, b + 1]);
+        }
     }
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
     .with_inserted_indices(Indices::U16(indices))
 }
 
 /// Small arrowheads every `CHEVRON_SPACING` units along `path`, each
-/// pointing in the direction of flow.
-fn chevron_mesh(path: &[Vec2]) -> Mesh {
-    let mut positions: Vec<[f32; 3]> = Vec::new();
+/// Where a ribbon's chevrons sit: their position, the direction they point,
+/// and how far along the path they are (which staggers the flow animation).
+fn chevrons(path: &[Vec2]) -> Vec<(Vec2, Vec2, f32)> {
+    let mut marks = Vec::new();
     let mut travelled = CHEVRON_SPACING / 2.0;
+    let mut covered = 0.0;
     for pair in path.windows(2) {
         let (a, b) = (pair[0], pair[1]);
         let length = a.distance(b);
         let direction = (b - a).normalize_or_zero();
         while travelled <= length {
-            let tip = a + direction * (travelled + CHEVRON_SIZE / 2.0);
-            let back = tip - direction * CHEVRON_SIZE;
-            let side = direction.perp() * (CHEVRON_SIZE * 0.6);
-            for corner in [tip, back + side, back - side] {
-                positions.push(corner.extend(0.0).to_array());
-            }
+            marks.push((a + direction * travelled, direction, covered + travelled));
             travelled += CHEVRON_SPACING;
         }
         travelled -= length;
+        covered += length;
     }
-    // Separate triangles (no shared vertices), so no index buffer is needed.
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    marks
 }
 
 /// A star-shaped outline with `points` spikes, alternating between `inner`
@@ -359,4 +387,21 @@ fn star_mesh(points: u16, inner: f32, outer: f32) -> Mesh {
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_indices(Indices::U16(indices))
+}
+
+/// The colour an object throws off when the astronaut touches it. Each type
+/// sparks in its own colour, so a contact is recognisable at a glance.
+#[must_use]
+pub(crate) fn spark_color(kind: ObjectKind) -> Color {
+    match kind {
+        ObjectKind::CloudPuff => PUFF_COLOR,
+        ObjectKind::WindRibbon => CHEVRON_GLOW,
+        ObjectKind::Crystal => CRYSTAL_GLOW,
+        ObjectKind::TwinPortals => PORTAL_RIM,
+        ObjectKind::GravityOrb => ORB_CORE,
+        ObjectKind::Bubble => BUBBLE_SHELL,
+        ObjectKind::SporeFlower => PETAL_COLOR,
+        ObjectKind::CometStone => FLAME_COLOR,
+        ObjectKind::StaticCloud => STATIC_CRACKLE,
+    }
 }

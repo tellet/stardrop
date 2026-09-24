@@ -25,6 +25,12 @@ const UNFOCUSED: Color = Color::srgba(0.78, 0.78, 0.92, 0.65);
 const NOTE_COLOR: Color = Color::srgba(0.8, 0.8, 0.95, 0.75);
 /// Menus dim whatever is behind them (the level, while paused).
 const BACKDROP: Color = Color::srgba(0.02, 0.015, 0.06, 0.72);
+/// Every row is this wide, so the settings' values line up in a column.
+const ROW_WIDTH: f32 = 440.0;
+/// How far the focused row slides in from the others, and how fast the slide
+/// catches up (per second).
+const SLIDE_DISTANCE: f32 = 14.0;
+const SLIDE_RATE: f32 = 18.0;
 /// Gamepad sticks count as a press past this much.
 const STICK_THRESHOLD: f32 = 0.6;
 
@@ -88,6 +94,38 @@ struct MenuScreen;
 #[derive(Component, Debug, Clone, Copy)]
 struct MenuItem(usize);
 
+/// How far a row has slid towards the focus, in pixels. Eased, so the focus
+/// glides between rows instead of jumping.
+#[derive(Component, Debug, Default, Clone, Copy)]
+struct Slide(f32);
+
+/// One row of a screen: what it says, what it shows on the right (settings
+/// rows only), and what it does.
+struct Row {
+    label: String,
+    /// Shown in a second column, right-aligned, so values line up.
+    value: Option<String>,
+    action: MenuAction,
+}
+
+impl Row {
+    fn new(label: &str, action: MenuAction) -> Self {
+        Self {
+            label: label.to_owned(),
+            value: None,
+            action,
+        }
+    }
+
+    fn with_value(label: &str, value: String, action: MenuAction) -> Self {
+        Self {
+            label: label.to_owned(),
+            value: Some(value),
+            action,
+        }
+    }
+}
+
 /// Which item is focused, and how many there are.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 struct Focus {
@@ -131,7 +169,7 @@ impl Plugin for MenuPlugin {
             .add_systems(
                 Update,
                 (
-                    (move_focus, hover_focus, show_focus).chain(),
+                    (move_focus, hover_focus, show_focus, slide_focus).chain(),
                     activate,
                     go_back,
                 )
@@ -149,7 +187,7 @@ fn spawn_screen(
     state: AppState,
     title: &str,
     note: Option<String>,
-    items: Vec<(String, MenuAction)>,
+    items: Vec<Row>,
 ) {
     *focus = Focus {
         index: 0,
@@ -182,15 +220,40 @@ fn spawn_screen(
                     ..default()
                 },
             ));
-            for (index, (label, action)) in items.into_iter().enumerate() {
-                screen.spawn((
-                    MenuItem(index),
-                    action,
-                    Button,
-                    Text::new(label),
-                    TextFont::from_font_size(ITEM_SIZE),
-                    TextColor(if index == 0 { FOCUSED } else { UNFOCUSED }),
-                ));
+            for (index, row) in items.into_iter().enumerate() {
+                let color = TextColor(if index == 0 { FOCUSED } else { UNFOCUSED });
+                // A row is a fixed-width line so that every value column lands
+                // in the same place, whatever the labels say.
+                screen
+                    .spawn((
+                        MenuItem(index),
+                        Slide::default(),
+                        row.action,
+                        Button,
+                        Node {
+                            width: Val::Px(ROW_WIDTH),
+                            justify_content: if row.value.is_some() {
+                                JustifyContent::SpaceBetween
+                            } else {
+                                JustifyContent::Center
+                            },
+                            ..default()
+                        },
+                    ))
+                    .with_children(|line| {
+                        line.spawn((
+                            Text::new(row.label),
+                            TextFont::from_font_size(ITEM_SIZE),
+                            color,
+                        ));
+                        if let Some(value) = row.value {
+                            line.spawn((
+                                Text::new(value),
+                                TextFont::from_font_size(ITEM_SIZE),
+                                color,
+                            ));
+                        }
+                    });
             }
             if let Some(note) = note {
                 screen.spawn((
@@ -215,10 +278,10 @@ fn spawn_main_menu(mut commands: Commands, mut focus: ResMut<Focus>) {
         "Stardrop",
         Some("arrows or mouse to choose, Enter to pick".to_owned()),
         vec![
-            ("Descend".to_owned(), MenuAction::ChooseLevel),
-            ("Journal".to_owned(), MenuAction::OpenJournal),
-            ("Settings".to_owned(), MenuAction::OpenSettings),
-            ("Quit".to_owned(), MenuAction::Quit),
+            Row::new("Descend", MenuAction::ChooseLevel),
+            Row::new("Journal", MenuAction::OpenJournal),
+            Row::new("Settings", MenuAction::OpenSettings),
+            Row::new("Quit", MenuAction::Quit),
         ],
     );
 }
@@ -242,17 +305,17 @@ fn spawn_level_select(
             .map(|(index, entry)| {
                 if progress.is_unlocked(index, &order) {
                     let record = progress.level(&entry.file);
-                    (
-                        format!(
-                            "{}. {}  {}",
-                            index + 1,
-                            entry.name,
-                            star_marks(record.stars())
-                        ),
+                    Row::with_value(
+                        &format!("{}. {}", index + 1, entry.name),
+                        star_marks(record.stars()),
                         MenuAction::StartLevel(index),
                     )
                 } else {
-                    (format!("{}. locked", index + 1), MenuAction::Locked)
+                    Row::with_value(
+                        &format!("{}. locked", index + 1),
+                        star_marks(Stars::default()),
+                        MenuAction::Locked,
+                    )
                 }
             })
             .collect()
@@ -278,11 +341,11 @@ fn spawn_pause_menu(mut commands: Commands, mut focus: ResMut<Focus>) {
         "Paused",
         None,
         vec![
-            ("Resume".to_owned(), MenuAction::Resume),
-            ("Retry".to_owned(), MenuAction::RetryLevel),
-            ("Journal".to_owned(), MenuAction::OpenJournal),
-            ("Settings".to_owned(), MenuAction::OpenSettings),
-            ("Level select".to_owned(), MenuAction::BackToLevels),
+            Row::new("Resume", MenuAction::Resume),
+            Row::new("Retry", MenuAction::RetryLevel),
+            Row::new("Journal", MenuAction::OpenJournal),
+            Row::new("Settings", MenuAction::OpenSettings),
+            Row::new("Level select", MenuAction::BackToLevels),
         ],
     );
 }
@@ -296,32 +359,39 @@ fn spawn_settings_menu(mut commands: Commands, mut focus: ResMut<Focus>, setting
         "Settings",
         Some("Enter changes a setting; sound arrives in a later milestone".to_owned()),
         vec![
-            (
-                format!("Master volume   {}%", settings.master_volume),
+            Row::with_value(
+                "Master volume",
+                format!("{}%", settings.master_volume),
                 MenuAction::Change(Setting::MasterVolume),
             ),
-            (
-                format!("Music           {}%", settings.music_volume),
+            Row::with_value(
+                "Music",
+                format!("{}%", settings.music_volume),
                 MenuAction::Change(Setting::MusicVolume),
             ),
-            (
-                format!("Sound effects   {}%", settings.sfx_volume),
+            Row::with_value(
+                "Sound effects",
+                format!("{}%", settings.sfx_volume),
                 MenuAction::Change(Setting::SfxVolume),
             ),
-            (
-                format!("Ambience        {}%", settings.ambience_volume),
+            Row::with_value(
+                "Ambience",
+                format!("{}%", settings.ambience_volume),
                 MenuAction::Change(Setting::AmbienceVolume),
             ),
-            (
-                format!("Fullscreen      {}", on_off(settings.fullscreen)),
+            Row::with_value(
+                "Fullscreen",
+                on_off(settings.fullscreen).to_owned(),
                 MenuAction::Change(Setting::Fullscreen),
             ),
-            (
-                format!("Graphics        {}", settings.quality.label()),
+            Row::with_value(
+                "Graphics",
+                settings.quality.label().to_owned(),
                 MenuAction::Change(Setting::Quality),
             ),
-            (
-                format!("Reduce motion   {}", on_off(settings.reduce_motion)),
+            Row::with_value(
+                "Reduce motion",
+                on_off(settings.reduce_motion).to_owned(),
                 MenuAction::Change(Setting::ReduceMotion),
             ),
         ],
@@ -370,11 +440,11 @@ fn spawn_level_complete(
         total_stardust
     );
     let has_next = levels.is_some_and(|levels| selected.0 + 1 < levels.levels.len());
-    let mut items = vec![("Retry".to_owned(), MenuAction::RetryLevel)];
+    let mut items = vec![Row::new("Retry", MenuAction::RetryLevel)];
     if has_next {
-        items.insert(0, ("Next level".to_owned(), MenuAction::NextLevel));
+        items.insert(0, Row::new("Next level", MenuAction::NextLevel));
     }
-    items.push(("Level select".to_owned(), MenuAction::BackToLevels));
+    items.push(Row::new("Level select", MenuAction::BackToLevels));
     spawn_screen(
         &mut commands,
         &mut focus,
@@ -427,18 +497,49 @@ fn hover_focus(
     }
 }
 
-/// Brightens the focused item. Only runs when the focus actually changes.
-fn show_focus(focus: Res<Focus>, mut items: Query<(&MenuItem, &mut TextColor)>) {
+/// Brightens the focused row. Only runs when the focus actually changes.
+fn show_focus(
+    focus: Res<Focus>,
+    rows: Query<(&MenuItem, &Children)>,
+    mut colors: Query<&mut TextColor>,
+) {
     if !focus.is_changed() {
         return;
     }
-    for (item, mut color) in &mut items {
+    for (item, children) in &rows {
         let wanted = if item.0 == focus.index {
             FOCUSED
         } else {
             UNFOCUSED
         };
-        color.set_if_neq(TextColor(wanted));
+        for child in children {
+            if let Ok(mut color) = colors.get_mut(*child) {
+                color.set_if_neq(TextColor(wanted));
+            }
+        }
+    }
+}
+
+/// Glides the focused row a little out of the column, so the focus moves
+/// instead of jumping between rows.
+fn slide_focus(
+    time: Res<Time>,
+    focus: Res<Focus>,
+    settings: Res<Settings>,
+    mut rows: Query<(&MenuItem, &mut Slide, &mut Node)>,
+) {
+    let delta = time.delta_secs();
+    for (item, mut slide, mut node) in &mut rows {
+        let target = if item.0 == focus.index {
+            SLIDE_DISTANCE * settings.motion_scale()
+        } else {
+            0.0
+        };
+        if (slide.0 - target).abs() < 0.2 {
+            continue;
+        }
+        slide.0 = crate::astronaut::approach(slide.0, target, SLIDE_RATE, delta);
+        node.left = Val::Px(slide.0);
     }
 }
 

@@ -2,12 +2,21 @@
 //! motion. Stored next to the save file and applied as soon as they change.
 
 use bevy::prelude::*;
-use bevy::window::{MonitorSelection, WindowMode};
+use bevy::window::{Monitor, MonitorSelection, PrimaryMonitor, WindowMode};
 use serde::{Deserialize, Serialize};
 
 use crate::save::{SaveFolder, read_file, write_file};
 
 const SETTINGS_FILE: &str = "settings.ron";
+/// The playfield's shape: the window opens the same way round.
+const PORTRAIT: f32 = 9.0 / 16.0;
+/// How tall the window opens, if the monitor is big enough for it.
+const PREFERRED_HEIGHT: f32 = 1200.0;
+/// Otherwise it takes this much of the monitor's height.
+const SCREEN_SHARE: f32 = 0.85;
+/// A resized window is only written to the settings file once it has been
+/// left alone this long, so dragging an edge doesn't write it hundreds of times.
+const RESIZE_SETTLE: f32 = 1.0;
 /// Volumes step through these values (percent) when a row is activated.
 const VOLUME_STEPS: [u8; 5] = [0, 25, 50, 75, 100];
 
@@ -60,6 +69,9 @@ pub struct Settings {
     pub quality: Quality,
     /// Calms background motion and screen effects.
     pub reduce_motion: bool,
+    /// The window size the player last left behind, in logical pixels.
+    /// `None` until they resize it: the game picks one that fits the monitor.
+    pub window_size: Option<(f32, f32)>,
 }
 
 impl Default for Settings {
@@ -72,6 +84,7 @@ impl Default for Settings {
             fullscreen: false,
             quality: Quality::Full,
             reduce_motion: false,
+            window_size: None,
         }
     }
 }
@@ -119,9 +132,9 @@ impl Plugin for SettingsPlugin {
             .add_systems(Startup, load_settings)
             .add_systems(
                 Update,
-                (apply_window_mode, apply_quality, store_settings)
-                    .run_if(resource_exists_and_changed::<Settings>),
-            );
+                (apply_window_mode, store_settings).run_if(resource_exists_and_changed::<Settings>),
+            )
+            .add_systems(Update, (size_window_once, remember_window_size));
     }
 }
 
@@ -149,6 +162,65 @@ fn store_settings(folder: Res<SaveFolder>, settings: Res<Settings>) {
     }
 }
 
+/// Sizes the window the first time the monitor is known: the size the player
+/// left behind, or a portrait window that fits their screen.
+///
+/// Waiting for the monitor is why this isn't part of the window's opening
+/// settings: the monitor's size isn't known until the window exists.
+fn size_window_once(
+    mut done: Local<bool>,
+    settings: Res<Settings>,
+    monitor: Query<&Monitor, With<PrimaryMonitor>>,
+    mut window: Single<&mut Window>,
+) {
+    let Ok(monitor) = monitor.single() else {
+        return;
+    };
+    if *done {
+        return;
+    }
+    *done = true;
+    // Physical pixels over the scale factor: what the player sees as "size".
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "screen sizes are small numbers"
+    )]
+    let monitor_height = monitor.physical_height as f32 / monitor.scale_factor as f32;
+    let (width, height) = settings.window_size.unwrap_or_else(|| {
+        let height = PREFERRED_HEIGHT.min(monitor_height * SCREEN_SHARE);
+        (height * PORTRAIT, height)
+    });
+    window.resolution.set(width, height);
+    window.position.center(MonitorSelection::Primary);
+}
+
+/// Remembers a window the player resized, once they've stopped dragging.
+fn remember_window_size(
+    time: Res<Time>,
+    window: Single<&Window>,
+    mut settings: ResMut<Settings>,
+    mut steady: Local<f32>,
+    mut last: Local<Vec2>,
+) {
+    if window.mode != WindowMode::Windowed {
+        return;
+    }
+    let size = window.resolution.size();
+    if size.distance_squared(*last) > 0.25 {
+        *last = size;
+        *steady = 0.0;
+        return;
+    }
+    if settings.window_size == Some((size.x, size.y)) {
+        return;
+    }
+    *steady += time.delta_secs();
+    if *steady >= RESIZE_SETTLE {
+        settings.window_size = Some((size.x, size.y));
+    }
+}
+
 fn apply_window_mode(settings: Res<Settings>, mut window: Single<&mut Window>) {
     let wanted = if settings.fullscreen {
         WindowMode::BorderlessFullscreen(MonitorSelection::Current)
@@ -157,25 +229,6 @@ fn apply_window_mode(settings: Res<Settings>, mut window: Single<&mut Window>) {
     };
     if window.mode != wanted {
         window.mode = wanted;
-    }
-}
-
-/// Bloom is the expensive part of our look, so "plain" turns it off.
-fn apply_quality(
-    settings: Res<Settings>,
-    mut commands: Commands,
-    cameras: Query<Entity, With<Camera2d>>,
-) {
-    for camera in &cameras {
-        let mut entity = commands.entity(camera);
-        match settings.quality {
-            Quality::Full => {
-                entity.insert(crate::camera::bloom());
-            }
-            Quality::Plain => {
-                entity.remove::<bevy::post_process::bloom::Bloom>();
-            }
-        }
     }
 }
 

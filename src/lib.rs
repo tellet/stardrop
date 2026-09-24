@@ -5,7 +5,7 @@
 //! so it can be unit-tested and benchmarked without a running `App`.
 
 use bevy::prelude::*;
-use bevy::window::WindowResolution;
+use bevy::window::{MonitorSelection, WindowResolution};
 
 mod app_state;
 mod astronaut;
@@ -21,6 +21,7 @@ mod journal;
 pub mod level;
 mod menu;
 pub mod objects;
+mod particles;
 pub mod physics;
 mod rng;
 pub mod save;
@@ -29,11 +30,15 @@ pub mod settings;
 pub mod sim;
 #[cfg(test)]
 mod soak_tests;
+mod soft_mesh;
 pub mod solver;
+mod theme;
 mod ui;
 
-/// Window size on first launch, in physical pixels. 16:9, the aspect ratio the game is designed for.
-const INITIAL_WINDOW_SIZE: (u32, u32) = (1280, 720);
+/// Window size on first launch, in physical pixels: portrait, like the
+/// playfield. `settings.rs` shrinks it on the first frame if the monitor is
+/// smaller, and restores the size the player left behind.
+const INITIAL_WINDOW_SIZE: (u32, u32) = (675, 1200);
 
 /// Builds and runs the game until the window is closed.
 #[must_use]
@@ -53,6 +58,7 @@ pub fn run() -> AppExit {
         primary_window: Some(Window {
             title: "Stardrop".into(),
             resolution: WindowResolution::from(INITIAL_WINDOW_SIZE),
+            position: WindowPosition::Centered(MonitorSelection::Primary),
             ..default()
         }),
         ..default()
@@ -67,6 +73,7 @@ pub fn run() -> AppExit {
         collectibles::CollectiblesPlugin,
         objects::ObjectsPlugin,
         effects::EffectsPlugin,
+        particles::ParticlesPlugin,
         camera::CameraPlugin,
         background::BackgroundPlugin,
         debug::DebugPlugin,
