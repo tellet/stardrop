@@ -149,21 +149,23 @@ The game should look like a calm illustrated storybook sky that happens to be in
 The sound should be comforting, smooth and warm at all times, and it also quietly teaches the player what objects do.
 
 ### 6.1 Musical system
-- A soft **ambient pad** plays under every level, with a slow-changing chord progression, all in a single key per level (e.g. a major pentatonic scale, so any combination of notes sounds harmonious).
+- A soft **ambient pad** plays under every level, with a slow-changing chord progression, all in a single key per level: a **minor pentatonic** scale, so any combination of notes sounds harmonious *and* the game sounds like empty space rather than a sunny afternoon.
+- The music is built on **open fourths, fifths and octaves**. Thirds are avoided: they are what make a chord sound warm and domestic.
+- **Everything heard in a level rings on.** Every note is followed by a long tail of reflections (a second or more), because the sound of somewhere enormous is the sound of something taking a long time to fade. Menu and journal sounds stay close and dry.
 - **Every object type is an instrument**, and touching an object plays a note from the level's current scale:
-  - Cloud puff: soft marimba.
+  - Cloud puff: softly struck metal, two tines a hair apart so the note beats against itself.
   - Wind ribbon: breathy flute swell, lasting while inside the ribbon.
   - Bubble: gentle glass chime on capture, soft "pop" plink on release.
-  - Crystal: bright but soft bell.
+  - Crystal: a glass bell heard from a long way off — almost no strike, all ringing.
   - Gravity orb: warm low hum that slowly rises in pitch while orbiting.
   - Comet stone: deep, soft whoosh with a low bass note.
-  - Spore flower: airy, slightly detuned music-box twinkle.
+  - Spore flower: a music box further out of tune than a music box should be, and without its sparkle.
   - Twin portals: a swelling reverse-cymbal shimmer into a soft chord.
   - Static cloud: a muffled, low, *sympathetic* tone, never harsh or startling.
-- **Helpful objects** play notes that sound resolved and bright; **tricky and harmful ones** play softer, suspended or minor-ish intervals (still within the key), so players subconsciously learn which objects are friends.
+- **Helpful objects** play the open notes of the scale (root, fourth, fifth); **tricky and harmful ones** play the notes that colour it (the flat third and flat seventh), still within the key, so players subconsciously learn which objects are friends.
 - Consecutive object touches step up the scale, so a good run literally sounds like a rising melody.
 - Optionally, notes are gently aligned to the pad's pulse (a tiny delay of at most a few tens of milliseconds) so they always feel musical. Evaluate whether this feels good; skip it if it feels laggy.
-- Reaching the beacon plays a warm resolving chord that completes the melody.
+- Reaching the beacon plays an open chord — root, fifth, octave, no third — that completes the melody without making it cosy.
 - The music gains subtle layers as the player descends through a level (e.g. soft strings joining as the astronaut passes the middle of the screen), and each level's music reflects its setting.
 
 ### 6.2 Sound design rules

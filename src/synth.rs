@@ -11,6 +11,11 @@
 //! Two rules from Section 6.2 hold everywhere, and the tests enforce them:
 //! every sound fades in over a few milliseconds (nothing clicks or stabs),
 //! and nothing reaches full scale (nothing clips).
+//!
+//! A third rule shapes the whole palette: nothing stops dead. Every note
+//! played in a level is followed by a long tail of reflections, because the
+//! sound of somewhere enormous is the sound of something taking a long time
+//! to fade.
 
 #![expect(
     clippy::cast_precision_loss,
@@ -36,6 +41,16 @@ const SOFTEST_ATTACK: f32 = 0.004;
 const TAIL: f32 = 0.01;
 /// Noise seed: a sound is the same every time it plays.
 const NOISE_SEED: u64 = 0x534F_554E_4400_0001;
+/// The reflection delays of the space every level note is heard in, in
+/// milliseconds. Deliberately not related to each other by whole numbers, so
+/// their echoes never line up into a rhythm.
+const REFLECTIONS: [f32; 4] = [29.7, 37.1, 41.1, 43.7];
+/// Two short diffusers after them, which smear the reflections into a wash.
+const DIFFUSERS: [f32; 2] = [5.0, 1.7];
+const DIFFUSION: f32 = 0.7;
+/// How long a tail takes to fade away, and how much of it is mixed in.
+const TAIL_SECONDS: f32 = 2.5;
+const TAIL_MIX: f32 = 0.55;
 
 /// One of the game's sounds. Each is rendered once at [`reference_hz`] and
 /// pitched from there when it plays.
@@ -239,6 +254,63 @@ impl Buffer {
         self
     }
 
+    /// Puts the sound in a large, soft space: four delayed copies feeding
+    /// back on themselves, then two diffusers to smear them into a wash.
+    ///
+    /// This is a Schroeder reverb, the oldest trick there is, and still the
+    /// right one when the space is meant to be felt rather than identified.
+    /// The buffer is lengthened to hold the tail.
+    pub fn space(&mut self, tail: f32, mix: f32) -> &mut Self {
+        let rate = SAMPLE_RATE as f32;
+        self.samples
+            .resize(self.len() + (tail * rate) as usize, 0.0);
+        let dry = self.samples.clone();
+        let mut wet = vec![0.0; self.len()];
+
+        for delay_ms in REFLECTIONS {
+            let delay = ((delay_ms / 1000.0) * rate) as usize;
+            if delay == 0 || delay >= self.len() {
+                continue;
+            }
+            // How much comes back each time round, for this tail length.
+            let feedback = 10.0_f32.powf(-3.0 * (delay_ms / 1000.0) / tail.max(0.1));
+            let mut line = vec![0.0_f32; delay];
+            let mut cursor = 0;
+            for (index, sample) in dry.iter().enumerate() {
+                let echo = line[cursor];
+                line[cursor] = sample + echo * feedback;
+                cursor = (cursor + 1) % delay;
+                wet[index] += echo;
+            }
+        }
+
+        for delay_ms in DIFFUSERS {
+            let delay = ((delay_ms / 1000.0) * rate) as usize;
+            if delay == 0 || delay >= wet.len() {
+                continue;
+            }
+            let mut line = vec![0.0_f32; delay];
+            let mut cursor = 0;
+            for sample in &mut wet {
+                let held = line[cursor];
+                let out = held - DIFFUSION * *sample;
+                line[cursor] = *sample + DIFFUSION * out;
+                cursor = (cursor + 1) % delay;
+                *sample = out;
+            }
+        }
+
+        // The reflections are darker than the sound that made them: distance
+        // takes the top off everything.
+        let loudest = wet.iter().fold(0.0_f32, |worst, s| worst.max(s.abs()));
+        let evened = if loudest > 1e-6 { 1.0 / loudest } else { 0.0 };
+        for (sample, reflected) in self.samples.iter_mut().zip(&wet) {
+            *sample += reflected * evened * mix;
+        }
+        self.soften(3200.0);
+        self
+    }
+
     /// Turns the sound back to front: a strike becomes a swell towards
     /// something, which is how a reverse cymbal and our failed attempt work.
     pub fn reverse(&mut self) -> &mut Self {
@@ -296,112 +368,132 @@ pub fn render(sound: Sound) -> Vec<f32> {
     let hz = sound.reference_hz();
     let mut buffer = Buffer::new(sound.seconds());
     match sound {
-        // A struck wooden bar: the note, its octave, and a knock of air.
+        // Struck metal rather than wood: two tines a hair apart, so the note
+        // beats slowly against itself instead of sitting still.
         Sound::Marimba => {
             buffer
-                .partial(hz, 1.0, 0.28, 1.0)
-                .partial(hz * 4.0, 0.22, 0.10, 1.0)
-                .partial(hz * 9.0, 0.06, 0.04, 1.0)
-                .breath(0.05, 0.005, 0.006)
-                .soften(4200.0);
+                .partial(hz, 0.9, 0.9, 1.0)
+                .partial(hz * 1.004, 0.7, 0.85, 1.0)
+                .partial(hz * 2.76, 0.18, 0.35, 1.0)
+                .breath(0.03, 0.01, 0.01)
+                .soften(2400.0)
+                .space(TAIL_SECONDS, TAIL_MIX);
         }
         // Air across an edge: mostly breath, with the note growing through it.
         Sound::Flute => {
             buffer
-                .swell(hz, 0.7, 0.6, 0.45)
-                .swell(hz * 2.0, 0.12, 0.7, 0.35)
-                // A slow waver, so it breathes instead of sitting still.
-                .swell(hz * 1.005, 0.25, 0.75, 0.5)
-                .breath(0.22, 0.55, 0.5)
-                .soften(2600.0);
+                .swell(hz, 0.7, 0.7, 0.5)
+                .swell(hz * 1.5, 0.14, 0.8, 0.4)
+                // Two voices a hair apart: the waver of air in a big space.
+                .swell(hz * 1.006, 0.3, 0.8, 0.55)
+                .breath(0.26, 0.6, 0.55)
+                .soften(1800.0)
+                .space(TAIL_SECONDS, TAIL_MIX);
         }
         // Glass: high, clean, a long ring.
         Sound::Chime => {
             buffer
-                .partial(hz * 2.0, 0.8, 0.55, 1.0)
-                .partial(hz * 3.0, 0.35, 0.40, 1.0)
-                .partial(hz * 5.02, 0.18, 0.30, 1.0)
-                .soften(7000.0);
+                .partial(hz * 2.0, 0.8, 0.8, 1.0)
+                .partial(hz * 3.0, 0.22, 0.5, 1.0)
+                .partial(hz * 4.02, 0.10, 0.35, 1.0)
+                .soften(3600.0)
+                .space(TAIL_SECONDS, TAIL_MIX);
         }
         // A bubble letting go: a little drop of pitch.
         Sound::Plink => {
-            buffer.partial(hz, 1.0, 0.09, 0.55).soften(5000.0);
+            buffer
+                .partial(hz, 1.0, 0.12, 0.55)
+                .soften(2800.0)
+                .space(1.4, 0.4);
         }
         // A bell's partials aren't whole multiples; that's what makes it a bell.
+        // Glass heard from a long way off: the strike is nearly gone, only
+        // the ringing is left.
         Sound::Bell => {
             buffer
-                .partial(hz, 0.7, 0.9, 1.0)
-                .partial(hz * 2.76, 0.30, 0.55, 1.0)
-                .partial(hz * 5.40, 0.14, 0.30, 1.0)
-                .partial(hz * 0.5, 0.25, 1.1, 1.0)
-                .soften(6000.0);
+                .partial(hz, 0.6, 1.4, 1.0)
+                .partial(hz * 1.5, 0.3, 1.0, 1.0)
+                .partial(hz * 2.76, 0.16, 0.6, 1.0)
+                .partial(hz * 0.5, 0.3, 1.6, 1.0)
+                .soften(2800.0)
+                .space(TAIL_SECONDS, 0.65);
         }
         // Held, and rising while it holds you.
         Sound::Hum => {
             buffer
                 .partial(hz, 0.9, 3.0, 1.35)
-                .partial(hz * 2.0, 0.25, 2.0, 1.35)
-                .partial(hz * 3.0, 0.10, 1.2, 1.35)
-                .soften(1400.0);
+                .partial(hz * 1.497, 0.3, 2.2, 1.35)
+                .partial(hz * 2.0, 0.18, 1.6, 1.35)
+                .soften(900.0)
+                .space(TAIL_SECONDS, 0.4);
         }
         // Weight, falling: a wide rush of air over a low note.
         Sound::Whoosh => {
             buffer
-                .breath(0.9, 0.5, 0.35)
-                .partial(hz, 0.8, 0.8, 0.6)
-                .soften(900.0);
+                .breath(0.9, 0.5, 0.4)
+                .partial(hz, 0.8, 1.0, 0.6)
+                .soften(700.0)
+                .space(TAIL_SECONDS, 0.5);
         }
         // Two tines, very slightly apart, which is the music-box shimmer.
+        // Further out of tune than a music box would ever be, and without
+        // its sparkle: the sound of something not quite right.
         Sound::MusicBox => {
             buffer
-                .partial(hz * 2.0, 0.6, 0.35, 1.0)
-                .partial(hz * 2.01, 0.6, 0.33, 1.0)
-                .partial(hz * 6.0, 0.10, 0.12, 1.0)
-                .soften(6500.0);
+                .partial(hz * 2.0, 0.55, 0.5, 1.0)
+                .partial(hz * 2.03, 0.55, 0.45, 1.0)
+                .partial(hz * 2.98, 0.12, 0.2, 1.0)
+                .soften(3000.0)
+                .space(TAIL_SECONDS, TAIL_MIX);
         }
         // Swells up to the moment you arrive on the other side.
         Sound::Shimmer => {
             buffer
-                .breath(0.7, 0.9, 0.55)
-                .partial(hz * 4.0, 0.25, 1.4, 1.0)
-                .soften(5500.0)
+                .breath(0.7, 0.9, 0.6)
+                .partial(hz * 3.0, 0.22, 1.4, 1.0)
+                .soften(3400.0)
                 .reverse();
-            // The chord you land in, after the swell.
+            // The open fifth you arrive in, after the swell.
             buffer
-                .partial(hz, 0.35, 1.2, 1.0)
-                .partial(hz * 1.5, 0.25, 1.1, 1.0);
+                .partial(hz, 0.35, 1.4, 1.0)
+                .partial(hz * 1.5, 0.28, 1.3, 1.0)
+                .space(TAIL_SECONDS, 0.6);
         }
         // The hazard: low, dull, and sorry about it.
         Sound::Muffled => {
             buffer
-                .partial(hz, 0.9, 0.7, 0.92)
-                .partial(hz * 1.5, 0.3, 0.4, 0.92)
-                .breath(0.15, 0.1, 0.1)
-                .soften(320.0);
+                .partial(hz, 0.9, 0.9, 0.92)
+                .partial(hz * 1.5, 0.3, 0.5, 0.92)
+                .breath(0.15, 0.1, 0.12)
+                .soften(260.0)
+                .space(TAIL_SECONDS, 0.45);
         }
         Sound::Twinkle => {
             buffer
-                .partial(hz * 2.0, 0.8, 0.12, 1.0)
-                .partial(hz * 3.0, 0.3, 0.08, 1.0)
-                .soften(9000.0);
+                .partial(hz * 2.0, 0.8, 0.16, 1.0)
+                .partial(hz * 2.997, 0.25, 0.1, 1.0)
+                .soften(5200.0)
+                .space(1.8, 0.5);
         }
         // A breath drawn in, not a buzzer: the attempt gathering itself again.
         Sound::Sigh => {
             buffer
-                .swell(hz, 0.6, 1.2, 0.6)
-                .swell(hz * 1.5, 0.3, 1.3, 0.5)
-                .breath(0.2, 1.1, 0.7)
-                .soften(1100.0)
-                .reverse();
+                .swell(hz, 0.6, 1.2, 0.65)
+                .swell(hz * 1.5, 0.3, 1.3, 0.55)
+                .breath(0.2, 1.1, 0.75)
+                .soften(800.0)
+                .reverse()
+                .space(TAIL_SECONDS, 0.5);
         }
         Sound::UiMove => {
-            buffer.partial(hz, 0.7, 0.07, 1.0).soften(4000.0);
+            buffer.partial(hz, 0.7, 0.09, 1.0).soften(2600.0);
         }
         Sound::UiPick => {
             buffer
-                .partial(hz, 0.8, 0.18, 1.0)
-                .partial(hz * 1.5, 0.4, 0.14, 1.0)
-                .soften(5000.0);
+                .partial(hz, 0.8, 0.22, 1.0)
+                .partial(hz * 1.5, 0.4, 0.18, 1.0)
+                .soften(3000.0)
+                .space(0.8, 0.35);
         }
         // Paper: breath with no pitch at all.
         Sound::PageTurn => {
@@ -460,19 +552,22 @@ pub fn bed(part: Bed, root_hz: f32, air: f32, muffled: bool) -> Vec<f32> {
             let root = root_hz * 0.5;
             buffer
                 .drone(root, 0.50, 1.0 / LOOP_SECONDS, 0.35)
+                // The fifth, twice, a beat apart: the chord never settles.
                 .drone(root * 1.5, 0.30, 2.0 / LOOP_SECONDS, 0.45)
-                .drone(root * 2.0, 0.20, 3.0 / LOOP_SECONDS, 0.55)
+                .drone(root * 1.503, 0.22, 3.0 / LOOP_SECONDS, 0.5)
+                .drone(root * 2.0, 0.18, 3.0 / LOOP_SECONDS, 0.55)
                 .drone(root * 0.5, 0.25, 1.0 / LOOP_SECONDS, 0.25)
-                .soften(900.0);
+                .soften(700.0);
         }
         // Strings joining underneath once the fall is past halfway.
         Bed::Deeper => {
             let root = root_hz * 0.5;
             buffer
-                .drone(root * 1.25, 0.35, 2.0 / LOOP_SECONDS, 0.5)
-                .drone(root * 3.0, 0.12, 3.0 / LOOP_SECONDS, 0.6)
+                // A fourth, not a third: the pad stays open underneath.
+                .drone(root * 4.0 / 3.0, 0.35, 2.0 / LOOP_SECONDS, 0.5)
+                .drone(root * 2.997, 0.12, 3.0 / LOOP_SECONDS, 0.6)
                 .drone(root * 0.5, 0.30, 1.0 / LOOP_SECONDS, 0.4)
-                .soften(1300.0);
+                .soften(1000.0);
         }
         // High up it's a cold hum; lower down it's moving air.
         Bed::Ambience => {
@@ -547,6 +642,44 @@ mod tests {
                 "{sound:?} ends with a click"
             );
         }
+    }
+
+    /// Nothing played in a level may stop dead: the tail is what makes the
+    /// place sound big. Menu notes are exempt, being nowhere in particular.
+    #[test]
+    fn notes_keep_ringing_after_they_are_played() {
+        /// How long the sound stays within 1 % of its loudest moment: how
+        /// long you can still hear it, in other words.
+        fn rings_for(samples: &[f32]) -> f32 {
+            let block = SAMPLE_RATE as usize / 20;
+            let blocks: Vec<f32> = samples
+                .chunks(block)
+                .map(|chunk| {
+                    let sum: f32 = chunk.iter().map(|sample| sample * sample).sum();
+                    (sum / chunk.len().max(1) as f32).sqrt()
+                })
+                .collect();
+            let loudest = blocks.iter().fold(0.0_f32, |worst, b| worst.max(*b));
+            let last = blocks
+                .iter()
+                .rposition(|level| *level > loudest * 0.01)
+                .unwrap_or(0);
+            last as f32 * 0.05
+        }
+
+        for sound in [
+            Sound::Marimba,
+            Sound::Bell,
+            Sound::Chime,
+            Sound::Flute,
+            Sound::MusicBox,
+            Sound::Twinkle,
+        ] {
+            let rings = rings_for(&render(sound));
+            assert!(rings > 1.0, "{sound:?} stops after {rings:.2}s");
+        }
+        // A menu note is close by, and stays close.
+        assert!(rings_for(&render(Sound::UiMove)) < 0.6);
     }
 
     /// A loop that doesn't join is a tick, once every eight seconds, forever.

@@ -445,6 +445,16 @@ Measured 2026-09-24, same machine as the M0 baseline.
 - **Why:** building one altitude's music takes **74 ms**. On the main thread that would be four dropped frames at the start of every level — exactly the hitch Section 7.1 forbids.
 - The fade-in hides the wait entirely: the music is a second and a half from silence anyway.
 
+## M8-5 · Cold and vast, not sunny (after playtesting)
+
+- **What the playtest said:** "the sounds are a bit too sunny and not spacey-ish at all".
+- **Why it was:** three choices, all of them safe. Major pentatonic everywhere; struck, bright timbres (marimba, bell, music box); and — the real culprit — no reverb at all, so every note stopped dead the moment it was played.
+- **The fix, in three parts:** the scale is now **minor pentatonic**; melodies and the landing chord are built on **open fourths and fifths**, never thirds (the landing chord is root-fifth-octave); and every sound heard in a level is put through a **synthesised reverb** with a ~2.5 s tail. Voices are darker too: lower filter cutoffs, slower swells, and pairs of partials a few cents apart so sustained notes beat against themselves instead of sitting still.
+- **The reverb** is a Schroeder network — four feedback delays whose lengths share no whole-number ratios (so their echoes never line up into a rhythm), then two all-pass diffusers to smear them, then a filter, because distance takes the top off everything.
+- **Menus stay dry.** The interface is not in the sky; only what happens in a level rings.
+- **Cost:** one-shot sounds grew from 2.78 MB to **7.65 MB**, since every one now carries seconds of tail. Bed build time is unchanged at ~77 ms.
+- **`STARDROP.md` §6.1 was updated** to match: it specified major pentatonic, which was the root of the problem.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
@@ -453,7 +463,7 @@ Measured 2026-09-24, same machine as the M0 baseline.
 |---|---|---|
 | One altitude's music, built | **74 ms** | Off the main thread (M8-4). `--ignored bed_cost` |
 | One altitude's music, held | **5.4 MB** | Four 8-second loops, stereo f32 in the mixer. Freed when the level changes. |
-| Every one-shot sound | **2.78 MB** | Fifteen sounds, built once at startup, kept for the whole session. |
+| Every one-shot sound | **7.65 MB** | Fifteen sounds, built once at startup, kept for the whole session. Was 2.78 MB before the reverb tails (M8-5). |
 | Our own systems, per frame | 0.100 ms | Unchanged by audio (the mixer runs on its own thread). Budget: 1 ms. |
 | Binary | **48.2 MB** | Was 46.7 MB before the audio crate. |
 | Memory over 400 rounds | +40 KB, then flat | Unchanged by audio. |

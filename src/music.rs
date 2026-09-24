@@ -2,16 +2,29 @@
 //! part of Section 6, written as plain functions so it can be tested by ear
 //! *and* by unit test.
 //!
-//! Every level sits in one key, and every note comes from that key's major
+//! Every level sits in one key, and every note comes from that key's minor
 //! pentatonic scale. A pentatonic has no semitone clashes, so any two notes
 //! played together still sound like music — which matters when the player,
 //! not a composer, decides what gets played.
+//!
+//! Minor, and built on fourths and fifths rather than thirds: a third is a
+//! warm, domestic interval, and this game is set in empty space.
 
 use crate::level::Theme;
 use crate::objects::ObjectKind;
 
-/// The major pentatonic, in semitones above the root.
-pub const PENTATONIC: [i32; 5] = [0, 2, 4, 7, 9];
+/// The minor pentatonic, in semitones above the root: root, flat third,
+/// fourth, fifth, flat seventh.
+pub const PENTATONIC: [i32; 5] = [0, 3, 5, 7, 10];
+/// The open steps of that scale — root, fourth, fifth. Nothing here leans
+/// warm or sad; they just sound wide.
+const OPEN: [i32; 3] = [0, 2, 3];
+/// The two that colour it: the flat third and the flat seventh.
+const SHADED: [i32; 2] = [1, 4];
+/// Steps in one octave of the scale.
+const RUNGS: u32 = 5;
+/// How far a run of touches climbs before starting again from the bottom.
+const OCTAVES: u32 = 2;
 
 /// The key a level is played in.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,43 +48,43 @@ pub enum Mood {
 /// in pitch as the player falls, so the whole game is one long descent.
 const KEYS: [Key; 10] = [
     Key {
-        name: "A major pentatonic",
+        name: "A minor pentatonic",
         root_hz: 440.00,
     },
     Key {
-        name: "G major pentatonic",
+        name: "G minor pentatonic",
         root_hz: 392.00,
     },
     Key {
-        name: "F♯ major pentatonic",
+        name: "F♯ minor pentatonic",
         root_hz: 369.99,
     },
     Key {
-        name: "E major pentatonic",
+        name: "E minor pentatonic",
         root_hz: 329.63,
     },
     Key {
-        name: "D major pentatonic",
+        name: "D minor pentatonic",
         root_hz: 293.66,
     },
     Key {
-        name: "C major pentatonic",
+        name: "C minor pentatonic",
         root_hz: 261.63,
     },
     Key {
-        name: "B major pentatonic",
+        name: "B minor pentatonic",
         root_hz: 246.94,
     },
     Key {
-        name: "A major pentatonic, low",
+        name: "A minor pentatonic, low",
         root_hz: 220.00,
     },
     Key {
-        name: "G major pentatonic, low",
+        name: "G minor pentatonic, low",
         root_hz: 196.00,
     },
     Key {
-        name: "D major pentatonic, low",
+        name: "D minor pentatonic, low",
         root_hz: 146.83,
     },
 ];
@@ -126,28 +139,28 @@ pub fn mood(kind: ObjectKind) -> Mood {
 /// Which step of the scale a touch plays: `streak` is how many objects have
 /// been touched in a row this attempt, starting at 0.
 ///
-/// Every touch steps one higher, so a good run rises. Helpful objects land on
-/// the resolved steps of the scale (root, third, fifth); tricky ones land
-/// between them.
+/// Every touch climbs, so a good run rises. Helpful objects climb the open
+/// notes, tricky ones the shaded ones, and after two octaves the run starts
+/// again from the bottom rather than disappearing upwards.
 #[must_use]
 pub fn touch_step(kind: ObjectKind, streak: u32) -> i32 {
-    // Runs longer than this keep rising, but from the bottom again: the
-    // melody stays in a comfortable range instead of disappearing upwards.
-    const RUN: u32 = 6;
-    let rise = i32::try_from(streak % RUN).unwrap_or(0);
-    let footing = match mood(kind) {
-        // Steps 0, 2 and 4 of the pentatonic are its resolved notes.
-        Mood::Bright => 0,
-        Mood::Unsettled => 1,
+    let ladder: &[i32] = match mood(kind) {
+        Mood::Bright => &OPEN,
+        Mood::Unsettled => &SHADED,
     };
-    footing + rise
+    let rungs = u32::try_from(ladder.len()).unwrap_or(1);
+    let position = streak % (rungs * OCTAVES);
+    let octave = i32::try_from(position / rungs).unwrap_or(0);
+    let rung = usize::try_from(position % rungs).unwrap_or(0);
+    ladder[rung] + i32::try_from(RUNGS).unwrap_or(5) * octave
 }
 
-/// The chord that finishes the melody when the astronaut lands: the root, its
-/// third and its fifth, an octave apart, all from the level's own scale.
+/// The chord that finishes the melody when the astronaut lands: root, fifth,
+/// octave. No third at all — an open fifth is the sound of somewhere big,
+/// and the third is what would make it sound like a living room.
 #[must_use]
 pub fn landing_chord(key: Key) -> [f32; 3] {
-    [step_hz(key, 0), step_hz(key, 2), step_hz(key, 5)]
+    [step_hz(key, 0), step_hz(key, 3), step_hz(key, 5)]
 }
 
 /// Each mote of stardust rings one step higher than the last.
@@ -168,21 +181,22 @@ mod tests {
 
     #[test]
     fn a_scale_step_is_the_note_it_should_be() {
-        let d_major = Key {
-            name: "D major pentatonic",
+        let d_minor = Key {
+            name: "D minor pentatonic",
             root_hz: 293.66,
         };
-        // D E F# A B, then the octave.
-        assert!(close(step_hz(d_major, 0), 293.66), "D4");
-        assert!(close(step_hz(d_major, 1), 329.63), "E4");
-        assert!(close(step_hz(d_major, 2), 369.99), "F#4");
-        assert!(close(step_hz(d_major, 3), 440.00), "A4");
-        assert!(close(step_hz(d_major, 4), 493.88), "B4");
-        assert!(close(step_hz(d_major, 5), 587.33), "D5, the octave");
-        // The fifth consecutive touch of a helpful object, from the root.
+        // D F G A C, then the octave.
+        assert!(close(step_hz(d_minor, 0), 293.66), "D4");
+        assert!(close(step_hz(d_minor, 1), 349.23), "F4");
+        assert!(close(step_hz(d_minor, 2), 392.00), "G4");
+        assert!(close(step_hz(d_minor, 3), 440.00), "A4");
+        assert!(close(step_hz(d_minor, 4), 523.25), "C5");
+        assert!(close(step_hz(d_minor, 5), 587.33), "D5, the octave");
+        // The fifth consecutive touch of a helpful object: the second time up
+        // the open notes, so the fourth an octave above the root.
         assert!(close(
-            step_hz(d_major, touch_step(ObjectKind::CloudPuff, 4)),
-            493.88
+            step_hz(d_minor, touch_step(ObjectKind::CloudPuff, 4)),
+            784.00
         ));
     }
 
@@ -193,8 +207,8 @@ mod tests {
             root_hz: 440.0,
         };
         assert!(close(step_hz(key, -5), 220.0));
-        // A major pentatonic is A B C# E F#, so the step below the root is F#.
-        assert!(close(step_hz(key, -1), 369.99));
+        // A minor pentatonic is A C D E G, so the step below the root is G.
+        assert!(close(step_hz(key, -1), 392.00));
     }
 
     /// A run of touches must climb, and must stay inside a range a player can
