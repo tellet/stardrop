@@ -25,6 +25,7 @@ pub(crate) use scenery::{MOTE_RADIUS, StardustMote};
 pub use validate::LevelError;
 
 use crate::app_state::AppState;
+use crate::attempt::AttemptRestarted;
 use crate::physics::PhysicsSystems;
 
 /// Where level files live, relative to `assets/`.
@@ -261,8 +262,10 @@ fn apply_level_changes(
     scenery: Res<SceneryAssets>,
     old_scenery: Query<Entity, With<LevelEntity>>,
     mut problem: ResMut<LevelProblem>,
-    phase: Res<State<LevelPhase>>,
+    // The level file this system last put into play.
+    mut applied: Local<Option<AssetId<LevelAsset>>>,
     mut next_phase: ResMut<NextState<LevelPhase>>,
+    mut restarted: MessageWriter<AttemptRestarted>,
 ) {
     let Some(handle) = handle else {
         return;
@@ -297,9 +300,15 @@ fn apply_level_changes(
             scenery::spawn(&mut commands, &scenery, level);
             // Replacing the level also restarts the attempt (see `attempt.rs`):
             // with the whole level on screen, a fresh start shows the edit best.
+            let is_new_level = *applied != Some(ours);
+            *applied = Some(ours);
             commands.insert_resource(ActiveLevel(level.clone()));
-            if *phase.get() == LevelPhase::Loading {
+            // A different level always starts a fresh attempt, whatever the
+            // last one ended in. A new version of the level being played
+            // doesn't: `attempt.rs` restarts that one, in place.
+            if is_new_level {
                 next_phase.set(LevelPhase::Ready);
+                restarted.write(AttemptRestarted);
             }
             info!("Loaded level \"{}\"", level.name);
         }
@@ -324,12 +333,14 @@ fn report_unreadable_file(
 pub(crate) mod tests {
     use core::time::Duration;
 
+    use bevy::asset::AssetPlugin;
     use bevy::state::app::StatesPlugin;
     use bevy::time::TimeUpdateStrategy;
 
     use super::*;
     use crate::astronaut::Astronaut;
     use crate::config::GameConfig;
+    use crate::physics::movement::Body;
     use crate::physics::{Motion, PhysicsPlugin};
 
     /// A minimal app running the real level rules and physics on
@@ -391,6 +402,135 @@ pub(crate) mod tests {
                 (entry.name.clone(), entry.file.clone(), level)
             })
             .collect()
+    }
+
+    /// The whole game flow, headless: real level files, real loading, the
+    /// real screens. No window, no menus, no save file.
+    fn game_app() -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, StatesPlugin, AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<ColorMaterial>()
+            .init_resource::<crate::settings::Settings>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_state::<AppState>()
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+                16,
+            )))
+            .add_plugins((
+                crate::config::ConfigPlugin,
+                LevelPlugin,
+                PhysicsPlugin,
+                crate::astronaut::AstronautPlugin,
+                crate::attempt::AttemptPlugin,
+                crate::collectibles::CollectiblesPlugin,
+                crate::objects::ObjectsPlugin,
+                crate::effects::EffectsPlugin,
+            ));
+        app
+    }
+
+    /// Runs frames until `ready` is true, or gives up. Level files load on a
+    /// background thread, so the number of frames it takes isn't fixed.
+    fn run_until(app: &mut App, what: &str, ready: impl Fn(&App) -> bool) {
+        for _ in 0..600 {
+            app.update();
+            if ready(app) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        panic!("{what} never happened");
+    }
+
+    fn go_to(app: &mut App, state: AppState) {
+        app.world_mut()
+            .resource_mut::<NextState<AppState>>()
+            .set(state);
+        app.update();
+    }
+
+    fn start_level(app: &mut App, index: usize) {
+        let wanted = app
+            .world()
+            .resource::<Levels>()
+            .entry(SelectedLevel(index))
+            .expect("the level is in the list")
+            .name
+            .clone();
+        *app.world_mut().resource_mut::<SelectedLevel>() = SelectedLevel(index);
+        go_to(app, AppState::Playing);
+        // "Next level" keeps the level that just finished loaded, so waiting
+        // for `ActiveLevel` to merely exist would wait for nothing.
+        run_until(app, "the level loaded", |app| {
+            app.world()
+                .get_resource::<ActiveLevel>()
+                .is_some_and(|level| level.name == wanted)
+        });
+    }
+
+    /// Landing, without playing the level: drops the astronaut onto the pad.
+    fn land(app: &mut App) {
+        let beacon = app.world().resource::<ActiveLevel>().beacon;
+        let world = app.world_mut();
+        let mut astronaut = world.query_filtered::<&mut Motion, With<Astronaut>>();
+        for mut motion in astronaut.iter_mut(world) {
+            motion.teleport(Body::at_rest(beacon.center));
+        }
+        app.world_mut()
+            .resource_mut::<NextState<LevelPhase>>()
+            .set(LevelPhase::Falling);
+        run_until(app, "the landing", |app| {
+            *app.world().resource::<State<LevelPhase>>().get() == LevelPhase::Landed
+        });
+    }
+
+    /// Both ways on to another level after finishing one: through the list,
+    /// and straight on with "Next level" (which never leaves the level).
+    #[test]
+    fn choosing_another_level_after_landing_starts_it_fresh() {
+        for through_the_list in [true, false] {
+            let mut app = game_app();
+            run_until(&mut app, "the level list loaded", |app| {
+                app.world().contains_resource::<Levels>()
+            });
+            start_level(&mut app, 0);
+            land(&mut app);
+            if through_the_list {
+                go_to(&mut app, AppState::LevelSelect);
+            }
+            start_level(&mut app, 1);
+            app.update();
+            assert_fresh_attempt(&mut app);
+        }
+    }
+
+    /// A fresh attempt: waiting at the start, with nothing carried over.
+    fn assert_fresh_attempt(app: &mut App) {
+        let start = app.world().resource::<ActiveLevel>().start;
+        assert_eq!(
+            *app.world().resource::<State<LevelPhase>>().get(),
+            LevelPhase::Ready,
+            "the new level must wait at the start, not carry the old phase"
+        );
+        let world = app.world_mut();
+        let body = world
+            .query_filtered::<&Motion, With<Astronaut>>()
+            .single(world)
+            .map(Motion::body)
+            .unwrap_or_default();
+        assert!(
+            body.position.distance(start) < 10.0,
+            "the astronaut waits at the new start, not at {:?}",
+            body.position
+        );
+        let run = *world.resource::<crate::collectibles::CurrentRun>();
+        assert_eq!(run.stardust.count(), 0, "stardust carried over");
+        assert!(
+            run.elapsed < 1e-3,
+            "the clock carried over: {}",
+            run.elapsed
+        );
     }
 
     #[derive(Resource, Default)]
