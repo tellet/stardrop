@@ -94,6 +94,8 @@ A level that breaks any of these rules is rejected, and the message says what's 
 
 `theme` picks the altitude a level falls through: its sky colours, its background layers and how much its lights glow. The ten themes run from `DeepSpace` down to `Homecoming`, and each one's art is a block of constants in `src/theme.rs` — change a colour there and every level using that theme changes with it. A level file can only *pick* a theme, never describe one, for the same reason it can't change how objects behave.
 
+A theme also picks the level's musical key: the ten altitudes descend from A down to a low D, so the game falls in sound as well as in colour (`src/music.rs`).
+
 ## Rules the tests check
 
 These aren't part of the file format; the solver checks them for every shipped level (`src/solver.rs`):

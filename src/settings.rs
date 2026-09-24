@@ -50,8 +50,8 @@ impl Quality {
     }
 }
 
-/// Everything the player can change. Volumes are percentages; audio arrives
-/// in Milestone 8 and will read them.
+/// Everything the player can change. Volumes are percentages, and each one
+/// sets the level of its own audio channel (`audio.rs`).
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Settings {

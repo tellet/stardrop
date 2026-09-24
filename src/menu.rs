@@ -10,6 +10,7 @@ use bevy::prelude::*;
 
 use crate::app_state::AppState;
 use crate::attempt::RestartRequested;
+use crate::audio::Interface;
 use crate::collectibles::CurrentRun;
 use crate::level::{ActiveLevel, Levels, SelectedLevel};
 use crate::save::Progress;
@@ -357,7 +358,7 @@ fn spawn_settings_menu(mut commands: Commands, mut focus: ResMut<Focus>, setting
         &mut focus,
         AppState::Settings,
         "Settings",
-        Some("Enter changes a setting; sound arrives in a later milestone".to_owned()),
+        Some("Enter changes a setting".to_owned()),
         vec![
             Row::with_value(
                 "Master volume",
@@ -461,6 +462,7 @@ fn move_focus(
     gamepads: Query<&Gamepad>,
     mut focus: ResMut<Focus>,
     mut stick_held: Local<bool>,
+    mut sound: MessageWriter<Interface>,
 ) {
     let mut delta = 0_isize;
     if keys.any_just_pressed([KeyCode::ArrowDown, KeyCode::KeyS]) {
@@ -482,6 +484,7 @@ fn move_focus(
     if delta != 0 {
         let moved = focus.moved(delta);
         *focus = moved;
+        sound.write(Interface::Moved(moved.index));
     }
 }
 
@@ -489,10 +492,14 @@ fn move_focus(
 fn hover_focus(
     hovered: Query<(&Interaction, &MenuItem), Changed<Interaction>>,
     mut focus: ResMut<Focus>,
+    mut sound: MessageWriter<Interface>,
 ) {
     for (interaction, item) in &hovered {
-        if matches!(interaction, Interaction::Hovered | Interaction::Pressed) {
+        if matches!(interaction, Interaction::Hovered | Interaction::Pressed)
+            && focus.index != item.0
+        {
             focus.index = item.0;
+            sound.write(Interface::Moved(item.0));
         }
     }
 }
@@ -555,6 +562,7 @@ fn activate(
     mut restart: MessageWriter<RestartRequested>,
     mut settings: ResMut<Settings>,
     mut exit: MessageWriter<AppExit>,
+    mut sound: MessageWriter<Interface>,
 ) {
     let clicked = clicks
         .iter()
@@ -577,6 +585,10 @@ fn activate(
     let Some(action) = action else {
         return;
     };
+    // A locked level is the one thing that answers with nothing at all.
+    if action != MenuAction::Locked {
+        sound.write(Interface::Chose);
+    }
     match action {
         MenuAction::ChooseLevel | MenuAction::BackToLevels => {
             next_state.set(AppState::LevelSelect);

@@ -414,6 +414,50 @@ Measured 2026-09-24, same machine as the M0 baseline.
 | Memory over 400 play/fail/retry/reload rounds | 24812 KB → **24856 KB** (+44 KB) | Headless, release; the growth is in the first 100 rounds and then flat. `--ignored long_session` |
 | Entities in play | 1024 | Including the 192-spark pool and the background. |
 
+## M8-1 · bevy_kira_audio, chosen over bevy_seedling
+
+- **What:** `bevy_kira_audio = "=0.26.0"` (kira 0.12), with only its `ogg` feature.
+- **Both fit Bevy 0.19** — kira_audio 0.26 wants bevy ^0.19, seedling 0.8 wants ^0.19 — so the choice was about the shape of the work, not compatibility.
+- **Why kira:** channels map one-to-one onto the five volume settings, every command takes a tween (so nothing ever cuts), instances can be controlled individually, and playback rate gives pitch. Seedling's node graph is more powerful and probably where Bevy audio is going, but it would have spent this milestone on plumbing.
+- **What it costs:** +1.5 MB of binary (48.2 MB, was 46.7), mostly symphonia's ogg decoder — which we don't even use, since nothing loads from a file. Worth revisiting at M9 if size matters.
+- **The one gap:** the wrapper doesn't expose kira's filters, so the low-pass Section 6.2 asks for while paused can't be applied at runtime. See M8-3.
+
+## M8-2 · Every sound is synthesised, none recorded
+
+- **What:** `synth.rs` builds every note and every loop out of sine waves, filtered noise and envelopes. No audio files ship with the game.
+- **Why:** the same reasoning as the art (M7-1). One file to ship, no licences to track, and every note is exactly in the level's key instead of a sample pitched towards it. It also means a sound is a few numbers, so it can be reshaped in seconds.
+- **One sample per instrument, pitched when played.** A marimba is rendered once at 440 Hz; the note the game wants divided by 440 is its playback rate. Nine instruments cost 2.8 MB instead of nine instruments times every note.
+- **Verified by measurement, not by ear alone:** a test renders each sound and a Goertzel filter confirms its strongest frequency is the one it was built at, to the hertz.
+- **`cargo run --release --example listen`** writes every sound to `target/sounds/*.wav`, so the palette can be judged without playing the game.
+
+## M8-3 · The music never stops, so it can never cut
+
+- **What:** four loops start together and run forever: the pad, a deeper layer, a muffled copy of the pad, and the ambience. Everything the game does to the music is a volume change on one of them.
+- **The deeper layer** fades in as the astronaut falls, reaching full by 85 % of the way down.
+- **Pausing** fades the bright pad out and the muffled one in over 350 ms. Because both loops have been playing in step since the level began, they are at the same moment of the same music: the crossfade is inaudible as a change of *position*, only of tone. This is how Section 6.2's low-pass got done without a runtime filter.
+- **Ducking:** an object's note drops the music by a third for a moment, so notes stay audible without anything getting louder.
+- **A loop has to be periodic to loop.** Three things broke this and each was audible as a tick every eight seconds: envelopes that hadn't finished, partials whose frequency didn't fit a whole number of cycles into the loop (now snapped, at most 5 cents off), and — the subtle one — a one-pole filter starting from silence, so the loop's first moment was filtered differently from its last. The filter now runs a throwaway pass first to warm up. A test measures the step across the join against the ordinary step between samples.
+- **Real noise cannot loop,** so the ambience's "noise" is 48 quiet sines at scattered pitches, all snapped to the loop.
+
+## M8-4 · The music is built off the main thread
+
+- **What:** changing altitude spawns an `AsyncComputeTaskPool` task that renders the four loops; the game swaps them in on a later frame and fades them up.
+- **Why:** building one altitude's music takes **74 ms**. On the main thread that would be four dropped frames at the start of every level — exactly the hitch Section 7.1 forbids.
+- The fade-in hides the wait entirely: the music is a second and a half from silence anyway.
+
+## Measurements (M8)
+
+Measured 2026-09-24, same machine as the M0 baseline.
+
+| Metric | Value | Notes |
+|---|---|---|
+| One altitude's music, built | **74 ms** | Off the main thread (M8-4). `--ignored bed_cost` |
+| One altitude's music, held | **5.4 MB** | Four 8-second loops, stereo f32 in the mixer. Freed when the level changes. |
+| Every one-shot sound | **2.78 MB** | Fifteen sounds, built once at startup, kept for the whole session. |
+| Our own systems, per frame | 0.100 ms | Unchanged by audio (the mixer runs on its own thread). Budget: 1 ms. |
+| Binary | **48.2 MB** | Was 46.7 MB before the audio crate. |
+| Memory over 400 rounds | +40 KB, then flat | Unchanged by audio. |
+
 ---
 
 ## Baseline measurements (M0)

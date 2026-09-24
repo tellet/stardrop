@@ -73,6 +73,7 @@ dirs = "=7.0.0"
 bevy_embedded_assets = { version = "=0.16.0", default-features = false, features = [
     "default-source",
 ] }
+bevy_kira_audio = { version = "=0.26.0", default-features = false, features = ["ogg"] }
 
 [dev-dependencies]
 # Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.

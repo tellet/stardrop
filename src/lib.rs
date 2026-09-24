@@ -10,6 +10,7 @@ use bevy::window::{MonitorSelection, WindowResolution};
 mod app_state;
 mod astronaut;
 mod attempt;
+mod audio;
 mod background;
 mod camera;
 mod collectibles;
@@ -20,6 +21,7 @@ mod effects;
 mod journal;
 pub mod level;
 mod menu;
+pub mod music;
 pub mod objects;
 mod particles;
 pub mod physics;
@@ -32,6 +34,7 @@ pub mod sim;
 mod soak_tests;
 mod soft_mesh;
 pub mod solver;
+pub mod synth;
 mod theme;
 mod ui;
 
@@ -74,6 +77,7 @@ pub fn run() -> AppExit {
         objects::ObjectsPlugin,
         effects::EffectsPlugin,
         particles::ParticlesPlugin,
+        audio::GameAudioPlugin,
         camera::CameraPlugin,
         background::BackgroundPlugin,
         debug::DebugPlugin,

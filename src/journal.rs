@@ -272,7 +272,11 @@ fn spawn_journal_ui(commands: &mut Commands) {
 }
 
 /// Arrows or a stick move between pages.
-fn turn_pages(keys: Res<ButtonInput<KeyCode>>, mut page: ResMut<Page>) {
+fn turn_pages(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut page: ResMut<Page>,
+    mut sound: MessageWriter<crate::audio::Interface>,
+) {
     let mut delta = 0_isize;
     if keys.any_just_pressed([KeyCode::ArrowRight, KeyCode::KeyD]) {
         delta += 1;
@@ -290,6 +294,7 @@ fn turn_pages(keys: Res<ButtonInput<KeyCode>>, mut page: ResMut<Page>) {
         let count = PAGES.len() as isize;
         let index = (page.0 as isize + delta).rem_euclid(count);
         page.0 = index.unsigned_abs();
+        sound.write(crate::audio::Interface::TurnedPage);
     }
 }
 
