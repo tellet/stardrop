@@ -37,6 +37,14 @@ pub const SAMPLE_RATE: u32 = 22_050;
 const PEAK: f32 = 0.72;
 /// The shortest fade-in allowed, in seconds. Anything faster clicks.
 const SOFTEST_ATTACK: f32 = 0.004;
+/// How long a struck note takes to reach full strength. Short enough to
+/// still read as a strike, long enough that it never stabs.
+const STRIKE_ATTACK: f32 = 0.018;
+/// Everything in a level is rolled off above this, on top of each voice's
+/// own filtering: two gentle slopes sound softer than one steep one.
+const HOUSE_CUTOFF: f32 = 2600.0;
+/// Menu sounds are quieter and duller still: they play over everything.
+const MENU_CUTOFF: f32 = 1800.0;
 /// Every sound fades out over at least this long, for the same reason.
 const TAIL: f32 = 0.01;
 /// Noise seed: a sound is the same every time it plays.
@@ -116,8 +124,15 @@ impl Sound {
     pub fn reference_hz(self) -> f32 {
         match self {
             // The middle of the range these instruments are asked for.
-            Self::Marimba | Self::Flute | Self::Chime | Self::Bell | Self::MusicBox => 440.0,
-            Self::Plink | Self::Twinkle | Self::UiMove | Self::UiPick => 880.0,
+            // Stardust is in this list too: its partials sit an octave above
+            // the note, and at 880 they were piercing.
+            Self::Marimba
+            | Self::Flute
+            | Self::Chime
+            | Self::Bell
+            | Self::MusicBox
+            | Self::Twinkle => 440.0,
+            Self::Plink | Self::UiMove | Self::UiPick => 880.0,
             Self::Shimmer => 330.0,
             Self::Hum | Self::Muffled | Self::Sigh => 110.0,
             Self::Whoosh => 55.0,
@@ -177,7 +192,10 @@ impl Buffer {
             let progress = t / self.time_at(self.len().max(1) - 1).max(1e-6);
             let pitch = hz * (1.0 + (bend - 1.0) * progress);
             phase += TAU * pitch / SAMPLE_RATE as f32;
-            self.samples[index] += phase.sin() * level * (-t / decay.max(1e-4)).exp();
+            // Swell to full over the attack, then fade: an instant start is
+            // what makes a note sound sharp.
+            let struck = 1.0 - (-t / STRIKE_ATTACK).exp();
+            self.samples[index] += phase.sin() * level * struck * (-t / decay.max(1e-4)).exp();
         }
         self
     }
@@ -307,7 +325,7 @@ impl Buffer {
         for (sample, reflected) in self.samples.iter_mut().zip(&wet) {
             *sample += reflected * evened * mix;
         }
-        self.soften(3200.0);
+        self.soften(2400.0);
         self
     }
 
@@ -471,9 +489,10 @@ pub fn render(sound: Sound) -> Vec<f32> {
         Sound::Twinkle => {
             buffer
                 .partial(hz * 2.0, 0.8, 0.16, 1.0)
-                .partial(hz * 2.997, 0.25, 0.1, 1.0)
-                .soften(5200.0)
-                .space(1.8, 0.5);
+                .partial(hz * 2.997, 0.25, 0.12, 1.0)
+                .soften(3600.0)
+                // A mote is tiny, but it's tiny in a very large place.
+                .space(2.4, 0.5);
         }
         // A breath drawn in, not a buzzer: the attempt gathering itself again.
         Sound::Sigh => {
@@ -503,7 +522,11 @@ pub fn render(sound: Sound) -> Vec<f32> {
                 .soften(2200.0);
         }
     }
-    buffer.finish()
+    let cutoff = match sound {
+        Sound::UiMove | Sound::UiPick | Sound::PageTurn => MENU_CUTOFF,
+        _ => HOUSE_CUTOFF,
+    };
+    buffer.soften(cutoff).finish()
 }
 
 // --- The music bed ---------------------------------------------------------
@@ -559,15 +582,19 @@ pub fn bed(part: Bed, root_hz: f32, air: f32, muffled: bool) -> Vec<f32> {
                 .drone(root * 0.5, 0.25, 1.0 / LOOP_SECONDS, 0.25)
                 .soften(700.0);
         }
-        // Strings joining underneath once the fall is past halfway.
+        // What joins underneath once the fall is properly under way. It has
+        // to be *different* from the pad, not more of it: an octave lower,
+        // and breathing visibly rather than holding still, so that the
+        // player hears the fall deepen instead of just getting louder.
         Bed::Deeper => {
             let root = root_hz * 0.5;
             buffer
-                // A fourth, not a third: the pad stays open underneath.
-                .drone(root * 4.0 / 3.0, 0.35, 2.0 / LOOP_SECONDS, 0.5)
-                .drone(root * 2.997, 0.12, 3.0 / LOOP_SECONDS, 0.6)
-                .drone(root * 0.5, 0.30, 1.0 / LOOP_SECONDS, 0.4)
-                .soften(1000.0);
+                // A slow swell, four times per loop: the pulse of falling.
+                .drone(root * 0.5, 0.45, 4.0 / LOOP_SECONDS, 0.85)
+                .drone(root * 0.75, 0.25, 4.0 / LOOP_SECONDS, 0.8)
+                // A fourth, not a third: the chord stays open.
+                .drone(root * 4.0 / 3.0, 0.22, 2.0 / LOOP_SECONDS, 0.5)
+                .soften(850.0);
         }
         // High up it's a cold hum; lower down it's moving air.
         Bed::Ambience => {

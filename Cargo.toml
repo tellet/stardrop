@@ -89,6 +89,10 @@ harness = false
 # while still compiling quickly.
 [profile.dev]
 opt-level = 1
+# No debug info. It is the largest thing in `target/` by far (several GB of a
+# debug build of Bevy), and we debug through tests and logs rather than a step
+# debugger. Set it back to `true` if you ever need to attach one.
+debug = false
 
 # Dependencies (Bevy etc.) rarely change, so optimize them fully once;
 # otherwise a debug build of Bevy is far too slow to play.
@@ -105,16 +109,10 @@ strip = true        # Drop debug symbols from the shipped binary.
 panic = "abort"     # No unwinding machinery: smaller and faster. A panic ends the game immediately,
                     # which is acceptable because game logic must not panic (Section 7.4).
 
-# What we ship and measure budgets against: `cargo build --profile dist`.
-[profile.dist]
-inherits = "release"
-lto = "fat"         # Whole-program link-time optimization: smallest, fastest binary; slow to build.
-
-# Shipping build with symbols, for profiling (`cargo build --profile profiling`).
-[profile.profiling]
-inherits = "dist"
-strip = false
-debug = "line-tables-only"
+# The `dist` (fat LTO, what we ship) and `profiling` (dist plus symbols)
+# profiles live here from Milestone 9 on. They are left out until then
+# because every profile built is another full copy of Bevy in `target/`,
+# and nothing before M9 needs them. DECISIONS.md M0-10 has both, to restore.
 
 # --- Lints ---------------------------------------------------------------
 

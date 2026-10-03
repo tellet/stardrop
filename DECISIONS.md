@@ -455,6 +455,19 @@ Measured 2026-09-24, same machine as the M0 baseline.
 - **Cost:** one-shot sounds grew from 2.78 MB to **7.65 MB**, since every one now carries seconds of tail. Bed build time is unchanged at ~77 ms.
 - **`STARDROP.md` §6.1 was updated** to match: it specified major pentatonic, which was the root of the problem.
 
+## M8-6 · `target/` is kept small on purpose
+
+- **What happened:** the build folder grew past ten gigabytes and had to be deleted by hand. One release build alone is **1.5 GB**; a debug build of Bevy with full debug info is several more, and every extra profile is another full copy.
+- **Three changes:** `[profile.dev] debug = false` (we debug through tests and logs, never a step debugger); the `dist` and `profiling` profiles are removed until M9 actually needs them (they are recorded in M0-10 and are four lines to restore); and `scripts/check.sh` sets `CARGO_INCREMENTAL=0`, since it rebuilds everything anyway.
+- **What to run when disk gets tight:** `cargo clean --profile dev` drops the debug build and keeps the release one you play. `~/.cargo/registry` (2.7 GB) is shared with every other project — leave it.
+
+## M8-7 · Three things the first playtest found
+
+- **"The sounds are a bit sharp."** Not the sounds themselves — they are nearly pure tones — but how they were played. A sample played faster is higher *and shorter*, and the melody climbed far enough that a stardust twinkle built at 1760 Hz came out at 9 kHz as a chirp. Now `playable_rate` folds every note into the octave around the pitch its sound was built at (an octave is the one interval the ear hears as the same note), stardust climbs within a single octave, struck notes swell over 18 ms instead of starting at full, and everything gets a second gentle roll-off at the end — 2.6 kHz in a level, 1.8 kHz for menu sounds.
+- **"The background music doesn't change when I'm stardropping."** The machinery was working — a probe showed the layer fading in to 0.69 during a fall — but the layer *sounded* like more pad: another slow drone, same register. It is now an octave lower and pulses four times per loop, so the fall deepens rather than just getting louder. It also arrives sooner (full by 55 % of the way down, catching up half again as fast), and in a four-second fall it now reaches 0.99.
+- **"The sounds in levels are the same as in the menu."** They were: menus and levels played the identical bed, and the menu's key is the same as the first level's. A menu is nowhere, so it now plays the pad alone, quieter, with no air moving in it; a level adds the ambience, and falling adds the layer.
+- **The lesson for the rest of the audio work:** check what the game *plays*, not only what the synthesiser *makes*. Every one of these was invisible in the rendered WAVs.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

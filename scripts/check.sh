@@ -5,6 +5,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The incremental cache is worth a gigabyte in `target/` and buys nothing
+# here: this script compiles everything anyway.
+export CARGO_INCREMENTAL=0
+
 echo "==> fmt";     cargo fmt --all -- --check
 echo "==> clippy";  cargo clippy --all-targets -- -D warnings
 # Debug-only code (F2 shapes) is behind the `dev` feature; lint it too.

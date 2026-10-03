@@ -163,11 +163,12 @@ pub fn landing_chord(key: Key) -> [f32; 3] {
     [step_hz(key, 0), step_hz(key, 3), step_hz(key, 5)]
 }
 
-/// Each mote of stardust rings one step higher than the last.
+/// Each mote of stardust rings one step higher than the last, within a
+/// single octave above the root. Climbing further would leave the twinkles
+/// shrill and short — a sample played much faster is both.
 #[must_use]
 pub fn stardust_step(collected: u32) -> i32 {
-    // Starts an octave up: twinkles sit above the melody, out of its way.
-    5 + i32::try_from(collected % 8).unwrap_or(0)
+    i32::try_from(RUNGS).unwrap_or(5) + i32::try_from(collected % RUNGS).unwrap_or(0)
 }
 
 #[cfg(test)]

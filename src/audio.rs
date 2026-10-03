@@ -48,8 +48,13 @@ const AMBIENCE_TRIM: f32 = 0.35;
 const INSTRUMENT_TRIM: f32 = 0.7;
 /// Repeated sounds vary by this much in pitch, so nothing sounds mechanical.
 const PITCH_SPREAD: f64 = 0.05;
-/// Where in the fall the deeper layer has fully joined.
-const DEEPER_FULL_DEPTH: f32 = 0.85;
+/// Where in the fall the deeper layer has fully joined, and how fast it
+/// catches up. A fall is only a few seconds: slower than this and it never
+/// arrives at all.
+const DEEPER_FULL_DEPTH: f32 = 0.55;
+const DEEPER_RATE: f32 = 2.5;
+/// How loud the pad is in a menu, against a level.
+const MENU_PAD: f32 = 0.6;
 
 /// The music bed.
 #[derive(Resource)]
@@ -84,6 +89,8 @@ struct MusicBed {
     air: Option<Handle<AudioInstance>>,
     /// How much of the deeper layer is wanted, 0 to 1.
     depth: f32,
+    /// Whether a level is loaded, which is what the menus aren't.
+    in_level: bool,
     /// How much the music is currently ducked, 0 to 1.
     duck: f32,
 }
@@ -168,6 +175,28 @@ fn decibels(percent: u8, trim: f32) -> Decibels {
         return Decibels::SILENCE;
     }
     Decibels(20.0 * amplitude.log10())
+}
+
+/// How fast to play a sound to get `note` out of something built at
+/// `reference`, folded into the octave around it.
+///
+/// Playing a sample faster raises its pitch *and* shortens it, so a note
+/// several octaves up arrives as a short, sharp chirp. Folding by octaves
+/// keeps the note in the key — an octave is the one interval the ear hears
+/// as the same note — while every sound keeps the shape it was given.
+#[must_use]
+pub(crate) fn playable_rate(note: f32, reference: f32) -> f64 {
+    if note <= 0.0 || reference <= 0.0 {
+        return 1.0;
+    }
+    let mut ratio = note / reference;
+    while ratio > 1.5 {
+        ratio *= 0.5;
+    }
+    while ratio < 0.75 {
+        ratio *= 2.0;
+    }
+    f64::from(ratio)
 }
 
 /// Wraps generated samples as something the mixer can play.
@@ -306,6 +335,7 @@ fn follow_the_fall(
     phase: Option<Res<State<LevelPhase>>>,
 ) {
     bed.duck = (bed.duck - time.delta_secs() * DUCK_RECOVERY).max(0.0);
+    bed.in_level = level.is_some();
     let falling = phase.is_some_and(|phase| *phase.get() == LevelPhase::Falling);
     let wanted = match (falling, level, astronaut) {
         (true, Some(level), Some(motion)) => {
@@ -315,7 +345,7 @@ fn follow_the_fall(
         _ => 0.0,
     };
     // Eased, so the layer swells in rather than tracking every wobble.
-    bed.depth += (wanted - bed.depth) * (time.delta_secs() * 1.5).min(1.0);
+    bed.depth += (wanted - bed.depth) * (time.delta_secs() * DEEPER_RATE).min(1.0);
 }
 
 /// Sets every channel's volume from the settings, the fall and the duck.
@@ -347,11 +377,18 @@ fn mix(
     let paused = state.is_some_and(|state| *state.get() != AppState::Playing);
     let duck = 1.0 - DUCK_DEPTH * bed.duck;
     let quick = AudioTween::new(Duration::from_millis(120), AudioEasing::Linear);
+    // A menu is nowhere: the pad alone, quieter, with no air moving in it.
+    // A level is somewhere, and falling through it brings the layer in.
+    let (pad, air) = if bed.in_level {
+        (duck, if bed.depth > 0.0 { 1.0 } else { 0.55 })
+    } else {
+        (MENU_PAD * duck, 0.0)
+    };
     let levels = [
-        (&bed.pad, if paused { 0.0 } else { duck }),
+        (&bed.pad, if paused { 0.0 } else { pad }),
         (&bed.muffled, if paused { duck } else { 0.0 }),
         (&bed.deeper, if paused { 0.0 } else { bed.depth * duck }),
-        (&bed.air, if paused { 0.35 } else { 1.0 }),
+        (&bed.air, if paused { air * 0.5 } else { air }),
     ];
     for (handle, level) in levels {
         let Some(mut instance) = handle.as_ref().and_then(|handle| instances.get_mut(handle))
@@ -422,7 +459,7 @@ fn play_object_notes(
         bed.duck = 1.0;
         channel
             .play(source.clone())
-            .with_playback_rate(f64::from(note / sound.reference_hz()))
+            .with_playback_rate(playable_rate(note, sound.reference_hz()))
             .linear_fade_in(Duration::from_millis(8));
     }
 }
@@ -444,7 +481,7 @@ fn ring_stardust(
         streak.motes += 1;
         channel
             .play(source.clone())
-            .with_playback_rate(f64::from(note / synth::Sound::Twinkle.reference_hz()));
+            .with_playback_rate(playable_rate(note, synth::Sound::Twinkle.reference_hz()));
     }
 }
 
@@ -460,7 +497,7 @@ fn play_the_landing(
     for note in landing_chord(current_key(&bed)) {
         channel
             .play(source.clone())
-            .with_playback_rate(f64::from(note / synth::Sound::Bell.reference_hz()));
+            .with_playback_rate(playable_rate(note, synth::Sound::Bell.reference_hz()));
     }
 }
 
@@ -496,7 +533,7 @@ fn play_interface_sounds(
             // Not a note: just a breath, a little different each time.
             1.0 + PITCH_SPREAD * f64::from(step)
         } else {
-            f64::from(step_hz(menu_key(), step) / sound.reference_hz())
+            playable_rate(step_hz(menu_key(), step), sound.reference_hz())
         };
         channel.play(source.clone()).with_playback_rate(rate);
     }
@@ -527,6 +564,33 @@ fn pop_when_a_bubble_lets_go(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// However high the melody climbs, no sound is ever played more than an
+    /// octave from the pitch it was built at: beyond that a sample turns
+    /// into a chirp.
+    #[test]
+    fn notes_stay_within_an_octave_of_the_sound_they_came_from() {
+        for (note, reference) in [
+            (440.0, 440.0),
+            (9000.0, 880.0),
+            (55.0, 440.0),
+            (1320.0, 440.0),
+            (147.0, 110.0),
+        ] {
+            let rate = playable_rate(note, reference);
+            assert!(
+                (0.75..=1.5).contains(&rate),
+                "{note} Hz from a {reference} Hz sound plays at {rate}x"
+            );
+        }
+        // The note that comes out is still the note asked for, give or take
+        // whole octaves.
+        let rate = playable_rate(1760.0, 440.0);
+        let octaves = (rate.log2() - (1760.0_f64 / 440.0).log2()).abs();
+        assert!((octaves - octaves.round()).abs() < 1e-6);
+        // Nonsense in, something playable out.
+        assert!((playable_rate(0.0, 440.0) - 1.0).abs() < 1e-9);
+    }
 
     #[test]
     fn a_volume_of_zero_is_silence_and_full_is_unchanged() {
