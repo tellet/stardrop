@@ -194,6 +194,13 @@ fn spawn_screen(
         index: 0,
         count: items.len(),
     };
+    // Every screen says where Esc goes, because a key nobody mentions is a
+    // key nobody presses.
+    let note = match (note, back_from(state)) {
+        (Some(note), Some((_, where_to))) => Some(format!("{note}\nEsc goes back to {where_to}")),
+        (None, Some((_, where_to))) => Some(format!("Esc goes back to {where_to}")),
+        (note, None) => note,
+    };
     commands
         .spawn((
             MenuScreen,
@@ -632,6 +639,21 @@ fn change_setting(setting: Setting, settings: &mut Settings) {
 }
 
 /// Esc (or gamepad B) leaves the current screen.
+/// Where Esc leads from each screen, and what to call that in a hint.
+/// `go_back` and the hint under every screen both read this, so what the
+/// screen says and what the key does can never drift apart.
+fn back_from(state: AppState) -> Option<(AppState, &'static str)> {
+    match state {
+        AppState::LevelSelect | AppState::Journal | AppState::Settings => {
+            Some((AppState::MainMenu, "the main menu"))
+        }
+        AppState::Paused => Some((AppState::Playing, "the fall")),
+        AppState::LevelComplete => Some((AppState::LevelSelect, "the level list")),
+        // Nowhere left to go back to.
+        AppState::MainMenu | AppState::Playing => None,
+    }
+}
+
 fn go_back(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
@@ -645,13 +667,8 @@ fn go_back(
     if !back {
         return;
     }
-    match state.get() {
-        AppState::LevelSelect | AppState::Journal | AppState::Settings => {
-            next_state.set(AppState::MainMenu);
-        }
-        AppState::Paused => next_state.set(AppState::Playing),
-        AppState::LevelComplete => next_state.set(AppState::LevelSelect),
-        AppState::MainMenu | AppState::Playing => {}
+    if let Some((destination, _)) = back_from(*state.get()) {
+        next_state.set(destination);
     }
 }
 
@@ -673,6 +690,28 @@ fn pause_on_escape(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Esc must do something on every screen that isn't the top one or the
+    /// fall itself, and the hint must name where it goes.
+    #[test]
+    fn every_screen_says_where_escape_goes() {
+        for state in [
+            AppState::LevelSelect,
+            AppState::Journal,
+            AppState::Settings,
+            AppState::Paused,
+            AppState::LevelComplete,
+        ] {
+            let (destination, where_to) =
+                back_from(state).unwrap_or_else(|| panic!("{state:?} has no way back"));
+            assert_ne!(destination, state, "{state:?} goes back to itself");
+            assert!(!where_to.is_empty());
+        }
+        // The main menu and the fall have nowhere to go back to: on the fall
+        // Esc pauses instead (`pause_on_escape`).
+        assert!(back_from(AppState::MainMenu).is_none());
+        assert!(back_from(AppState::Playing).is_none());
+    }
 
     #[test]
     fn focus_wraps_around_the_ends() {
