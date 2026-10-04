@@ -161,6 +161,78 @@ pub(crate) fn gradient_mesh(stops: &[Color]) -> Mesh {
     builder.into_mesh()
 }
 
+/// A filled outline with a soft rim: the shape for anything that should read
+/// as solid matter rather than light — a rock, a shard, a petal.
+///
+/// `points` are the corners, anticlockwise, around the origin. The rim fades
+/// out over `edge` (a fraction of each point's distance from the middle), so
+/// the silhouette stays sharp while its edge never looks cut out.
+pub(crate) fn soft_polygon(builder: &mut MeshBuilder, points: &[Vec2], color: [f32; 4], edge: f32) {
+    if points.len() < 3 {
+        return;
+    }
+    let clear = [color[0], color[1], color[2], 0.0];
+    let middle = builder.vertex(Vec2::ZERO, color);
+    let inner: Vec<u32> = points
+        .iter()
+        .map(|point| builder.vertex(*point * (1.0 - edge), color))
+        .collect();
+    let outer: Vec<u32> = points
+        .iter()
+        .map(|point| builder.vertex(*point, clear))
+        .collect();
+    for index in 0..points.len() {
+        let next = (index + 1) % points.len();
+        builder.triangle(middle, inner[index], inner[next]);
+        builder.quad([inner[index], outer[index], outer[next], inner[next]]);
+    }
+}
+
+/// A band of a circle: `sweep` radians of a ring of radius 1, `thickness`
+/// wide, fading away at both ends so it reads as a stroke rather than a
+/// cut-off piece of pipe. Used for rims, swirls and accretion rings.
+pub(crate) fn arc(
+    builder: &mut MeshBuilder,
+    start: f32,
+    sweep: f32,
+    thickness: f32,
+    color: [f32; 4],
+    steps: u8,
+) {
+    let clear = [color[0], color[1], color[2], 0.0];
+    let steps = steps.max(2);
+    let mut previous: Option<(u32, u32)> = None;
+    for step in 0..=steps {
+        let along = f32::from(step) / f32::from(steps);
+        let angle = start + sweep * along;
+        // Full strength in the middle of the arc, nothing at its ends.
+        let strength = (along * core::f32::consts::PI).sin();
+        let tint = [color[0], color[1], color[2], color[3] * strength];
+        let direction = Vec2::from_angle(angle);
+        let inner = builder.vertex(
+            direction * (1.0 - thickness),
+            if strength > 0.0 { tint } else { clear },
+        );
+        let outer = builder.vertex(direction, if strength > 0.0 { tint } else { clear });
+        if let Some((last_inner, last_outer)) = previous {
+            builder.quad([last_inner, last_outer, outer, inner]);
+        }
+        previous = Some((inner, outer));
+    }
+}
+
+/// A tapered spike pointing along +Y, one unit long and `width` wide at its
+/// base: a petal, a tendril, a shard of light.
+pub(crate) fn spike(builder: &mut MeshBuilder, width: f32, color: [f32; 4], tip_fade: bool) {
+    let clear = [color[0], color[1], color[2], 0.0];
+    let tip = builder.vertex(Vec2::Y, if tip_fade { clear } else { color });
+    let left = builder.vertex(Vec2::new(-width / 2.0, 0.0), color);
+    let right = builder.vertex(Vec2::new(width / 2.0, 0.0), color);
+    let base = builder.vertex(Vec2::new(0.0, -width / 2.0), clear);
+    builder.triangle(tip, left, right);
+    builder.triangle(base, right, left);
+}
+
 /// One soft disc of radius 1, white, for anything that wants to be tinted by
 /// its material (sparks, glows). Scale it to the size you need.
 pub(crate) fn unit_disc(segments: usize) -> Mesh {

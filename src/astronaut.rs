@@ -10,17 +10,33 @@ use crate::physics::{AirControl, Motion};
 use crate::settings::Settings;
 use crate::soft_mesh::unit_disc;
 
-/// The astronaut's own light, bright enough for bloom to pick up.
-const ASTRONAUT_GLOW: Color = Color::linear_rgb(2.2, 1.6, 0.9);
+/// The suit: pale, lit from above, bright enough for a little bloom.
+const SUIT_COLOR: Color = Color::linear_rgb(1.5, 1.45, 1.6);
+/// The shaded underside of the suit and the pack behind it.
+const SUIT_SHADE: Color = Color::linear_rgb(0.42, 0.40, 0.52);
+/// The life-support pack: darker still, and squarer.
+const PACK_COLOR: Color = Color::linear_rgb(0.30, 0.28, 0.40);
+/// The lamp on the shoulder, which is what you actually see from far away.
+const LAMP_COLOR: Color = Color::linear_rgba(3.0, 2.3, 1.2, 1.0);
 /// The soft halo around them: dimmer and much wider than the body.
 const HALO_COLOR: Color = Color::linear_rgba(1.6, 1.1, 0.7, 0.30);
 const HALO_RADIUS: f32 = 3.0;
-/// The visor: deep sky blue, so the body always has a readable "front".
-const VISOR_COLOR: Color = Color::linear_rgb(0.06, 0.16, 0.34);
-/// Where the visor sits on the body, and how big it is, as fractions of the
-/// astronaut's radius.
-const VISOR_OFFSET: f32 = 0.18;
-const VISOR_SIZE: Vec2 = Vec2::new(1.05, 0.62);
+/// The visor: deep sky blue, so the figure always has a readable "front".
+const VISOR_COLOR: Color = Color::linear_rgb(0.05, 0.14, 0.30);
+/// A thin bright line along the top of the visor.
+const VISOR_RIM: Color = Color::linear_rgba(0.9, 1.8, 2.4, 0.9);
+/// The figure, in fractions of the collision radius. A helmet that fills
+/// the whole circle reads as a ball; this one sits on shoulders, and the
+/// visor is a window in it rather than most of its face.
+const HELMET_SIZE: Vec2 = Vec2::new(0.74, 0.74);
+const HELMET_RISE: f32 = 0.34;
+const VISOR_SIZE: Vec2 = Vec2::new(0.52, 0.38);
+const VISOR_OFFSET: f32 = 0.40;
+/// The body under the helmet, and the shoulders either side of it.
+const BODY_SIZE: Vec2 = Vec2::new(0.92, 0.72);
+const BODY_DROP: f32 = 0.46;
+const SHOULDER: Vec2 = Vec2::new(0.68, 0.30);
+const SHOULDER_SIZE: f32 = 0.38;
 /// The flash across the visor when the astronaut touches something.
 const VISOR_FLASH_COLOR: Color = Color::linear_rgba(3.0, 3.0, 2.6, 0.9);
 
@@ -100,32 +116,91 @@ fn spawn_astronaut(
         radius + SHIMMER_THICKNESS,
         radius + SHIMMER_THICKNESS * 2.0,
     ));
-    let visor = meshes.add(Circle::new(radius));
+    let disc = meshes.add(Circle::new(1.0));
+    let glow = meshes.add(unit_disc(24));
+    // A small person in a suit: shoulders, a body, a domed helmet with a
+    // window in it, and a lamp. At 28 units across, every part has to earn
+    // its place — anything smaller than a fifth of that is a smudge.
     commands
         .spawn((
             Astronaut,
             Tumble::default(),
             Motion::at_rest(level.start),
-            Mesh2d(meshes.add(Circle::new(radius))),
-            MeshMaterial2d(materials.add(ASTRONAUT_GLOW)),
             Transform::from_translation(level.start.extend(ASTRONAUT_DEPTH)),
+            Visibility::default(),
         ))
-        // The halo goes behind the body, so it reads as light around them.
+        // The light they give off, behind everything else.
         .with_child((
-            Mesh2d(meshes.add(unit_disc(24))),
+            Mesh2d(glow.clone()),
             MeshMaterial2d(materials.add(HALO_COLOR)),
             Transform::from_xyz(0.0, 0.0, -1.0).with_scale(Vec3::splat(radius * HALO_RADIUS)),
         ))
+        // The pack, just showing behind one shoulder.
         .with_child((
-            Mesh2d(visor.clone()),
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(PACK_COLOR)),
+            Transform::from_xyz(-radius * 0.22, -radius * 0.52, -0.3).with_scale(Vec3::new(
+                radius * 0.66,
+                radius * 0.52,
+                1.0,
+            )),
+        ))
+        // Shoulders, which are what make it a person and not a bottle.
+        .with_child((
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(SUIT_SHADE)),
+            Transform::from_xyz(-radius * SHOULDER.x, -radius * SHOULDER.y, -0.15)
+                .with_scale(Vec3::splat(radius * SHOULDER_SIZE)),
+        ))
+        .with_child((
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(SUIT_SHADE)),
+            Transform::from_xyz(radius * SHOULDER.x, -radius * SHOULDER.y, -0.15)
+                .with_scale(Vec3::splat(radius * SHOULDER_SIZE)),
+        ))
+        // The body.
+        .with_child((
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(SUIT_COLOR)),
+            Transform::from_xyz(0.0, -radius * BODY_DROP, -0.1)
+                .with_scale((BODY_SIZE * radius).extend(1.0)),
+        ))
+        // The helmet, and the window in it.
+        .with_child((
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(SUIT_COLOR)),
+            Transform::from_xyz(0.0, radius * HELMET_RISE, 0.0)
+                .with_scale((HELMET_SIZE * radius).extend(1.0)),
+        ))
+        .with_child((
+            Mesh2d(disc.clone()),
             MeshMaterial2d(materials.add(VISOR_COLOR)),
-            Transform::from_xyz(0.0, radius * VISOR_OFFSET, 1.0).with_scale(VISOR_SIZE.extend(1.0)),
+            Transform::from_xyz(0.0, radius * VISOR_OFFSET, 0.1)
+                .with_scale((VISOR_SIZE * radius).extend(1.0)),
+        ))
+        // The sky, caught along the top of the glass.
+        .with_child((
+            Mesh2d(disc.clone()),
+            MeshMaterial2d(materials.add(VISOR_RIM)),
+            Transform::from_xyz(-radius * 0.08, radius * 0.50, 0.2).with_scale(Vec3::new(
+                radius * 0.24,
+                radius * 0.07,
+                1.0,
+            )),
+        ))
+        // The shoulder lamp: the one part visible right across a level.
+        .with_child((
+            Mesh2d(glow),
+            MeshMaterial2d(materials.add(LAMP_COLOR)),
+            Transform::from_xyz(radius * 0.66, -radius * 0.3, 0.3)
+                .with_scale(Vec3::splat(radius * 0.22)),
         ))
         .with_child((
             VisorFlash,
-            Mesh2d(visor),
+            Mesh2d(disc),
             MeshMaterial2d(materials.add(VISOR_FLASH_COLOR)),
-            Transform::from_xyz(0.0, radius * VISOR_OFFSET, 2.0).with_scale(VISOR_SIZE.extend(1.0)),
+            Transform::from_xyz(0.0, radius * VISOR_OFFSET, 0.4)
+                .with_scale((VISOR_SIZE * radius).extend(1.0)),
             Visibility::Hidden,
         ))
         .with_child((
@@ -137,8 +212,8 @@ fn spawn_astronaut(
         .with_child((
             CaptureBubble,
             Mesh2d(meshes.add(Annulus::new(
-                config.astronaut_radius + CAPTURE_GAP,
-                config.astronaut_radius + CAPTURE_GAP + 4.0,
+                radius + CAPTURE_GAP,
+                radius + CAPTURE_GAP + 4.0,
             ))),
             MeshMaterial2d(materials.add(CAPTURE_COLOR)),
             Visibility::Hidden,

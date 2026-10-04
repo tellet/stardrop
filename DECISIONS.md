@@ -468,6 +468,15 @@ Measured 2026-09-24, same machine as the M0 baseline.
 - **"The sounds in levels are the same as in the menu."** They were: menus and levels played the identical bed, and the menu's key is the same as the first level's. A menu is nowhere, so it now plays the pad alone, quieter, with no air moving in it; a level adds the ambience, and falling adds the layer.
 - **The lesson for the rest of the audio work:** check what the game *plays*, not only what the synthesiser *makes*. Every one of these was invisible in the rendered WAVs.
 
+## M8-8 · New silhouettes, and an astronaut who is a person
+
+- **What the playtest said:** the shapes were "too childish and basic", and "the cosmonaut is just a circle".
+- **It was right.** Every object was a primitive: a cloud was three equal circles, a crystal one rhombus, a flower a five-petal daisy, the hazard a spiky star, and the astronaut a plain disc with an ellipse on it.
+- **The shapes now carry the idea:** the cloud is seven uneven lobes with light on one side; the crystal a cluster of shards with a facet catching the light; the orb a core inside a disc of matter seen nearly edge-on; the portals swirls turning inside a dark throat; the flower a seed pod with loose spores around it; the comet a lopsided pitted rock with a narrow hot trail; the hazard a hole with long feelers in a bruise of light; the stream of air narrows and fades at both ends instead of stopping square.
+- **The astronaut** has shoulders, a body, a domed helmet with a window in it, and a shoulder lamp — at 28 units across, the lamp is what you actually see from the far side of a level. Two tries: the first had a visor so large it read as a teacup.
+- **Three new mesh tools** carry all of it: a filled outline with a soft rim (rocks, shards, petals), an arc that fades at both ends (rims, swirls, accretion discs) and a tapered spike (petals, tendrils).
+- **Everything is still shared and unit-sized,** so this costs no memory per object: nine types' worth of meshes, scaled per object.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
