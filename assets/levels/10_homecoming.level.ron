@@ -1,21 +1,30 @@
-// Introduce: two rings; step in one and out of the other.
-// Test: a ribbon past the exit carries you back across.
-// Twist: spores and a puff between you and home.
+// Introduce: nothing. Everything here has been met before.
+// Test: the whole fall, one thing after another, with no straight line
+// through any of it.
+// Twist: the last hazard sits in front of the beacon, and the only way
+// round it is the crystal that turns you back.
 (
     name: "Homecoming",
     theme: Homecoming,
     start: (540, 180),
-    beacon: (center: (540, 1870), size: (320, 40)),
+    beacon: (center: (860, 1870), size: (160, 40)),
     stardust: [
-        (260, 560),
-        (860, 1160),
-        (440, 1520),
+        (300, 880),
+        (700, 1240),
+        (920, 1690),
     ],
     objects: [
-        TwinPortals(a: (260, 760), b: (860, 1060), radius: 60),
-        WindRibbon(path: [(900, 1260), (620, 1380), (420, 1460)], width: 85),
-        SporeFlower(center: (500, 1620), radius: 55),
-        CloudPuff(center: (820, 1700), radius: 80),
+        WindRibbon(path: [(380, 470), (770, 560)], width: 80),
+        TwinPortals(a: (220, 760), b: (880, 880), radius: 55),
+        SporeFlower(center: (540, 1020), radius: 55),
+        GravityOrb(center: (300, 1210), radius: 50),
+        CometStone(center: (780, 1150), radius: 50),
+        StaticCloud(center: (540, 1380), radius: 85),
+        Bubble(center: (240, 1520), radius: 65),
+        Crystal(center: (900, 1560), size: 55),
+        StaticCloud(center: (620, 1760), radius: 80),
+        StaticCloud(center: (880, 1430), radius: 70),
+        StaticCloud(center: (980, 1620), radius: 60),
     ],
-    target_time: 4.5,
+    target_time: 3.5,
 )

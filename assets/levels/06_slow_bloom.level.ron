@@ -1,21 +1,26 @@
-// Introduce: a bubble on the path lifts you, then lets go.
-// Test: a second bubble lifts you to a mote above it.
-// Twist: that lift stops just short of a dark cloud.
+// Introduce: a bubble lifts you over the first hazard.
+// Test: a second lift, taken late, is the only way to the high mote.
+// Twist: the way down ends in a stream that must be entered from above.
 // Letting go drops you past the beacon, off to its left.
 (
     name: "Slow Bloom",
     theme: CloudSea,
     start: (540, 180),
-    beacon: (center: (790, 1870), size: (300, 40)),
+    beacon: (center: (840, 1870), size: (210, 40)),
     stardust: [
-        (540, 620),
-        (300, 980),
-        (790, 1720),
+        (330, 560),
+        (540, 1050),
+        (900, 1640),
     ],
     objects: [
-        Bubble(center: (540, 820), radius: 75),
-        Bubble(center: (300, 1200), radius: 70),
-        StaticCloud(center: (300, 760), radius: 85),
+        Bubble(center: (420, 660), radius: 70),
+        StaticCloud(center: (770, 700), radius: 80),
+        Bubble(center: (300, 1120), radius: 65),
+        Crystal(center: (770, 1150), size: 60),
+        CloudPuff(center: (540, 1300), radius: 95),
+        StaticCloud(center: (620, 1690), radius: 85),
+        WindRibbon(path: [(680, 1480), (950, 1545)], width: 70),
+        StaticCloud(center: (1010, 1740), radius: 45),
     ],
     target_time: 6.0,
 )

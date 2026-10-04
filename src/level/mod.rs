@@ -580,6 +580,41 @@ pub(crate) mod tests {
         );
     }
 
+    /// The back half of the game has to be busier than the front half, and
+    /// its beacons have to be guarded. The measurement that says how hard a
+    /// level actually plays is `solver.rs`'s `difficulty_of_every_level`;
+    /// this is the cheap structural promise that goes with it.
+    #[test]
+    fn the_later_levels_ask_more_of_the_player() {
+        let levels = shipped_levels();
+        for (number, (name, _, level)) in levels.iter().enumerate() {
+            let late = number >= 5;
+            if !late {
+                continue;
+            }
+            assert!(
+                level.objects.len() >= 6,
+                "{name} has only {} objects for a late level",
+                level.objects.len()
+            );
+            // Something dangerous within the last third, so the approach to
+            // the beacon is never a free glide.
+            let guarded = level.objects.iter().any(|object| {
+                object.kind() == crate::objects::ObjectKind::StaticCloud
+                    && object.center().y < level.bottom() * 0.66
+            });
+            assert!(guarded, "{name}: nothing guards the beacon");
+        }
+        // And they must still be busier than the levels that teach.
+        let objects = |index: usize| levels[index].2.objects.len();
+        let early: usize = (0..5).map(objects).sum();
+        let late: usize = (5..10).map(objects).sum();
+        assert!(
+            late > early * 2,
+            "the late levels ({late} objects) are barely busier than the early ones ({early})"
+        );
+    }
+
     #[derive(Resource, Default)]
     struct Completions(usize);
 

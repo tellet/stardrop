@@ -1,21 +1,25 @@
-// Introduce: a comet stone drops you fast, in open sky.
-// Test: the dive carries you through a gap between dark clouds.
-// Twist: a puff catches the dive and turns it toward the pad.
+// Introduce: the stone throws you into a dive.
+// Test: the dive has to thread the gap between two hazards.
+// Twist: a cloud catches you out of it, and the beacon is back the other way.
 (
     name: "Heavy Heart",
     theme: Sunset,
     start: (540, 180),
-    beacon: (center: (820, 1870), size: (300, 40)),
+    beacon: (center: (300, 1870), size: (240, 40)),
     stardust: [
-        (540, 900),
-        (560, 1260),
-        (840, 1700),
+        (540, 780),
+        (830, 1250),
+        (240, 1610),
     ],
     objects: [
-        CometStone(center: (540, 560), radius: 60),
-        StaticCloud(center: (260, 1120), radius: 90),
-        StaticCloud(center: (860, 1120), radius: 90),
-        CloudPuff(center: (620, 1520), radius: 85),
+        CometStone(center: (540, 520), radius: 55),
+        StaticCloud(center: (290, 900), radius: 85),
+        StaticCloud(center: (790, 900), radius: 85),
+        CloudPuff(center: (560, 1150), radius: 90),
+        Crystal(center: (300, 1320), size: 55),
+        Bubble(center: (780, 1450), radius: 65),
+        StaticCloud(center: (165, 1700), radius: 65),
+        StaticCloud(center: (560, 1700), radius: 80),
     ],
     target_time: 3.5,
 )

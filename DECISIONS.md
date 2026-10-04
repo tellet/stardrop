@@ -477,6 +477,22 @@ Measured 2026-09-24, same machine as the M0 baseline.
 - **Three new mesh tools** carry all of it: a filled outline with a soft rim (rocks, shards, petals), an arc that fades at both ends (rims, swirls, accretion discs) and a tapered spike (petals, tendrils).
 - **Everything is still shared and unit-sized,** so this costs no memory per object: nine types' worth of meshes, scaled per object.
 
+## M8-9 · Levels 6-10 rebuilt, and a number for "hard"
+
+- **What the playtest said:** "the higher levels are a bit too simple".
+- **Why they were:** every level had three or four objects, whatever its number. The game got *new* objects as it went, but never more of them, and never a route that needed two moves in a row.
+- **Now:** eight to eleven objects each, routes that need a sequence, and a hazard guarding the approach to every late beacon. Object counts run 0, 3, 3, 3, 4 across the teaching levels and 8, 8, 9, 8, 11 across the rest.
+- **"Hard" is now measured, not asserted.** `difficulty_of_every_level` plays 300 careless runs per level — hold a direction for a third of a second, pick again — and reports how many land. That is the closest thing to a first-time player this project has.
+
+  | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | before | 41 % | 37 % | 26 % | 37 % | 11 % | 17 % | 17 % | 30 % | 5 % | 23 % |
+  | after | 41 % | 37 % | 26 % | 37 % | 11 % | 7 % | 7 % | 7 % | 5 % | 5 % |
+
+- **It took four rounds of tuning,** and the measurement earned its keep every time: the finale was the third-*easiest* level in the game, and one hazard added to Slow Bloom made it instantly the hardest (4.7 %) until its radius came down.
+- **Still uneven at the front:** level 4 (37 %) is easier than level 3 (26 %). Left alone for now — those are the teaching levels, and they weren't what the playtest was about.
+- **Target times still come from the solver** (fastest route x1.4), so the two levels with a comet dive in them ask 3.5 s, which only the dive can make.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

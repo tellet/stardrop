@@ -1,21 +1,27 @@
 // Introduce: a flower swaps your controls in open sky.
-// Test: the next mote is to the left, while left means right.
-// Twist: a crystal turns you around while the spores still hold.
+// Test: a crystal turns you around while the spores still hold.
+// Twist: the only way left is a portal that comes out on the right.
 // Letting go drops you past the beacon, off to its left.
 (
     name: "Pollen Drift",
     theme: WarmEvening,
     start: (540, 180),
-    beacon: (center: (760, 1870), size: (300, 40)),
+    beacon: (center: (740, 1870), size: (190, 40)),
     stardust: [
-        (300, 1020),
-        (780, 1480),
-        (700, 1740),
+        (300, 880),
+        (880, 1440),
+        (700, 1700),
     ],
     objects: [
-        SporeFlower(center: (540, 600), radius: 60),
-        Crystal(center: (840, 1320), size: 55),
-        CloudPuff(center: (300, 1600), radius: 80),
+        SporeFlower(center: (540, 560), radius: 60),
+        Crystal(center: (840, 1000), size: 55),
+        StaticCloud(center: (300, 1080), radius: 80),
+        TwinPortals(a: (200, 1320), b: (900, 1180), radius: 55),
+        SporeFlower(center: (620, 1340), radius: 55),
+        CloudPuff(center: (300, 1520), radius: 85),
+        StaticCloud(center: (520, 1750), radius: 75),
+        StaticCloud(center: (950, 1690), radius: 65),
+        StaticCloud(center: (770, 1590), radius: 70),
     ],
-    target_time: 6.0,
+    target_time: 5.5,
 )

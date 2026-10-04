@@ -253,6 +253,56 @@ mod tests {
         }
     }
 
+    /// How often careless play lands: the honest measure of how hard a
+    /// level is. Plays a few hundred coarse random runs per level — the
+    /// sort of thing a player does on a first look — and counts the ones
+    /// that reach the beacon.
+    ///
+    /// `cargo test --release --lib -- --ignored difficulty --nocapture`
+    #[test]
+    #[ignore = "a measurement, not a check"]
+    fn difficulty_of_every_level() {
+        use crate::rng::SplitMix64;
+
+        let config = GameConfig::default();
+        for (number, (name, _, level)) in crate::level::tests::shipped_levels()
+            .into_iter()
+            .enumerate()
+        {
+            let seed = 0x5041_594C_4F41_4400 + u64::try_from(number).unwrap_or(0);
+            let mut rng = SplitMix64::new(seed);
+            let tries = 300;
+            let mut landed = 0;
+            for _ in 0..tries {
+                // Careless play: hold a direction for a third of a second,
+                // then pick again.
+                let mut inputs = Vec::with_capacity(MAX_STEPS);
+                while inputs.len() < MAX_STEPS {
+                    // A third each way: left, straight, right.
+                    let roll = rng.range(0.0, 3.0);
+                    let choice = if roll < 1.0 {
+                        CHOICES[0]
+                    } else if roll < 2.0 {
+                        CHOICES[1]
+                    } else {
+                        CHOICES[2]
+                    };
+                    for _ in 0..40 {
+                        inputs.push(choice);
+                    }
+                }
+                if crate::sim::play(&level, &config, &inputs).1 == Progress::Landed {
+                    landed += 1;
+                }
+            }
+            println!(
+                "{:>2}. {name:<14} careless play lands {:>5.1}% of the time",
+                number + 1,
+                f64::from(landed) * 100.0 / f64::from(tries)
+            );
+        }
+    }
+
     /// Prints where the fastest route goes, to place stardust along it.
     /// Run on demand: `cargo test --release print_routes -- --ignored --nocapture`.
     #[test]

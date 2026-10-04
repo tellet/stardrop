@@ -102,4 +102,5 @@ These aren't part of the file format; the solver checks them for every shipped l
 
 - Every level is beatable, and all of its stardust is reachable in one attempt.
 - `target_time` is no tighter than the fastest route × 1.4.
+- Levels 6 to 10 carry at least six objects each, and something dangerous guards the last third, so the approach to the beacon is never a free glide.
 - From the third level on, letting go must miss: a straight drop with no steering never lands on the beacon. The first two levels teach the controls, so there a straight drop may land.

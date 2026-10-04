@@ -1,20 +1,26 @@
 // Introduce: one orb pulls you as you pass.
-// Test: swing around a second orb to reach the far mote.
-// Twist: the swing passes close to a dark cloud.
+// Test: a swing around the second orb is the only way across.
+// Twist: the last orb sits right where you want to fall, and the beacon
+// is on the far side of it.
 (
     name: "Orbit",
     theme: Twilight,
     start: (540, 180),
-    beacon: (center: (700, 1870), size: (300, 40)),
+    beacon: (center: (280, 1870), size: (240, 40)),
     stardust: [
-        (540, 880),
-        (900, 1200),
-        (640, 1700),
+        (820, 760),
+        (300, 1250),
+        (620, 1760),
     ],
     objects: [
-        GravityOrb(center: (540, 700), radius: 55),
-        GravityOrb(center: (720, 1160), radius: 50),
-        StaticCloud(center: (280, 1460), radius: 90),
+        GravityOrb(center: (620, 620), radius: 55),
+        Bubble(center: (880, 900), radius: 60),
+        GravityOrb(center: (340, 1040), radius: 50),
+        StaticCloud(center: (700, 1150), radius: 80),
+        WindRibbon(path: [(200, 1350), (430, 1420)], width: 70),
+        GravityOrb(center: (760, 1500), radius: 45),
+        StaticCloud(center: (430, 1640), radius: 70),
+        CloudPuff(center: (140, 1700), radius: 80),
     ],
     target_time: 5.5,
 )
