@@ -73,6 +73,9 @@ dirs = "=7.0.0"
 bevy_embedded_assets = { version = "=0.16.0", default-features = false, features = [
     "default-source",
 ] }
+# Nothing is ever loaded from a sound file: every sound is built in code
+# (`synth.rs`). `ogg` is still on because the crate does not compile without
+# a decoder feature — its prelude re-exports a type that one provides.
 bevy_kira_audio = { version = "=0.26.0", default-features = false, features = ["ogg"] }
 
 [dev-dependencies]
@@ -109,10 +112,18 @@ strip = true        # Drop debug symbols from the shipped binary.
 panic = "abort"     # No unwinding machinery: smaller and faster. A panic ends the game immediately,
                     # which is acceptable because game logic must not panic (Section 7.4).
 
-# The `dist` (fat LTO, what we ship) and `profiling` (dist plus symbols)
-# profiles live here from Milestone 9 on. They are left out until then
-# because every profile built is another full copy of Bevy in `target/`,
-# and nothing before M9 needs them. DECISIONS.md M0-10 has both, to restore.
+# What we ship and measure budgets against: `cargo build --profile dist`.
+# Every profile built is another full copy of Bevy in `target/`, so build
+# this one when you need it and `cargo clean --profile dist` after.
+[profile.dist]
+inherits = "release"
+lto = "fat"         # Whole-program link-time optimization: smallest, fastest binary; slow to build.
+
+# Shipping build with symbols, for profiling (`cargo build --profile profiling`).
+[profile.profiling]
+inherits = "dist"
+strip = false
+debug = "line-tables-only"
 
 # --- Lints ---------------------------------------------------------------
 

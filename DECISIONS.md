@@ -493,6 +493,33 @@ Measured 2026-09-24, same machine as the M0 baseline.
 - **Still uneven at the front:** level 4 (37 %) is easier than level 3 (26 %). Left alone for now — those are the teaching levels, and they weren't what the playtest was about.
 - **Target times still come from the solver** (fastest route x1.4), so the two levels with a comet dive in them ask 3.5 s, which only the dive can make.
 
+## M9-1 · What shipping looks like
+
+- **One file.** `scripts/package.sh` builds the `dist` profile and drops `stardrop`, the README and the credits into `package/`. The binary carries its own assets (M5-7), so it runs from an empty folder — checked by copying it into one and starting it.
+- **`dist` and `profiling` are back** in `Cargo.toml`, removed at M8-6 to keep `target/` small. Build them when needed, `cargo clean --profile dist` after.
+- **44.3 MB** with fat LTO, against 48.2 MB for the everyday release build.
+
+## Measurements (M9) — the Section 7.1 budgets
+
+Measured 2026-10-04 on the `dist` build, same machine as the M0 baseline.
+
+| Budget | Required | Measured | |
+|---|---|---|---|
+| Frame rate, full quality | stable 60 FPS | **0.65 ms** a frame with vsync off (≈1500 FPS); 16.68 ms locked, worst 17.0 | ✅ 25x headroom |
+| Frame rate, plain quality | — | **0.51 ms** a frame | ✅ |
+| Our own systems | under 1 ms a frame | **0.100 ms** | ✅ |
+| No hitches | no visible stutter | worst frame **17.0 ms** across a whole level, vsync on | ✅ |
+| Level load and retry | under 200 ms | level change **50 ms**; retry moves one entity and loads nothing | ✅ |
+| Idle efficiency | quiet in menus | **2.7 %** of one core in a menu, against 15.4 % while falling | ✅ |
+| Memory | flat over a session | **390 MB** in menus, **411 MB** playing, steady; +40 KB over 400 play/fail/retry/reload rounds | ✅ |
+| Startup | a couple of seconds | **420 ms** to the first frame | ✅ |
+| Binary | one file | **44.3 MB**, assets inside | ✅ |
+
+The two numbers worth knowing the shape of: the game spends **0.65 ms** of a
+16.7 ms frame doing everything it does, and a tenth of a millisecond of that
+is our own code — the rest is the renderer. There is room for a great deal
+more sky.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

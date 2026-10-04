@@ -121,7 +121,7 @@ fn page_text(kind: ObjectKind) -> (&'static str, &'static str) {
         ObjectKind::GravityOrb => ("Gravity orb", "It wants me. Swing wide and it lets go."),
         ObjectKind::TwinPortals => (
             "Twin portals",
-            "Two rings, one doorway. In here, out there.",
+            "Two mouths, one tunnel. In here, out there.",
         ),
         ObjectKind::StaticCloud => ("Static cloud", "Dark, and it crackles. Best not."),
     }
