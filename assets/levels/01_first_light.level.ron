@@ -1,6 +1,7 @@
 // Introduce: the fall itself, and the beacon straight below.
 // Test: three motes on a gentle zigzag teach steering.
-// Twist: the last mote sits off to the side of the pad.
+// Twist: two soft clouds on the way down, which teach that touching things
+// is the point: each one plays the next note of the level's phrase.
 (
     name: "First Light",
     theme: DeepSpace,
@@ -11,5 +12,9 @@
         (660, 1080),
         (430, 1520),
     ],
-    target_time: 6.0,
+    objects: [
+        CloudPuff(center: (380, 780), radius: 85),
+        CloudPuff(center: (680, 1210), radius: 85),
+    ],
+    phrase: 2,
 )

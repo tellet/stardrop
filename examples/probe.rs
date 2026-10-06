@@ -12,7 +12,7 @@ use stardrop::config::GameConfig;
 use stardrop::level::Level;
 use stardrop::physics::movement::AirInput;
 use stardrop::sim::{Attempt, Progress};
-use stardrop::solver::{Goal, solve, suggested_target_time};
+use stardrop::solver::{Goal, solve};
 
 fn main() {
     let Some(path) = std::env::args().nth(1) else {
@@ -58,7 +58,11 @@ fn main() {
         );
     }
 
-    for goal in [Goal::Fastest, Goal::MostStardust] {
+    for goal in [
+        Goal::Fastest,
+        Goal::MostStardust,
+        Goal::Phrase(level.phrase),
+    ] {
         match solve(&level, &config, goal) {
             Some(route) => {
                 if goal == Goal::MostStardust {
@@ -70,11 +74,12 @@ fn main() {
                     println!("  motes: {}", motes.join(" "));
                 }
                 println!(
-                    "{goal:?}: {:.2} s, stardust {}/{}, suggested target {:.1} s",
+                    "{goal:?}: {:.2} s, stardust {}/{}, phrase {}/{}",
                     route.seconds,
                     route.stardust,
                     level.stardust.len(),
-                    suggested_target_time(route.seconds)
+                    route.touches,
+                    level.phrase
                 );
                 print_path(&level, &config, &route.inputs);
                 if goal == Goal::MostStardust {

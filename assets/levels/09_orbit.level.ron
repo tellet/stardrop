@@ -22,5 +22,5 @@
         StaticCloud(center: (430, 1640), radius: 70),
         CloudPuff(center: (140, 1700), radius: 80),
     ],
-    target_time: 5.5,
+    phrase: 5,
 )

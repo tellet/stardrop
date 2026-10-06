@@ -16,5 +16,5 @@
         CloudPuff(center: (300, 1120), radius: 80),
         CloudPuff(center: (780, 1660), radius: 80),
     ],
-    target_time: 6.0,
+    phrase: 2,
 )

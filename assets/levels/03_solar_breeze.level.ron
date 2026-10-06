@@ -16,5 +16,5 @@
         WindRibbon(path: [(880, 1240), (520, 1330), (320, 1400)], width: 85),
         CloudPuff(center: (300, 1620), radius: 80),
     ],
-    target_time: 6.0,
+    phrase: 3,
 )

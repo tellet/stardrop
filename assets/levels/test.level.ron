@@ -30,5 +30,5 @@
         // if you notice which way the chevrons point.
         WindRibbon(path: [(90, 1450), (250, 1600), (460, 1700)], width: 90),
     ],
-    target_time: 8.0,
+    phrase: 1,
 )

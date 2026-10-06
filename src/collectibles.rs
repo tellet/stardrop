@@ -37,6 +37,9 @@ impl Plugin for CollectiblesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentRun>()
             .add_message::<StardustCollected>()
+            // Declared here as well as in `ObjectsPlugin`: this plugin
+            // counts touches, and registering a message twice is a no-op.
+            .add_message::<crate::objects::ObjectTouched>()
             .add_systems(
                 FixedUpdate,
                 (
@@ -50,11 +53,21 @@ impl Plugin for CollectiblesPlugin {
                 Update,
                 (
                     start_new_run.run_if(on_message::<AttemptRestarted>),
+                    count_touches.run_if(on_message::<crate::objects::ObjectTouched>),
                     show_motes,
                 )
                     .chain(),
             );
     }
+}
+
+/// Every object touched is the next note of the attempt's melody, and the
+/// third star asks for a whole phrase of them.
+fn count_touches(
+    mut touched: MessageReader<crate::objects::ObjectTouched>,
+    mut run: ResMut<CurrentRun>,
+) {
+    run.touches += u32::try_from(touched.read().count()).unwrap_or(u32::MAX);
 }
 
 fn count_run_time(time: Res<Time>, mut run: ResMut<CurrentRun>) {

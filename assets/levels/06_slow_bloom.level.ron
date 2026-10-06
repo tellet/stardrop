@@ -22,5 +22,5 @@
         WindRibbon(path: [(680, 1480), (950, 1545)], width: 70),
         StaticCloud(center: (1010, 1740), radius: 45),
     ],
-    target_time: 6.0,
+    phrase: 5,
 )

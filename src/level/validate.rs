@@ -62,8 +62,14 @@ pub enum LevelError {
     BadBeaconSize,
     /// The beacon isn't below the start, so it can never be reached by falling.
     BeaconAboveStart,
-    /// The target time isn't positive.
-    BadTargetTime,
+    /// The phrase asks for more touches than the level has objects, so the
+    /// third star could never be earned.
+    ImpossiblePhrase {
+        /// What the level asked for.
+        phrase: u8,
+        /// How many objects it actually has.
+        objects: usize,
+    },
     /// More stardust than a run can track.
     TooMuchStardust(usize),
     /// An object's size is outside its type's range.
@@ -112,7 +118,10 @@ impl fmt::Display for LevelError {
             ),
             Self::BadBeaconSize => write!(f, "the beacon's width and height must be positive"),
             Self::BeaconAboveStart => write!(f, "the beacon must be below the start"),
-            Self::BadTargetTime => write!(f, "target_time must be more than 0 seconds"),
+            Self::ImpossiblePhrase { phrase, objects } => write!(
+                f,
+                "phrase asks for {phrase} touches, but the level has only {objects} objects"
+            ),
             Self::BadObjectSize { object, min, max } => write!(
                 f,
                 "{}'s size must be between {min} and {max}",
@@ -167,9 +176,12 @@ pub(super) fn check(file: &LevelFile) -> Result<(), LevelError> {
     if file.name.trim().is_empty() {
         return Err(LevelError::EmptyName);
     }
-    finite("target_time", file.target_time)?;
-    if file.target_time <= 0.0 {
-        return Err(LevelError::BadTargetTime);
+
+    if usize::from(file.phrase) > file.objects.len() {
+        return Err(LevelError::ImpossiblePhrase {
+            phrase: file.phrase,
+            objects: file.objects.len(),
+        });
     }
 
     inside(file.start, Item::Start)?;
@@ -311,7 +323,7 @@ mod tests {
         start: (540, 200),
         beacon: (center: (540, 1880), size: (300, 40)),
         stardust: [(200, 1000), (900, 1500)],
-        target_time: 8.0,
+        phrase: 0,
     )"#;
 
     /// Parses `VALID` with one piece of text swapped, and returns the error.
@@ -343,7 +355,7 @@ mod tests {
     #[test]
     fn behavior_fields_are_rejected() {
         // Consistency rule: a level can't change how anything behaves.
-        let error = error_after("target_time: 8.0,", "target_time: 8.0, gravity: 900,");
+        let error = error_after("phrase: 0,", "phrase: 0, gravity: 900,");
         assert!(matches!(error, LevelError::Syntax { .. }));
         assert!(error.to_string().contains("gravity"));
     }
@@ -356,8 +368,8 @@ mod tests {
 
     #[test]
     fn missing_required_field_is_rejected() {
-        let error = error_after("target_time: 8.0,", "");
-        assert!(error.to_string().contains("target_time"));
+        let error = error_after("phrase: 0,", "");
+        assert!(error.to_string().contains("phrase"));
     }
 
     #[test]
@@ -367,8 +379,9 @@ mod tests {
 
     #[test]
     fn nan_is_rejected() {
-        let error = error_after("target_time: 8.0", "target_time: NaN");
-        assert_eq!(error, LevelError::NotANumber("target_time"));
+        // A number that isn't one, in a field that has to be finite.
+        let error = error_after("start: (540, 200)", "start: (540, NaN)");
+        assert_eq!(error, LevelError::NotANumber("a position"));
     }
 
     #[test]
@@ -409,10 +422,15 @@ mod tests {
     }
 
     #[test]
-    fn target_time_must_be_positive() {
+    fn a_phrase_longer_than_the_level_is_rejected() {
+        // The test level has no objects at all, so one touch is already
+        // one too many.
         assert_eq!(
-            error_after("target_time: 8.0", "target_time: 0.0"),
-            LevelError::BadTargetTime
+            error_after("phrase: 0", "phrase: 9"),
+            LevelError::ImpossiblePhrase {
+                phrase: 9,
+                objects: 0
+            }
         );
     }
 
@@ -427,10 +445,7 @@ mod tests {
     }
 
     fn with_objects(objects: &str) -> String {
-        VALID.replace(
-            "target_time: 8.0,",
-            &format!("objects: [{objects}], target_time: 8.0,"),
-        )
+        VALID.replace("phrase: 0,", &format!("objects: [{objects}], phrase: 0,"))
     }
 
     #[test]

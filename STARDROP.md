@@ -81,8 +81,9 @@ Nine object types. The descriptions below are for us; the player is never told a
 
 ### 3.5 Collectibles & scoring
 - Each level has a few **stardust motes** to collect, placed along risky or clever routes.
-- Up to **3 stars** per level: 1 for reaching the beacon, 1 for collecting all stardust in one attempt, 1 for beating the level's target time.
-- Completing a level unlocks the next. Best time, stars and stardust are saved.
+- Up to **3 stars** per level: 1 for reaching the beacon, 1 for collecting all stardust in one attempt, 1 for **finishing the level's phrase** — touching the number of objects the level asks for, in that one attempt.
+- The phrase star is the scoring half of the musical system (Section 6.1): every object touched plays the next note of the level's scale, so finishing a phrase is something the player hears rather than something the interface has to explain. It also gives the player a reason to go *through* a level rather than around it.
+- Completing a level unlocks the next. Best time, stars and stardust are saved. Time is still shown on the level-complete screen; it just isn't what a star is for, because a stopwatch and a calm fall pull in opposite directions.
 
 ### 3.6 The field journal
 - The first time the astronaut touches an object type, a small "new entry" notice appears, and the journal gains an illustrated page for it with a short note in the astronaut's voice, written as a guess based on what they just saw (e.g. *"Bubbles: slow, cozy, never in a hurry."*).

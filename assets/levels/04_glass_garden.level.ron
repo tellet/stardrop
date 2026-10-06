@@ -16,5 +16,5 @@
         Crystal(center: (860, 1080), size: 55),
         CloudPuff(center: (520, 1520), radius: 85),
     ],
-    target_time: 6.0,
+    phrase: 3,
 )

@@ -26,5 +26,5 @@
         StaticCloud(center: (880, 1430), radius: 70),
         StaticCloud(center: (980, 1620), radius: 60),
     ],
-    target_time: 3.5,
+    phrase: 5,
 )

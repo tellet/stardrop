@@ -80,7 +80,7 @@ pub(super) struct LevelFile {
     pub stardust: Vec<FilePoint>,
     #[serde(default)]
     pub objects: Vec<FileObject>,
-    pub target_time: f32,
+    pub phrase: u8,
 }
 
 /// The altitude theme: which palette and scenery a level uses (Section 4).
@@ -151,8 +151,11 @@ pub struct Level {
     pub stardust: Vec<Vec2>,
     /// Objects, in the order they're listed in the file.
     pub objects: Vec<Placement>,
-    /// Seconds for the "fast run" star.
-    pub target_time: f32,
+    /// How many objects a single attempt must touch to finish the phrase
+    /// and earn the third star. Every touch plays the next note of the
+    /// level's scale, so a phrase is something you hear, not something the
+    /// interface has to tell you about.
+    pub phrase: u8,
 }
 
 impl Level {
@@ -202,7 +205,7 @@ impl Level {
                 .collect(),
             name: file.name,
             theme: file.theme,
-            target_time: file.target_time,
+            phrase: file.phrase,
         }
     }
 }
@@ -217,7 +220,7 @@ impl Level {
             theme: DeepSpace,
             start: (540, 200),
             beacon: (center: (540, 1880), size: (300, 40)),
-            target_time: 8.0,
+            phrase: 0,
         )"#;
         match Self::parse(text) {
             Ok(level) => level,
@@ -286,7 +289,7 @@ mod tests {
         start: (540, 200),
         beacon: (center: (540, 1880), size: (300, 40)),
         stardust: [(200, 1000)],
-        target_time: 8.0,
+        phrase: 0,
     )"#;
 
     #[test]
@@ -305,13 +308,13 @@ mod tests {
     #[test]
     fn objects_convert_to_world_coordinates() {
         let text = VALID.replace(
-            "target_time: 8.0,",
+            "phrase: 0,",
             "objects: [
                 CloudPuff(center: (240, 900), radius: 80),
                 Crystal(center: (700, 1200), size: 40),
                 StaticCloud(center: (800, 500), radius: 60),
             ],
-            target_time: 8.0,",
+            phrase: 2,",
         );
         let level = Level::parse(&text).unwrap();
         assert_eq!(

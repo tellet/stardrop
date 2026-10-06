@@ -520,6 +520,15 @@ The two numbers worth knowing the shape of: the game spends **0.65 ms** of a
 is our own code — the rest is the renderer. There is room for a great deal
 more sky.
 
+## M10-1 · The melody earns the third star
+
+- **Why:** the musical system was the one thing in this game nobody else is doing, and it was decoration. The streak changed nothing, and the scoring was the three-star frame every puzzle game ships with.
+- **What changed:** the "fast run" star is gone. The third star is now the **phrase**: touch the number of objects the level asks for, in one attempt. Every touch already plays the next note of the level's scale, so the player hears the phrase fill up and the interface never has to explain it.
+- **It fixes a design fight too.** A stopwatch star and a calm game pull in opposite directions, and two levels asked 3.5 s, which only the comet dive could make. Time is still shown after a landing. It just isn't what a star is for.
+- **Levels say how long their phrase is** (`phrase: 5`), validated against the number of objects they contain, so the star is always earnable. Teaching levels ask for 2 or 3, the back half for 5. First Light had no objects at all and now has two clouds, which also teaches on the first fall that touching things is the point.
+- **The solver proves it.** A third goal, `Goal::Phrase(n)`, searches for a landing route that touches n objects. The first version scored touches without a cap and the search taught itself to bounce on one cloud forever rather than fall: a longer melody always beat a deeper fall. Capping the reward at what the level asks for fixed it.
+- **Saves migrate.** Version 2 drops the old "fast" star rather than carrying it over, because a star has to have been earned at the thing it is for.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

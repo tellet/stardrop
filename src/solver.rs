@@ -32,6 +32,10 @@ pub enum Goal {
     Fastest,
     /// Land with as much stardust as possible.
     MostStardust,
+    /// Land having touched this many objects: the third star. The number
+    /// matters — rewarding touches without a cap teaches the search to
+    /// bounce on one cloud forever instead of falling.
+    Phrase(u8),
 }
 
 /// A route that lands.
@@ -43,6 +47,8 @@ pub struct Route {
     pub seconds: f32,
     /// How much stardust it collects.
     pub stardust: usize,
+    /// How many objects it touches.
+    pub touches: u32,
 }
 
 /// One state the search is carrying.
@@ -62,7 +68,19 @@ impl Candidate {
             // Each mote is worth more than the whole level's depth.
             #[expect(clippy::cast_precision_loss, reason = "at most 64 motes")]
             Goal::MostStardust => self.attempt.stardust() as f32 * 10_000.0 + depth,
+            // The same again for touches, counted only up to what the level
+            // asks for, so that finishing the phrase stops being a reason to
+            // stay up here.
+            Goal::Phrase(needed) => f32::from(self.played(needed)) * 10_000.0 + depth,
         }
+    }
+
+    /// How much of the phrase this candidate has played, capped at what the
+    /// level asks for.
+    fn played(&self, needed: u8) -> u8 {
+        u8::try_from(self.attempt.touches())
+            .unwrap_or(u8::MAX)
+            .min(needed)
     }
 
     /// Which grid cell this candidate sits in: where it is on screen, plus
@@ -81,6 +99,7 @@ impl Candidate {
             match goal {
                 Goal::Fastest => 0,
                 Goal::MostStardust => self.attempt.stardust(),
+                Goal::Phrase(needed) => usize::from(self.played(needed)),
             },
         )
     }
@@ -153,6 +172,7 @@ fn keep_best(best: &mut Option<Route>, branch: &Candidate, goal: Goal) {
         inputs: branch.inputs.clone(),
         seconds: branch.attempt.elapsed(),
         stardust: branch.attempt.stardust(),
+        touches: branch.attempt.touches(),
     };
     let better = match (best.as_ref(), goal) {
         (None, _) => true,
@@ -160,17 +180,14 @@ fn keep_best(best: &mut Option<Route>, branch: &Candidate, goal: Goal) {
         (Some(current), Goal::MostStardust) => {
             (route.stardust, -route.seconds) > (current.stardust, -current.seconds)
         }
+        (Some(current), Goal::Phrase(needed)) => {
+            let played = |touches: u32| u8::try_from(touches).unwrap_or(u8::MAX).min(needed);
+            (played(route.touches), -route.seconds) > (played(current.touches), -current.seconds)
+        }
     };
     if better {
         *best = Some(route);
     }
-}
-
-/// The target time for a level: the fastest route, with room to breathe.
-#[must_use]
-pub fn suggested_target_time(fastest_seconds: f32) -> f32 {
-    // A clean run earns the star; a hesitant one doesn't (the user's choice).
-    (fastest_seconds * 1.4 * 2.0).round() / 2.0
 }
 
 #[cfg(test)]
@@ -190,12 +207,6 @@ mod tests {
         assert_eq!(progress, Progress::Landed);
     }
 
-    #[test]
-    fn target_times_round_to_half_seconds() {
-        assert!((suggested_target_time(10.0) - 14.0).abs() < 1e-6);
-        assert!((suggested_target_time(5.2) - 7.5).abs() < 1e-6);
-    }
-
     /// Every shipped level must be landable, and all its stardust reachable
     /// in one attempt, or its stars can't be earned.
     #[test]
@@ -213,21 +224,24 @@ mod tests {
                 thorough.stardust,
                 level.stardust.len()
             );
-            let suggested = suggested_target_time(fastest.seconds);
+            // The third star has to be earnable: some landing route must
+            // touch the whole phrase the level asks for.
+            let musical = solve(&level, &config, Goal::Phrase(level.phrase))
+                .unwrap_or_else(|| panic!("{file}: no route to the beacon"));
             assert!(
-                level.target_time >= suggested - 0.01,
-                "{file}: target_time {} is tighter than the suggested {suggested} \
-                 (fastest route {:.1} s)",
-                level.target_time,
-                fastest.seconds
+                musical.touches >= u32::from(level.phrase),
+                "{file}: asks for a phrase of {}, but the best landing route \
+                 touches only {}",
+                level.phrase,
+                musical.touches
             );
             println!(
-                "{name:<14} fastest {:>5.1} s  suggested target {suggested:>5.1} s  \
-                 set {:>5.1} s  stardust {}/{}",
+                "{name:<14} fastest {:>5.1} s  stardust {}/{}  phrase {}/{}",
                 fastest.seconds,
-                level.target_time,
                 thorough.stardust,
-                level.stardust.len()
+                level.stardust.len(),
+                musical.touches,
+                level.phrase
             );
         }
     }

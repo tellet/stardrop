@@ -45,7 +45,7 @@ pub struct LevelRecord {
     /// Best star for collecting everything in one attempt.
     pub star_all_stardust: bool,
     /// Best star for beating the target time.
-    pub star_fast: bool,
+    pub star_phrase: bool,
 }
 
 impl LevelRecord {
@@ -55,7 +55,7 @@ impl LevelRecord {
         Stars {
             landed: self.star_landed,
             all_stardust: self.star_all_stardust,
-            fast: self.star_fast,
+            phrase: self.star_phrase,
         }
     }
 
@@ -67,13 +67,13 @@ impl LevelRecord {
         let stars = self.stars().merged(stars);
         self.star_landed = stars.landed;
         self.star_all_stardust = stars.all_stardust;
-        self.star_fast = stars.fast;
+        self.star_phrase = stars.phrase;
     }
 }
 
 /// What this build writes. Raise it when the meaning of a field changes,
 /// and teach [`SaveData::migrated`] how to bring the old one forward.
-pub const SAVE_VERSION: u32 = 1;
+pub const SAVE_VERSION: u32 = 2;
 
 /// Everything the game remembers between sessions.
 ///
@@ -135,6 +135,15 @@ impl SaveData {
     /// time something *does* change, there is somewhere to put it.
     #[must_use]
     pub fn migrated(mut self) -> Self {
+        // Version 1 kept a "fast run" star, which version 2 replaced with
+        // the phrase star (DECISIONS.md M10-1). They mean different things,
+        // so the old one is dropped rather than carried across: a star has
+        // to have been earned at the thing it is for.
+        if self.version < 2 {
+            for record in self.levels.values_mut() {
+                record.star_phrase = false;
+            }
+        }
         if self.version > SAVE_VERSION {
             warn!(
                 "this save was written by a later version of the game ({} > {SAVE_VERSION}); \
@@ -326,7 +335,7 @@ fn record_landing(
     let Some(entry) = levels.as_ref().and_then(|levels| levels.entry(*selected)) else {
         return;
     };
-    let stars = Stars::earned(run.0, level.stardust.len(), level.target_time);
+    let stars = Stars::earned(run.0, level.stardust.len(), level.phrase);
     progress.record_landing(&entry.file, run.elapsed, run.stardust.count(), stars);
 }
 
@@ -374,8 +383,9 @@ mod tests {
         let run = RunStats {
             elapsed: time,
             stardust,
+            touches: 5,
         };
-        (time, collected, Stars::earned(run, 3, 20.0))
+        (time, collected, Stars::earned(run, 3, 5))
     }
 
     #[test]
@@ -490,6 +500,6 @@ mod tests {
     #[test]
     fn a_saved_file_says_which_version_wrote_it() {
         let text = SaveData::default().to_text();
-        assert!(text.contains("version: 1"), "{text}");
+        assert!(text.contains(&format!("version: {SAVE_VERSION}")), "{text}");
     }
 }

@@ -81,7 +81,7 @@ fn on_off(value: bool) -> &'static str {
 
 /// Three slots, filled in as the stars are earned: `*` earned, `-` not.
 fn star_marks(stars: Stars) -> String {
-    [stars.landed, stars.all_stardust, stars.fast]
+    [stars.landed, stars.all_stardust, stars.phrase]
         .map(|earned| if earned { '*' } else { '-' })
         .iter()
         .collect()
@@ -430,8 +430,8 @@ fn spawn_level_complete(
     progress: Res<Progress>,
 ) {
     let total_stardust = level.as_ref().map_or(0, |level| level.stardust.len());
-    let target = level.map_or(0.0, |level| level.target_time);
-    let earned = Stars::earned(run.0, total_stardust, target);
+    let phrase = level.map_or(0, |level| level.phrase);
+    let earned = Stars::earned(run.0, total_stardust, phrase);
     let record = levels
         .as_ref()
         .and_then(|levels| levels.entry(*selected))
@@ -441,11 +441,12 @@ fn spawn_level_complete(
         .best_time
         .map_or_else(|| "-".to_owned(), |best| format!("{best:.1} s"));
     let note = format!(
-        "{}\ntime {:.1} s   (best {best})\nstardust {}/{}   target {target:.0} s",
+        "{}\ntime {:.1} s   (best {best})\nstardust {}/{}   phrase {}/{phrase}",
         star_marks(earned),
         run.elapsed,
         run.stardust.count(),
-        total_stardust
+        total_stardust,
+        run.touches.min(u32::from(phrase))
     );
     let has_next = levels.is_some_and(|levels| selected.0 + 1 < levels.levels.len());
     let mut items = vec![Row::new("Retry", MenuAction::RetryLevel)];

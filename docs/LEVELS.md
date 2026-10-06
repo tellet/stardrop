@@ -51,9 +51,11 @@ For scale, the astronaut is a circle with a radius of 28 units, so the level is 
         StaticCloud(center: (330, 1250), radius: 95),
     ],
 
-    // Seconds for the "fast run" star: a good attempt, not a perfect one.
-    // The clock starts when the fall starts, not while studying the level.
-    target_time: 8.0,
+    // How many objects one attempt must touch to finish the level's phrase
+    // and earn the third star. Every touch plays the next note of the
+    // level's scale, so the player hears the phrase fill up. Must not ask
+    // for more objects than the level has.
+    phrase: 3,
 )
 ```
 
@@ -81,7 +83,7 @@ A level that breaks any of these rules is rejected, and the message says what's 
 
 - The file must be valid RON with exactly these fields. **Unknown fields are errors.** This is deliberate: a level can only *place* things and can never change how anything *behaves* (see the consistency rule in `STARDROP.md` §3.3). All behavior tuning lives in `src/config.rs`.
 - `name` isn't empty.
-- `target_time` is more than 0.
+- `phrase` asks for no more touches than the level has objects, so the third star can always be earned.
 - All numbers are ordinary numbers: no `NaN` and no `inf`.
 - The start, the whole beacon pad, every checkpoint and every stardust mote are inside the level.
 - The beacon is below the start, and its width and height are positive.
@@ -101,6 +103,7 @@ A theme also picks the level's musical key: the ten altitudes descend from A dow
 These aren't part of the file format; the solver checks them for every shipped level (`src/solver.rs`):
 
 - Every level is beatable, and all of its stardust is reachable in one attempt.
-- `target_time` is no tighter than the fastest route × 1.4.
+- Some landing route touches the whole phrase the level asks for, so the third star is earnable.
+- Every level asks for a phrase of at least 2.
 - Levels 6 to 10 carry at least six objects each, and something dangerous guards the last third, so the approach to the beacon is never a free glide.
 - From the third level on, letting go must miss: a straight drop with no steering never lands on the beacon. The first two levels teach the controls, so there a straight drop may land.

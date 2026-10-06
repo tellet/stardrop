@@ -36,6 +36,7 @@ pub struct Attempt {
     used: Vec<bool>,
     stardust: StardustSet,
     elapsed: f32,
+    touches: u32,
 }
 
 impl Attempt {
@@ -48,6 +49,7 @@ impl Attempt {
             used: vec![false; level.objects.len()],
             stardust: StardustSet::default(),
             elapsed: 0.0,
+            touches: 0,
         }
     }
 
@@ -61,6 +63,13 @@ impl Attempt {
     #[must_use]
     pub fn elapsed(&self) -> f32 {
         self.elapsed
+    }
+
+    /// How many objects this attempt has touched: the length of its
+    /// melody, and what the third star asks for.
+    #[must_use]
+    pub fn touches(&self) -> u32 {
+        self.touches
     }
 
     /// How much stardust this attempt has collected.
@@ -114,6 +123,8 @@ impl Attempt {
                 continue;
             }
             if entered {
+                // Counted exactly where the game sends `ObjectTouched`.
+                self.touches += 1;
                 match on_enter(placement, &config.objects, &config.movement, self.body) {
                     Outcome::Nothing => {}
                     Outcome::Changed(changed) | Outcome::Teleported(changed) => {

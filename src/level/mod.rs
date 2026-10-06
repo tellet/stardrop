@@ -605,6 +605,15 @@ pub(crate) mod tests {
             });
             assert!(guarded, "{name}: nothing guards the beacon");
         }
+        // Every level must ask for a phrase worth playing: a level whose
+        // third star is free isn't asking anything.
+        for (name, _, level) in &levels {
+            assert!(
+                level.phrase >= 2,
+                "{name} asks for a phrase of {}",
+                level.phrase
+            );
+        }
         // And they must still be busier than the levels that teach.
         let objects = |index: usize| levels[index].2.objects.len();
         let early: usize = (0..5).map(objects).sum();
