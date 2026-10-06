@@ -117,7 +117,14 @@ fn long_session_memory() {
     reload_level(&mut app);
     let start = resident_kb();
     let rounds = 400;
+    // Memory settles over the first rounds as the allocator takes its
+    // arenas. What matters is the second half: that is where a leak would
+    // keep showing up, and where this has to be flat.
+    let mut halfway = start;
     for round in 0..rounds {
+        if round == rounds / 2 {
+            halfway = resident_kb();
+        }
         drop(&mut app);
         for _ in 0..40 {
             app.update();
@@ -131,12 +138,18 @@ fn long_session_memory() {
         }
     }
     let end = resident_kb();
+    let settling = i64::try_from(halfway).unwrap_or(0) - i64::try_from(start).unwrap_or(0);
+    let after = i64::try_from(end).unwrap_or(0) - i64::try_from(halfway).unwrap_or(0);
     println!(
-        "{rounds} rounds of play, failure, retry and reload: {start} KB -> {end} KB ({:+} KB)",
-        i64::try_from(end).unwrap_or(0) - i64::try_from(start).unwrap_or(0)
+        "{rounds} rounds of play, failure, retry and reload: \
+         {start} KB -> {halfway} KB ({settling:+} KB while settling) -> {end} KB ({after:+} KB after)"
     );
     // Entities are covered by the footprint soak; this one is about memory.
     assert_eq!(phase(&app), LevelPhase::Ready);
+    assert!(
+        after < 500,
+        "memory grew by {after} KB over the second half: something is being kept"
+    );
 }
 
 /// A level with something of every kind, for the soaks.

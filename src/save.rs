@@ -30,7 +30,9 @@ const TEMP_FILE: &str = "save.writing.ron";
 
 /// The best results for one level.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, default)]
+// Part of the save file, so it follows the same rule: a record from a
+// later build opens here, carrying what this build understands.
+#[serde(default)]
 pub struct LevelRecord {
     /// Whether the beacon has ever been reached.
     pub completed: bool,
@@ -69,17 +71,45 @@ impl LevelRecord {
     }
 }
 
+/// What this build writes. Raise it when the meaning of a field changes,
+/// and teach [`SaveData::migrated`] how to bring the old one forward.
+pub const SAVE_VERSION: u32 = 1;
+
 /// Everything the game remembers between sessions.
 ///
 /// Levels are keyed by file name, not by position, so reordering or inserting
 /// levels never moves someone's progress to the wrong level.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, default)]
+///
+/// Unknown fields are *allowed* here, unlike in a level file: a save written
+/// by a later build must still open in this one, carrying what it can. The
+/// fields that build added are lost when this one writes the file back, which
+/// is the price of opening it at all.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SaveData {
+    /// Which build's format this is. A file with no version at all was
+    /// written before versioning existed, and reads as 0.
+    #[serde(default = "before_versioning")]
+    pub version: u32,
     /// Results per level file.
     pub levels: BTreeMap<String, LevelRecord>,
     /// Object types discovered, by name (stable across versions).
     pub discovered: Vec<String>,
+}
+
+/// What a file with no version field in it counts as.
+const fn before_versioning() -> u32 {
+    0
+}
+
+impl Default for SaveData {
+    fn default() -> Self {
+        Self {
+            version: SAVE_VERSION,
+            levels: BTreeMap::new(),
+            discovered: Vec::new(),
+        }
+    }
 }
 
 impl SaveData {
@@ -96,6 +126,24 @@ impl SaveData {
     pub fn to_text(&self) -> String {
         ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
             .unwrap_or_else(|_| "()".to_owned())
+    }
+
+    /// Brings a save from an older build up to date, and stamps it.
+    ///
+    /// Nothing has had to change yet: version 0 (before versioning) and
+    /// version 1 hold the same fields. The path exists so that the first
+    /// time something *does* change, there is somewhere to put it.
+    #[must_use]
+    pub fn migrated(mut self) -> Self {
+        if self.version > SAVE_VERSION {
+            warn!(
+                "this save was written by a later version of the game ({} > {SAVE_VERSION}); \
+                 opening it anyway, and anything newer in it will be dropped",
+                self.version
+            );
+        }
+        self.version = SAVE_VERSION;
+        self
     }
 
     /// Records a landing on `level_file`.
@@ -185,7 +233,9 @@ fn read_valid(path: &Path) -> Result<Option<SaveData>, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.to_string()),
     };
-    SaveData::parse(&text).map(Some).map_err(|e| e.to_string())
+    SaveData::parse(&text)
+        .map(|data| Some(data.migrated()))
+        .map_err(|error| error.to_string())
 }
 
 /// Reads a text file from the save folder, if it exists.
@@ -413,8 +463,33 @@ mod tests {
         assert_eq!(load(&folder), SaveData::default());
     }
 
+    /// A save written before versioning must still open, with its stars.
     #[test]
-    fn unknown_fields_are_rejected_rather_than_silently_dropped() {
-        assert!(SaveData::parse("(levels: {}, discovered: [], mystery: 1)").is_err());
+    fn a_save_from_before_versioning_still_opens() {
+        let old = "(levels: {\"01.ron\": (completed: true, best_time: Some(4.0), \
+                   most_stardust: 3, star_landed: true)}, discovered: [])";
+        let raw = SaveData::parse(old).expect("an old save is still valid");
+        assert_eq!(raw.version, 0, "a file with no version reads as 0");
+        let data = raw.migrated();
+        assert_eq!(data.version, SAVE_VERSION, "it gets stamped on the way in");
+        assert!(data.level("01.ron").completed, "and keeps what it knew");
+    }
+
+    /// A save from a later build must open too, carrying what this build
+    /// understands. Refusing it would throw away someone's progress.
+    #[test]
+    fn a_save_from_a_later_build_opens_with_what_we_understand() {
+        let newer = "(version: 99, levels: {}, discovered: [\"CloudPuff\"], mystery: 1)";
+        let data = SaveData::parse(newer)
+            .expect("a later save is not an error")
+            .migrated();
+        assert_eq!(data.version, SAVE_VERSION);
+        assert!(data.has_discovered(ObjectKind::CloudPuff));
+    }
+
+    #[test]
+    fn a_saved_file_says_which_version_wrote_it() {
+        let text = SaveData::default().to_text();
+        assert!(text.contains("version: 1"), "{text}");
     }
 }

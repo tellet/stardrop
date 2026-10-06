@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::save::{SaveFolder, read_file, write_file};
 
 const SETTINGS_FILE: &str = "settings.ron";
+/// What this build writes. See `save.rs` for how versions are handled.
+pub const SETTINGS_VERSION: u32 = 1;
 /// The playfield's shape: the window opens the same way round.
 const PORTRAIT: f32 = 9.0 / 16.0;
 /// How tall the window opens, if the monitor is big enough for it.
@@ -53,8 +55,12 @@ impl Quality {
 /// Everything the player can change. Volumes are percentages, and each one
 /// sets the level of its own audio channel (`audio.rs`).
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, default)]
+// Unknown fields are allowed, for the same reason as the save file: a
+// settings file from a later build must still open here.
+#[serde(default)]
 pub struct Settings {
+    /// Which build's format this is (`0`: written before versioning).
+    pub version: u32,
     /// Overall loudness.
     pub master_volume: u8,
     /// Music loudness.
@@ -77,6 +83,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            version: SETTINGS_VERSION,
             master_volume: 100,
             music_volume: 80,
             sfx_volume: 100,
@@ -145,7 +152,12 @@ fn load_settings(folder: Res<SaveFolder>, mut settings: ResMut<Settings>) {
     };
     match read_file(folder, SETTINGS_FILE) {
         Ok(Some(text)) => match Settings::parse(&text) {
-            Ok(loaded) => *settings = loaded,
+            Ok(loaded) => {
+                *settings = Settings {
+                    version: SETTINGS_VERSION,
+                    ..loaded
+                };
+            }
             Err(error) => warn!("settings unreadable ({error}); using the defaults"),
         },
         Ok(None) => {}

@@ -262,6 +262,11 @@ mod tests {
     #[test]
     #[ignore = "a measurement, not a check"]
     fn difficulty_of_every_level() {
+        /// What careless play may land, per level, from the first to the
+        /// last. The teaching levels are generous; the last five are not.
+        const CEILING: [f64; 10] = [
+            100.0, 100.0, 100.0, 100.0, 20.0, 12.0, 12.0, 12.0, 10.0, 8.0,
+        ];
         use crate::rng::SplitMix64;
 
         let config = GameConfig::default();
@@ -295,10 +300,15 @@ mod tests {
                     landed += 1;
                 }
             }
+            let rate = f64::from(landed) * 100.0 / f64::from(tries);
             println!(
-                "{:>2}. {name:<14} careless play lands {:>5.1}% of the time",
-                number + 1,
-                f64::from(landed) * 100.0 / f64::from(tries)
+                "{:>2}. {name:<14} careless play lands {rate:>5.1}% of the time",
+                number + 1
+            );
+            assert!(
+                rate <= CEILING[number.min(9)],
+                "{name} is too easy: careless play lands {rate:.1}%, ceiling is {:.1}%",
+                CEILING[number.min(9)]
             );
         }
     }

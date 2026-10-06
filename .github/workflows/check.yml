@@ -1,0 +1,48 @@
+# The quality gate, run on every push. Mirrors scripts/check.sh, and adds
+# the measurements that the brief sets budgets for (STARDROP.md §7.1).
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # The incremental cache is worth a gigabyte and buys nothing here.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Bevy needs these for sound and for gamepads.
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets --features dev -- -D warnings
+      - run: cargo test
+      - run: cargo build --release
+      # The budgets. These fail the build, so a regression can't be missed.
+      - name: measurements
+        run: cargo test --release --lib -- --ignored --nocapture
+
+  # The two platforms we have no machine for. Build and test only: nobody
+  # here can look at the result, so correctness of the picture is untested.
+  other-platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test
+      - run: cargo build --release

@@ -796,10 +796,14 @@ mod tests {
             built.as_secs_f64() * 1000.0
         );
         let one_shots: usize = Sound::ALL.iter().map(|sound| render(*sound).len()).sum();
-        println!(
-            "every one-shot sound: {:.2} MB",
-            (one_shots * 2 * size_of::<f32>()) as f32 / (1024.0 * 1024.0)
+        let one_shot_mb = (one_shots * 2 * size_of::<f32>()) as f32 / (1024.0 * 1024.0);
+        println!("every one-shot sound: {one_shot_mb:.2} MB");
+        // Budgets, so a louder idea can't quietly cost a hundred megabytes.
+        assert!(
+            megabytes < 8.0,
+            "one altitude's music holds {megabytes:.1} MB"
         );
+        assert!(one_shot_mb < 12.0, "the sounds hold {one_shot_mb:.1} MB");
     }
 
     /// The same sound every time: no sound may drift or surprise.
