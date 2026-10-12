@@ -7,8 +7,9 @@ each item below is either still open with a plan, or consciously accepted.
 
 | Item | Why it's there | Plan |
 |---|---|---|
-| Wayland support is disabled. | It needs the `libwayland-dev` and `libxkbcommon-dev` system packages, which aren't installed here. The game runs under XWayland meanwhile. | Install the packages, enable Bevy's `wayland` feature, and check a Wayland session. One line of `Cargo.toml` once the packages exist. |
 | The long-session memory measurement is headless: it covers our own allocations, not the GPU driver's. 400 play/fail/retry/reload rounds move RSS by +40 KB and then flatten. | A windowed soak takes the machine over for half an hour. | Run a 30-minute windowed soak on the `dist` build when the machine is free, and record the result here. |
+
+| Native Wayland is built in but has never run on a Wayland desktop. | This machine is X11 only (DECISIONS.md M0-2). | Start it once on a Wayland session and look. |
 
 ## Accepted
 

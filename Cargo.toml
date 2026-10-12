@@ -33,8 +33,10 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     # --- Window & input ---
     "bevy_window",           # Window abstraction.
     "bevy_winit",            # Actual OS window + event loop.
-    "x11",                   # Linux X11 support.
-    # "wayland" is off: needs libwayland-dev; XWayland runs us fine (DECISIONS.md).
+    "x11",                   # Linux X11 support...
+    "wayland",               # ...and native Wayland. Both on: one binary picks whichever
+                             # the desktop runs. Building needs libwayland-dev and
+                             # libxkbcommon-dev (DECISIONS.md M0-2).
     "keyboard",              # Keyboard input.
     "mouse",                 # Mouse input (menus).
     "gamepad",               # Gamepad input types.

@@ -26,7 +26,8 @@ Progress and settings are saved to your OS data folder
 
 ## Building
 
-Rust 1.95 or newer:
+Rust 1.95 or newer. On Linux you also need `libasound2-dev`, `libudev-dev`,
+`libwayland-dev` and `libxkbcommon-dev`:
 
 ```
 cargo run --release

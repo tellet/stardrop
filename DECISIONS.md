@@ -20,7 +20,7 @@ What we decided, why, and what we considered instead. Newest at the bottom.
 
 - **What:** the `wayland` feature is off; only `x11` is on.
 - **Why:** building it needs the `libwayland-dev` and `libxkbcommon-dev` system packages. The dev machine runs X11, and Wayland desktops run X11 apps through XWayland.
-- **Revisit:** before release (M9). Native Wayland gives slightly better frame pacing and scaling on Wayland desktops.
+- **Closed 2026-10-12.** The packages went on, and both backends are now built in: one binary picks whichever the desktop runs. Costs 1.4 MB of binary (48.2 -> 49.6 MB) and means anyone building this on Linux needs those two packages. Checked on X11, where winit still picks x11 and nothing changed. **Not checked on a Wayland session**: this machine doesn't run one.
 
 ## M0-3 · Tonemapping: TonyMcMapface
 
