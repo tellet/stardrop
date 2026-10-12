@@ -20,8 +20,14 @@ jobs:
       # Bevy needs these for sound, gamepads and the two window backends.
       - run: sudo apt-get update && sudo apt-get install -y
           libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
-      - uses: dtolnay/rust-toolchain@stable
+      # Pinned, not `stable`. Clippy changes which code it complains about
+      # between releases, and `#[expect(...)]` turns a lint that stops firing
+      # into an error, so an unpinned toolchain fails on code nobody touched.
+      # Raising this is a deliberate act: bump it, run ./scripts/check.sh,
+      # and fix whatever the newer clippy has learned to see.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.98.1"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
@@ -43,7 +49,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
       - uses: Swatinem/rust-cache@v2
       - run: cargo test
       - run: cargo build --release

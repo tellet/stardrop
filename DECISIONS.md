@@ -551,6 +551,14 @@ more sky.
 - **Tuned against the measurement, not by feel.** Careless play lands 6.0 %, 4.7 %, 5.0 % and 3.7 % of the time, against 5.0 % for Homecoming, so the game keeps descending to the end. Thin Air started at 16 %: its last stream funnelled anything into the pad. Night Flight started at 7.7 %.
 - **Each one needed the solver to make it honest.** Three of the four shipped with a mote that could not be collected along with the others, and the solver found all three before a player could.
 
+## M10-5 · CI pins the toolchain
+
+- **What happened:** the first CI run failed on two `#[expect(clippy::float_cmp)]` attributes being *unfulfilled*. The code was fine. CI ran a newer clippy than this machine's 1.98.1, that clippy no longer flags those comparisons, and an expectation that doesn't fire is an error under `-D warnings`.
+- **Fix:** the workflow installs 1.98.1 rather than `stable`. Consistent with every dependency being pinned exactly: an update must not change what the gate accepts without someone choosing it.
+- **Rejected:** a `rust-toolchain.toml`, which would pin developers too. Tried it, and rustup tried to install 1.98.1 as a second toolchain beside the identical `stable` one, failed on file conflicts, and left a broken toolchain directory behind. Pinning CI gets the determinism without touching anyone's machine.
+- **Also rejected:** turning the two `expect`s into `allow`s. `expect` is how you find out an exception is no longer needed; silencing it forever to survive a toolchain difference is the wrong trade.
+- **Bumping the version** means editing the workflow, running `./scripts/check.sh`, and fixing whatever the newer clippy sees.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
