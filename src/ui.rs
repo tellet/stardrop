@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 
 use crate::app_state::AppState;
+use crate::collectibles::CurrentRun;
 use crate::level::{ActiveLevel, LevelPhase, LevelProblem};
 use crate::settings::Settings;
 
@@ -33,6 +34,17 @@ struct ProblemText;
 #[derive(Component)]
 struct PlayOnly;
 
+/// One mark of the phrase, by its place in it.
+#[derive(Component)]
+struct PhraseMark(u32);
+
+/// How big the marks are, and how far apart.
+const MARK_SIZE: f32 = 18.0;
+const MARK_GAP: f32 = 10.0;
+/// Lit once that note has been played, dim before.
+const MARK_PLAYED: Color = Color::linear_rgba(2.4, 1.9, 0.9, 1.0);
+const MARK_WAITING: Color = Color::srgba(0.7, 0.7, 0.85, 0.22);
+
 /// The overlay every screen change fades in through.
 #[derive(Component)]
 struct ScreenFade;
@@ -47,7 +59,10 @@ pub(crate) struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ScreenFadeLeft>()
-            .add_systems(Startup, (spawn_problem_text, spawn_screen_fade))
+            .add_systems(
+                Startup,
+                (spawn_problem_text, spawn_screen_fade, prepare_star_art),
+            )
             .add_systems(
                 Update,
                 (start_screen_fade, show_play_ui_only_in_play).run_if(state_changed::<AppState>),
@@ -61,6 +76,13 @@ impl Plugin for UiPlugin {
             .add_systems(
                 OnEnter(LevelPhase::Ready),
                 (spawn_drop_hint, spawn_level_name),
+            )
+            .add_systems(
+                Update,
+                (
+                    rebuild_phrase_marks.run_if(resource_exists_and_changed::<ActiveLevel>),
+                    light_phrase_marks,
+                ),
             )
             .add_systems(Update, fade_in_level_name);
     }
@@ -124,6 +146,71 @@ fn run_screen_fade(
     let alpha = screen_fade_alpha(fade.0);
     for mut color in &mut overlay {
         color.0.set_alpha(alpha);
+    }
+}
+
+/// A note's place in the row. Phrases are a handful of notes long.
+fn note_offset(note: u32) -> f32 {
+    u16::try_from(note).map_or(0.0, f32::from)
+}
+
+/// The phrase, as a row of marks under the fall: one per note the level
+/// asks for, lighting up as each object is touched.
+///
+/// The melody is the real feedback; this is for the player who hasn't
+/// noticed yet that the notes mean something.
+fn rebuild_phrase_marks(
+    mut commands: Commands,
+    level: Res<ActiveLevel>,
+    art: Option<Res<StarArt>>,
+    old: Query<Entity, With<PhraseMark>>,
+) {
+    for entity in &old {
+        commands.entity(entity).despawn();
+    }
+    let Some(art) = art else {
+        return;
+    };
+    for note in 0..u32::from(level.phrase) {
+        commands.spawn((
+            PlayOnly,
+            PhraseMark(note),
+            ImageNode::new(art.0.clone()).with_color(MARK_WAITING),
+            Node {
+                position_type: PositionType::Absolute,
+                // Along the top, out of the way of the beacon and of where
+                // the astronaut spends its time.
+                top: Val::Percent(3.0),
+                // Centred as a group: each mark steps right from the middle.
+                left: Val::Percent(50.0),
+                margin: UiRect::left(Val::Px(
+                    // Step right from the middle, so the row sits centred.
+                    (note_offset(note) - (f32::from(level.phrase) - 1.0) / 2.0)
+                        * (MARK_SIZE + MARK_GAP)
+                        - MARK_SIZE / 2.0,
+                )),
+                width: Val::Px(MARK_SIZE),
+                height: Val::Px(MARK_SIZE),
+                ..default()
+            },
+        ));
+    }
+}
+
+/// Lights one mark per object touched this attempt.
+fn light_phrase_marks(run: Res<CurrentRun>, mut marks: Query<(&PhraseMark, &mut ImageNode)>) {
+    if !run.is_changed() {
+        return;
+    }
+    for (mark, mut image) in &mut marks {
+        let wanted = if run.touches > mark.0 {
+            MARK_PLAYED
+        } else {
+            MARK_WAITING
+        };
+        if image.color != wanted {
+            image.color = wanted;
+        }
     }
 }
 
@@ -216,4 +303,73 @@ fn spawn_drop_hint(mut commands: Commands) {
             ..default()
         },
     ));
+}
+
+// --- Stars -----------------------------------------------------------------
+
+/// How big the star picture is, in pixels. Drawn once, shown at whatever
+/// size a screen asks for.
+const STAR_PIXELS: u32 = 64;
+/// A five-pointed star: how deep the notches between its points go.
+const STAR_WAIST: f32 = 0.38;
+/// How far the glow reaches past the star's points.
+const STAR_GLOW: f32 = 0.30;
+
+/// The star picture, made once and used by every screen that shows stars.
+#[derive(Resource)]
+pub(crate) struct StarArt(pub Handle<Image>);
+
+/// Draws a soft five-pointed star: white, with its shape in the alpha, so a
+/// screen can tint it gold for earned and grey for not.
+fn star_image() -> Image {
+    let size = STAR_PIXELS as usize;
+    // Pixel coordinates in a 64-wide picture: exact in f32.
+    let at = |value: usize| u16::try_from(value).map_or(0.0, f32::from);
+    let mut pixels = Vec::with_capacity(size * size * 4);
+    let middle = (at(size) - 1.0) / 2.0;
+    for y in 0..size {
+        for x in 0..size {
+            let from_middle = Vec2::new(at(x) - middle, at(y) - middle) / middle;
+            let distance = from_middle.length();
+            // Five points. The radius allowed at this angle runs straight
+            // from a tip down to a notch and back: a curve here would make
+            // petals, and this is a star.
+            // Picture rows run downwards, so up is negative y. The half
+            // turn puts a point straight up instead of off to one side.
+            let angle = (-from_middle.y).atan2(from_middle.x);
+            let around =
+                (angle - core::f32::consts::FRAC_PI_2) / (core::f32::consts::TAU / 5.0) + 0.5;
+            let within = around - around.floor();
+            let point = 1.0 - 2.0 * (within - 0.5).abs();
+            let reach = STAR_WAIST + (1.0 - STAR_WAIST) * point;
+            // Solid inside the shape, fading out over a pixel or two, with a
+            // wider halo beyond it so it sits in light rather than on top.
+            let edge = 2.0 / middle;
+            let solid = (1.0 - (distance - reach * (1.0 - edge)) / edge.max(1e-4)).clamp(0.0, 1.0);
+            let glow = (1.0 - (distance - reach) / STAR_GLOW).clamp(0.0, 1.0) * 0.35;
+            let alpha = solid.max(glow * glow);
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a clamped fraction"
+            )]
+            let byte = (alpha * 255.0) as u8;
+            pixels.extend_from_slice(&[255, 255, 255, byte]);
+        }
+    }
+    Image::new(
+        bevy::render::render_resource::Extent3d {
+            width: STAR_PIXELS,
+            height: STAR_PIXELS,
+            depth_or_array_layers: 1,
+        },
+        bevy::render::render_resource::TextureDimension::D2,
+        pixels,
+        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+fn prepare_star_art(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    commands.insert_resource(StarArt(images.add(star_image())));
 }

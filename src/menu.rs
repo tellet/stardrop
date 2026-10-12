@@ -26,6 +26,12 @@ const UNFOCUSED: Color = Color::srgba(0.78, 0.78, 0.92, 0.65);
 const NOTE_COLOR: Color = Color::srgba(0.8, 0.8, 0.95, 0.75);
 /// Menus dim whatever is behind them (the level, while paused).
 const BACKDROP: Color = Color::srgba(0.02, 0.015, 0.06, 0.72);
+/// How big a star is on the finish screen, and how far apart they sit.
+const STAR_SIZE: f32 = 56.0;
+const STAR_GAP: f32 = 10.0;
+/// Earned stars are warm and bright; the rest are barely there.
+const STAR_EARNED: Color = Color::linear_rgba(2.6, 2.0, 0.9, 1.0);
+const STAR_MISSING: Color = Color::srgba(0.45, 0.45, 0.58, 0.35);
 /// Every row is this wide, so the settings' values line up in a column.
 const ROW_WIDTH: f32 = 440.0;
 /// How far the focused row slides in from the others, and how fast the slide
@@ -182,6 +188,14 @@ impl Plugin for MenuPlugin {
 
 /// Builds one screen: a dimmed backdrop, a title, the items, and an optional
 /// note under them. Everything is removed when the screen is left.
+/// What a screen shows above its items: the stars earned, and the facts
+/// behind them.
+struct Summary {
+    stars: Stars,
+    /// Label and value, one per line, laid out in two columns.
+    facts: Vec<(String, String)>,
+}
+
 fn spawn_screen(
     commands: &mut Commands,
     focus: &mut Focus,
@@ -189,6 +203,20 @@ fn spawn_screen(
     title: &str,
     note: Option<String>,
     items: Vec<Row>,
+) {
+    spawn_screen_with(commands, focus, state, title, note, items, None, None);
+}
+
+#[expect(clippy::too_many_arguments, reason = "one screen, one call")]
+fn spawn_screen_with(
+    commands: &mut Commands,
+    focus: &mut Focus,
+    state: AppState,
+    title: &str,
+    note: Option<String>,
+    items: Vec<Row>,
+    summary: Option<Summary>,
+    star_art: Option<&Handle<Image>>,
 ) {
     *focus = Focus {
         index: 0,
@@ -228,6 +256,60 @@ fn spawn_screen(
                     ..default()
                 },
             ));
+            if let Some(summary) = summary {
+                // Three stars, earned ones lit, then the facts behind them.
+                screen
+                    .spawn(Node {
+                        column_gap: Val::Px(STAR_GAP),
+                        margin: UiRect::bottom(Val::Px(18.0)),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        for earned in [
+                            summary.stars.landed,
+                            summary.stars.all_stardust,
+                            summary.stars.phrase,
+                        ] {
+                            let mut star = row.spawn(Node {
+                                width: Val::Px(STAR_SIZE),
+                                height: Val::Px(STAR_SIZE),
+                                ..default()
+                            });
+                            if let Some(art) = star_art {
+                                star.insert(ImageNode::new(art.clone()).with_color(if earned {
+                                    STAR_EARNED
+                                } else {
+                                    STAR_MISSING
+                                }));
+                            }
+                        }
+                    });
+                for (label, value) in summary.facts {
+                    screen
+                        .spawn(Node {
+                            width: Val::Px(ROW_WIDTH * 0.8),
+                            justify_content: JustifyContent::SpaceBetween,
+                            ..default()
+                        })
+                        .with_children(|line| {
+                            line.spawn((
+                                Text::new(label),
+                                TextFont::from_font_size(NOTE_SIZE),
+                                TextColor(NOTE_COLOR),
+                            ));
+                            line.spawn((
+                                Text::new(value),
+                                TextFont::from_font_size(NOTE_SIZE),
+                                TextColor(TITLE_COLOR),
+                            ));
+                        });
+                }
+                // Space before the choices.
+                screen.spawn(Node {
+                    height: Val::Px(16.0),
+                    ..default()
+                });
+            }
             for (index, row) in items.into_iter().enumerate() {
                 let color = TextColor(if index == 0 { FOCUSED } else { UNFOCUSED });
                 // A row is a fixed-width line so that every value column lands
@@ -423,6 +505,7 @@ fn rebuild_settings(
 fn spawn_level_complete(
     mut commands: Commands,
     mut focus: ResMut<Focus>,
+    star_art: Option<Res<crate::ui::StarArt>>,
     run: Res<CurrentRun>,
     level: Option<Res<ActiveLevel>>,
     levels: Option<Res<Levels>>,
@@ -440,27 +523,39 @@ fn spawn_level_complete(
     let best = record
         .best_time
         .map_or_else(|| "-".to_owned(), |best| format!("{best:.1} s"));
-    let note = format!(
-        "{}\ntime {:.1} s   (best {best})\nstardust {}/{}   phrase {}/{phrase}",
-        star_marks(earned),
-        run.elapsed,
-        run.stardust.count(),
-        total_stardust,
-        run.touches.min(u32::from(phrase))
-    );
+    let summary = Summary {
+        stars: earned,
+        facts: vec![
+            (
+                "time".to_owned(),
+                format!("{:.1} s   (best {best})", run.elapsed),
+            ),
+            (
+                "stardust".to_owned(),
+                format!("{}/{total_stardust}", run.stardust.count()),
+            ),
+            (
+                "phrase".to_owned(),
+                format!("{}/{phrase}", run.touches.min(u32::from(phrase))),
+            ),
+        ],
+    };
     let has_next = levels.is_some_and(|levels| selected.0 + 1 < levels.levels.len());
     let mut items = vec![Row::new("Retry", MenuAction::RetryLevel)];
     if has_next {
         items.insert(0, Row::new("Next level", MenuAction::NextLevel));
     }
     items.push(Row::new("Level select", MenuAction::BackToLevels));
-    spawn_screen(
+    let star_art = star_art.map(|art| art.0.clone());
+    spawn_screen_with(
         &mut commands,
         &mut focus,
         AppState::LevelComplete,
         "Landed",
-        Some(note),
+        None,
         items,
+        Some(summary),
+        star_art.as_ref(),
     );
 }
 

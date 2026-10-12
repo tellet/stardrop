@@ -538,6 +538,12 @@ more sky.
 - **Not in CI.** It needs a real GPU; a software renderer would make it flaky, and a flaky check is worse than none.
 - **The journal, the game and this check now draw objects from one definition** (`objects::preview_placement` and `astronaut::spawn_figure`), so what the check guards is what the player sees.
 
+## M10-3 · Stars you can see, and a phrase you can watch
+
+- **Stars were ASCII** (`*` and `-`) on every screen, after everything else had been drawn properly. They are now a five-pointed star generated in code as a small image, tinted gold when earned and nearly invisible when not. Two tries: a cosine radius profile makes petals, not points — a star needs straight edges from tip to notch — and the first pointed version came out rotated, because picture rows run downwards and up is negative y.
+- **The finish screen was one string** with four facts crammed into it. It is now the stars, then time, stardust and phrase as labelled rows, then the choices.
+- **The phrase is visible while falling:** a row of marks along the top, one per note the level asks for, lighting as each object is touched. The melody is still the real feedback; this is for the player who hasn't yet noticed that the notes mean something. They sit at the top because the bottom belongs to the beacon.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
