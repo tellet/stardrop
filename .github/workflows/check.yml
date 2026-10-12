@@ -47,6 +47,35 @@ jobs:
       - name: measurements
         run: cargo test --release --lib -- --ignored --nocapture
 
+  # `rust-version` in Cargo.toml says 1.95, so something has to hold us to
+  # it. A check, not a build: it catches our own code using anything newer
+  # without paying for codegen.
+  oldest-supported-rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo check --all-targets
+
+  # Known vulnerabilities in anything we depend on. The licences of all 393
+  # crates are listed in docs/THIRD-PARTY.md (./scripts/third-party.sh).
+  advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   # The two platforms we have no machine for. Build and test only: nobody
   # here can look at the result, so correctness of the picture is untested.
   other-platforms:

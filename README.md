@@ -62,6 +62,7 @@ up without rebuilding.
 | `TECH_DEBT.md` | known shortcuts, and when they get dealt with |
 | `docs/LEVELS.md` | the level format |
 | `CREDITS.md` | every asset and its licence |
+| `docs/THIRD-PARTY.md` | every crate compiled in, and its licence |
 
 The gameplay rules are plain Rust with no engine in them (`physics/`,
 `objects/`, `collision.rs`, `scoring.rs`), which is why they can be tested
