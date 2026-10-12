@@ -7,7 +7,7 @@ each item below is either still open with a plan, or consciously accepted.
 
 | Item | Why it's there | Plan |
 |---|---|---|
-| The long-session memory measurement is headless: it covers our own allocations, not the GPU driver's. 400 play/fail/retry/reload rounds move RSS by +40 KB and then flatten. | A windowed soak takes the machine over for half an hour. | Run a 30-minute windowed soak on the `dist` build when the machine is free, and record the result here. |
+| The long-session memory measurement is judged only on a developer's machine (DECISIONS.md M10-6), and is headless: it covers our own allocations, not the GPU driver's. 400 play/fail/retry/reload rounds move RSS by +40 KB and then flatten. | A windowed soak takes the machine over for half an hour. | Run a 30-minute windowed soak on the `dist` build when the machine is free, and record the result here. |
 
 | Native Wayland is built in but has never run on a Wayland desktop. | This machine is X11 only (DECISIONS.md M0-2). | Start it once on a Wayland session and look. |
 

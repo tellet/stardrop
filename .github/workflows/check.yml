@@ -32,6 +32,10 @@ jobs:
           toolchain: "1.98.1"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Save the cache even when the run fails. Otherwise a red build
+          # costs a full cold rebuild on the next push as well.
+          cache-on-failure: true
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       # The `dev` feature is linted by ./scripts/check.sh, not here: it is a
@@ -58,5 +62,7 @@ jobs:
         with:
           toolchain: "1.98.1"
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: cargo test
       - run: cargo build --release

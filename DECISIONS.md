@@ -559,6 +559,14 @@ more sky.
 - **Also rejected:** turning the two `expect`s into `allow`s. `expect` is how you find out an exception is no longer needed; silencing it forever to survive a toolchain difference is the wrong trade.
 - **Bumping the version** means editing the workflow, running `./scripts/check.sh`, and fixing whatever the newer clippy sees.
 
+## M10-6 · Resident memory is reported on CI, judged here
+
+- **What happened:** the memory soak failed on CI with +1988 KB over its second half, against +12 to +16 KB on this machine, every time.
+- **It is not a leak.** The run sat at 33544 KB at rounds 100, 200 *and* 300, then stepped up once at the end. A leak grows every round. How many arenas the allocator keeps depends on the machine's cores and its libc, and a 4-core shared runner is not this 12-thread desktop.
+- **The fix is about what the number means.** Resident memory is the operating system's figure, not the game's. What the game actually promises — no entity, mesh or material left behind — is checked deterministically by `twenty_retries_failures_and_reloads_leave_no_trace`, which runs everywhere and passed on CI. The soak now prints its numbers on CI and asserts only off it.
+- **Rejected:** loosening the threshold to a few megabytes. That keeps the shape of a check while removing its ability to see anything.
+- **Also fixed:** `cache-on-failure: true`, so a red build no longer throws away the compile cache and makes the next push rebuild everything from cold.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
