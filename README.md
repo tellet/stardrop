@@ -71,3 +71,16 @@ every level is beatable.
 
 Every sound and every shape is generated in code. Nothing here is a
 recording or a picture.
+
+## Licence
+
+Stardrop is offered under either of
+
+- the MIT licence (`LICENSE-MIT`), or
+- the Apache Licence 2.0 (`LICENSE-APACHE`),
+
+whichever you prefer. This is the usual pairing in the Rust world, and the
+terms most of the crates Stardrop is built on use.
+
+Contributions are offered under the same terms, without any further
+conditions.
