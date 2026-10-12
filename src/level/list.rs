@@ -129,7 +129,12 @@ mod tests {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/levels");
         let text = std::fs::read_to_string(format!("{dir}/levels.list.ron")).unwrap();
         let list = LevelList::parse(&text).unwrap();
-        assert_eq!(list.levels.len(), 10, "the game has ten levels");
+        // Ten to teach and finish the journey, then the locked ones after.
+        assert!(
+            list.levels.len() >= 10,
+            "the game has {} levels",
+            list.levels.len()
+        );
         for entry in &list.levels {
             let path = format!("{dir}/{}", entry.file);
             let level = std::fs::read_to_string(&path)
