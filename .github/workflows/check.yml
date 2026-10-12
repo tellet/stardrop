@@ -17,8 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Bevy needs these for sound and for gamepads.
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev
+      # Bevy needs these for sound, gamepads and the two window backends.
+      - run: sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
