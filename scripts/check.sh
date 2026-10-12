@@ -13,7 +13,8 @@ export CARGO_INCREMENTAL=0
 
 echo "==> fmt";     cargo fmt --all -- --check
 echo "==> clippy";  cargo clippy --all-targets -- -D warnings
-# Debug-only code (F2 shapes) is behind the `dev` feature; lint it too.
+# Debug-only code (F2 shapes) is behind the `dev` feature; lint it too. CI
+# skips this one: it is a second full compile of Bevy for very little code.
 echo "==> clippy (dev)"; cargo clippy --all-targets --features dev -- -D warnings
 echo "==> test";    cargo test
 echo "==> release"; cargo build --release

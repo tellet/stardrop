@@ -15,6 +15,8 @@ env:
 jobs:
   linux:
     runs-on: ubuntu-latest
+    # A stuck run should fail, not grind for the six hours GitHub allows.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       # Bevy needs these for sound, gamepads and the two window backends.
@@ -32,7 +34,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --features dev -- -D warnings
+      # The `dev` feature is linted by ./scripts/check.sh, not here: it is a
+      # whole second compile of Bevy under a different feature set, and all
+      # it covers is hot reload, dynamic linking and the F2 gizmos.
       - run: cargo test
       - run: cargo build --release
       # The budgets. These fail the build, so a regression can't be missed.
@@ -47,6 +51,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
