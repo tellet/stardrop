@@ -38,8 +38,10 @@ that version.
 
 For development, `cargo run --features dev` keeps assets on disk and reloads
 levels when they change. `./scripts/check.sh` is the quality gate: formatting,
-clippy, tests and a release build. Add `--smoke` to start the real game for
-a few seconds and fail if it panics.
+clippy, tests and a release build. Add `--smoke` to start the real game for a
+few seconds and fail if it panics, or `--visual` to check that the objects and
+the astronaut still look like themselves. Every push runs the same gate on
+Linux, Windows and macOS (`.github/workflows/check.yml`).
 
 ## Making levels
 

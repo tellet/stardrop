@@ -104,7 +104,7 @@ const OBJECT_DEPTH: f32 = 6.0;
 
 /// Shared mesh and material handles for every object type.
 #[derive(Resource)]
-pub(crate) struct ObjectAssets {
+pub struct ObjectAssets {
     unit_circle: Handle<Mesh>,
     /// A ring of unit outer radius (the bubble's shell).
     unit_ring: Handle<Mesh>,

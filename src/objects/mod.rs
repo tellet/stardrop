@@ -18,7 +18,8 @@ pub use kind::{
     MAX_RIBBON_POINTS, ObjectKind, ObjectShape, ObjectsConfig, Placement, SporeFlowerConfig,
     StaticCloudConfig, TwinPortalsConfig, WindRibbonConfig,
 };
-pub(crate) use visuals::{CHEVRON_SIZE, ObjectAssets, spark_color};
+pub use visuals::ObjectAssets;
+pub(crate) use visuals::{CHEVRON_SIZE, spark_color};
 
 use crate::astronaut::Astronaut;
 use crate::attempt::{AttemptFailed, AttemptRestarted, fail};
@@ -74,9 +75,55 @@ impl Plugin for ObjectsPlugin {
     }
 }
 
+/// A plain, middling example of each object type, for showing one on its
+/// own. The journal's pages and the golden-image check both use this, so
+/// what the check guards is what the player is shown.
+#[must_use]
+pub fn preview_placement(kind: ObjectKind, at: Vec2) -> Placement {
+    match kind {
+        ObjectKind::CloudPuff => Placement::CloudPuff {
+            center: at,
+            radius: 70.0,
+        },
+        ObjectKind::WindRibbon => Placement::WindRibbon {
+            path: vec![at - Vec2::new(90.0, 40.0), at + Vec2::new(90.0, 40.0)],
+            width: 70.0,
+        },
+        ObjectKind::Crystal => Placement::Crystal {
+            center: at,
+            size: 60.0,
+        },
+        ObjectKind::SporeFlower => Placement::SporeFlower {
+            center: at,
+            radius: 65.0,
+        },
+        ObjectKind::CometStone => Placement::CometStone {
+            center: at,
+            radius: 55.0,
+        },
+        ObjectKind::Bubble => Placement::Bubble {
+            center: at,
+            radius: 70.0,
+        },
+        ObjectKind::GravityOrb => Placement::GravityOrb {
+            center: at,
+            radius: 30.0,
+        },
+        ObjectKind::TwinPortals => Placement::TwinPortals {
+            a: at - Vec2::new(70.0, 0.0),
+            b: at + Vec2::new(70.0, 0.0),
+            radius: 45.0,
+        },
+        ObjectKind::StaticCloud => Placement::StaticCloud {
+            center: at,
+            radius: 70.0,
+        },
+    }
+}
+
 /// Spawns only what an object *looks* like, with no behavior: used by the
 /// journal, which shows the real shapes rather than separate pictures.
-pub(crate) fn spawn_preview(
+pub fn spawn_preview(
     commands: &mut Commands,
     assets: &ObjectAssets,
     meshes: &mut Assets<Mesh>,

@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use crate::app_state::AppState;
 
 use crate::config::GameConfig;
-use crate::objects::{ObjectAssets, ObjectKind, Placement, spawn_preview};
+use crate::objects::{ObjectAssets, ObjectKind, preview_placement, spawn_preview};
 use crate::save::Progress;
 
 /// Far from any level, so the journal and the level never share the screen.
@@ -127,49 +127,6 @@ fn page_text(kind: ObjectKind) -> (&'static str, &'static str) {
     }
 }
 
-/// A small version of each object, for its page.
-fn preview_of(kind: ObjectKind, at: Vec2) -> Placement {
-    match kind {
-        ObjectKind::CloudPuff => Placement::CloudPuff {
-            center: at,
-            radius: 70.0,
-        },
-        ObjectKind::WindRibbon => Placement::WindRibbon {
-            path: vec![at - Vec2::new(90.0, 40.0), at + Vec2::new(90.0, 40.0)],
-            width: 70.0,
-        },
-        ObjectKind::Crystal => Placement::Crystal {
-            center: at,
-            size: 60.0,
-        },
-        ObjectKind::SporeFlower => Placement::SporeFlower {
-            center: at,
-            radius: 65.0,
-        },
-        ObjectKind::CometStone => Placement::CometStone {
-            center: at,
-            radius: 55.0,
-        },
-        ObjectKind::Bubble => Placement::Bubble {
-            center: at,
-            radius: 70.0,
-        },
-        ObjectKind::GravityOrb => Placement::GravityOrb {
-            center: at,
-            radius: 30.0,
-        },
-        ObjectKind::TwinPortals => Placement::TwinPortals {
-            a: at - Vec2::new(70.0, 0.0),
-            b: at + Vec2::new(70.0, 0.0),
-            radius: 45.0,
-        },
-        ObjectKind::StaticCloud => Placement::StaticCloud {
-            center: at,
-            radius: 70.0,
-        },
-    }
-}
-
 /// Where a page sits in the grid.
 fn page_position(index: usize) -> Vec2 {
     // Small counts; the conversions are exact.
@@ -210,7 +167,7 @@ fn open_journal(
                 &assets,
                 &mut meshes,
                 &config.objects,
-                &preview_of(kind, at),
+                &preview_placement(kind, at),
                 marker,
             );
         } else {

@@ -529,6 +529,15 @@ more sky.
 - **The solver proves it.** A third goal, `Goal::Phrase(n)`, searches for a landing route that touches n objects. The first version scored touches without a cap and the search taught itself to bounce on one cloud forever rather than fall: a longer melody always beat a deeper fall. Capping the reward at what the level asks for fixed it.
 - **Saves migrate.** Version 2 drops the old "fast" star rather than carrying it over, because a star has to have been earned at the thing it is for.
 
+## M10-2 · The suite can finally see the screen
+
+- **Why:** three of the last round of bugs were visual, and every one got through the tests. A shape can break silently in a way nothing here could notice.
+- **What:** `cargo run --release --example golden` draws all nine objects and the astronaut in a fixed grid, renders them, and compares the result against a reference in the repository. `--write` accepts a new look. `./scripts/check.sh --visual` runs it.
+- **The reference is not a picture.** It is the image reduced to a 45x30 grid of brightness readings (`tests/golden/shapes.txt`, 2.8 KB): small enough to read in a diff, insensitive to antialiasing noise, and still able to see a silhouette change, a part gone missing or a layer slipped behind another. A committed PNG would have been a binary blob that every tiny renderer difference invalidates.
+- **Proved both ways:** two runs in a row differ in 0 of 1350 cells, and taking one petal off the spore flower fails it with 15 cells changed and a map of where.
+- **Not in CI.** It needs a real GPU; a software renderer would make it flaky, and a flaky check is worse than none.
+- **The journal, the game and this check now draw objects from one definition** (`objects::preview_placement` and `astronaut::spawn_figure`), so what the check guards is what the player sees.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

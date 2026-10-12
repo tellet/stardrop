@@ -47,7 +47,7 @@ impl Plugin for CameraPlugin {
 }
 
 /// The glow the game uses at "full" quality, at this theme's strength.
-pub(crate) fn bloom(intensity: f32) -> Bloom {
+pub fn bloom(intensity: f32) -> Bloom {
     Bloom {
         intensity,
         ..Bloom::NATURAL

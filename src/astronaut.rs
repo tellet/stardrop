@@ -75,7 +75,7 @@ const SHIMMER_THICKNESS: f32 = 7.0;
 
 /// Marks the player's astronaut.
 #[derive(Component)]
-pub(crate) struct Astronaut;
+pub struct Astronaut;
 
 /// The bright flash over the visor, shown for a moment on contact.
 #[derive(Component)]
@@ -106,12 +106,35 @@ impl Plugin for AstronautPlugin {
 
 fn spawn_astronaut(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<ColorMaterial>>,
     config: Res<GameConfig>,
     level: Res<ActiveLevel>,
 ) {
-    let radius = config.astronaut_radius;
+    let figure = spawn_figure(
+        &mut commands,
+        meshes,
+        materials,
+        config.astronaut_radius,
+        level.start,
+        (Astronaut, Tumble::default(), Motion::at_rest(level.start)),
+    );
+    let _ = figure;
+}
+
+/// Draws the astronaut: the one place the figure is described, so the
+/// journal, the golden-image check and the game all show the same person.
+///
+/// `extra` is whatever makes this one *the* astronaut rather than a picture
+/// of one.
+pub fn spawn_figure(
+    commands: &mut Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    radius: f32,
+    at: Vec2,
+    extra: impl Bundle,
+) -> Entity {
     let ring = meshes.add(Annulus::new(
         radius + SHIMMER_THICKNESS,
         radius + SHIMMER_THICKNESS * 2.0,
@@ -123,10 +146,8 @@ fn spawn_astronaut(
     // its place — anything smaller than a fifth of that is a smudge.
     commands
         .spawn((
-            Astronaut,
-            Tumble::default(),
-            Motion::at_rest(level.start),
-            Transform::from_translation(level.start.extend(ASTRONAUT_DEPTH)),
+            extra,
+            Transform::from_translation(at.extend(ASTRONAUT_DEPTH)),
             Visibility::default(),
         ))
         // The light they give off, behind everything else.
@@ -217,7 +238,8 @@ fn spawn_astronaut(
             ))),
             MeshMaterial2d(materials.add(CAPTURE_COLOR)),
             Visibility::Hidden,
-        ));
+        ))
+        .id()
 }
 
 /// The astronaut is only on screen while a level is: menus unload the level,

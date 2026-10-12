@@ -8,11 +8,11 @@ use bevy::prelude::*;
 use bevy::window::{MonitorSelection, WindowResolution};
 
 mod app_state;
-mod astronaut;
+pub mod astronaut;
 mod attempt;
 mod audio;
 mod background;
-mod camera;
+pub mod camera;
 mod collectibles;
 pub mod collision;
 pub mod config;

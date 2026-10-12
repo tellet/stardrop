@@ -125,7 +125,7 @@ impl Default for GameConfig {
 }
 
 /// Registers [`GameConfig`] as a resource.
-pub(crate) struct ConfigPlugin;
+pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
