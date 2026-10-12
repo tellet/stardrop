@@ -1,0 +1,25 @@
+// Orbits and doorways. Every swing hands you to the next one, and the only
+// way across the bottom is through a portal that comes out the far side.
+(
+    name: "Cold Current",
+    theme: CrystalAurora,
+    start: (540, 180),
+    beacon: (center: (870, 1870), size: (180, 40)),
+    stardust: [
+        (300, 700),
+        (760, 1180),
+        (330, 1480),
+    ],
+    objects: [
+        GravityOrb(center: (420, 560), radius: 55),
+        StaticCloud(center: (780, 680), radius: 80),
+        Crystal(center: (260, 980), size: 55),
+        GravityOrb(center: (620, 1120), radius: 50),
+        TwinPortals(a: (180, 1340), b: (900, 1280), radius: 55),
+        StaticCloud(center: (540, 1480), radius: 85),
+        Bubble(center: (300, 1560), radius: 60),
+        CloudPuff(center: (700, 1700), radius: 85),
+        StaticCloud(center: (1000, 1660), radius: 55),
+    ],
+    phrase: 5,
+)

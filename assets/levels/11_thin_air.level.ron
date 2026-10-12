@@ -1,0 +1,27 @@
+// A chain of streams, each entered from above. Letting go puts you in the
+// one that carries you away from the pad, and only the crystal turns you
+// back towards it.
+(
+    name: "Thin Air",
+    theme: HighClouds,
+    start: (540, 180),
+    beacon: (center: (130, 1870), size: (160, 40)),
+    stardust: [
+        (840, 700),
+        (420, 1120),
+        (560, 1480),
+    ],
+    objects: [
+        WindRibbon(path: [(620, 520), (900, 600)], width: 75),
+        StaticCloud(center: (380, 620), radius: 80),
+        Bubble(center: (880, 880), radius: 60),
+        CloudPuff(center: (300, 1040), radius: 90),
+        WindRibbon(path: [(420, 1240), (820, 1320)], width: 75),
+        StaticCloud(center: (180, 1340), radius: 70),
+        Crystal(center: (900, 1460), size: 55),
+        WindRibbon(path: [(820, 1600), (560, 1680)], width: 70),
+        StaticCloud(center: (370, 1780), radius: 75),
+        StaticCloud(center: (760, 1800), radius: 65),
+    ],
+    phrase: 5,
+)

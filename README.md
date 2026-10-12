@@ -18,7 +18,7 @@ before you take it.
 | Enter / Space | choose |
 | F1 | frame times |
 
-Each level offers three stars: reaching the beacon, collecting all its
+Fourteen levels, each unlocking the next. Each offers three stars: reaching the beacon, collecting all its
 stardust in one attempt, and landing inside the level's target time.
 
 Progress and settings are saved to your OS data folder

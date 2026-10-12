@@ -1,0 +1,26 @@
+// Two dives, and the bubbles that catch you out of them. Taking a dive you
+// cannot stop is the quick way down and the easy way to miss everything.
+(
+    name: "Late Sun",
+    theme: Sunset,
+    start: (540, 180),
+    beacon: (center: (640, 1870), size: (165, 40)),
+    stardust: [
+        (540, 700),
+        (240, 1180),
+        (900, 1540),
+    ],
+    objects: [
+        CometStone(center: (540, 460), radius: 50),
+        StaticCloud(center: (260, 760), radius: 80),
+        StaticCloud(center: (820, 760), radius: 80),
+        Bubble(center: (420, 1020), radius: 65),
+        SporeFlower(center: (760, 1120), radius: 55),
+        CometStone(center: (300, 1340), radius: 45),
+        CloudPuff(center: (600, 1420), radius: 90),
+        StaticCloud(center: (640, 1620), radius: 60),
+        StaticCloud(center: (900, 1720), radius: 75),
+        StaticCloud(center: (380, 1760), radius: 80),
+    ],
+    phrase: 5,
+)

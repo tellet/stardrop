@@ -1,0 +1,27 @@
+// Everything, one after another, with the narrowest pad in the game at the
+// end of it. Nothing new here: it just asks you to do all of it in one fall.
+(
+    name: "Night Flight",
+    theme: Twilight,
+    start: (540, 180),
+    beacon: (center: (540, 1870), size: (150, 40)),
+    stardust: [
+        (700, 620),
+        (200, 1020),
+        (860, 1480),
+    ],
+    objects: [
+        WindRibbon(path: [(420, 460), (820, 540)], width: 70),
+        SporeFlower(center: (540, 760), radius: 55),
+        GravityOrb(center: (260, 940), radius: 50),
+        StaticCloud(center: (700, 1000), radius: 80),
+        TwinPortals(a: (160, 1240), b: (880, 1180), radius: 50),
+        Crystal(center: (600, 1340), size: 55),
+        CometStone(center: (820, 1420), radius: 45),
+        Bubble(center: (340, 1520), radius: 60),
+        StaticCloud(center: (320, 1780), radius: 85),
+        StaticCloud(center: (780, 1780), radius: 85),
+        StaticCloud(center: (540, 1600), radius: 65),
+    ],
+    phrase: 5,
+)

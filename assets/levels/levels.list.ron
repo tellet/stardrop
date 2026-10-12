@@ -1,4 +1,5 @@
-// The ten levels, in order. Editing this changes the level select.
+// The levels, in order. Editing this changes the level select, and each
+// one unlocks the one after it.
 (
     levels: [
         (name: "First Light", file: "01_first_light.level.ron"),
@@ -11,5 +12,9 @@
         (name: "Pollen Drift", file: "08_pollen_drift.level.ron"),
         (name: "Orbit", file: "09_orbit.level.ron"),
         (name: "Homecoming", file: "10_homecoming.level.ron"),
+        (name: "Thin Air", file: "11_thin_air.level.ron"),
+        (name: "Cold Current", file: "12_cold_current.level.ron"),
+        (name: "Late Sun", file: "13_late_sun.level.ron"),
+        (name: "Night Flight", file: "14_night_flight.level.ron"),
     ],
 )

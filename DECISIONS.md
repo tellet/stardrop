@@ -544,6 +544,13 @@ more sky.
 - **The finish screen was one string** with four facts crammed into it. It is now the stars, then time, stardust and phrase as labelled rows, then the choices.
 - **The phrase is visible while falling:** a row of marks along the top, one per note the level asks for, lighting as each object is touched. The melody is still the real feedback; this is for the player who hasn't yet noticed that the notes mean something. They sit at the top because the bottom belongs to the beacon.
 
+## M10-4 · Four more levels, locked behind the ten
+
+- **What:** Thin Air (streams), Cold Current (orbits and doorways), Late Sun (two dives) and Night Flight (everything, narrowest pad in the game). Nine to eleven objects each, phrase of 5. They sit at the end of `levels.list.ron`, so the existing rule — a level unlocks the one after it — keeps them locked until Homecoming is finished.
+- **Nothing new is introduced.** By level 11 every object has been met; these ask the player to use them in sequence.
+- **Tuned against the measurement, not by feel.** Careless play lands 6.0 %, 4.7 %, 5.0 % and 3.7 % of the time, against 5.0 % for Homecoming, so the game keeps descending to the end. Thin Air started at 16 %: its last stream funnelled anything into the pad. Night Flight started at 7.7 %.
+- **Each one needed the solver to make it honest.** Three of the four shipped with a mote that could not be collected along with the others, and the solver found all three before a player could.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

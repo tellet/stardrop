@@ -278,8 +278,8 @@ mod tests {
     fn difficulty_of_every_level() {
         /// What careless play may land, per level, from the first to the
         /// last. The teaching levels are generous; the last five are not.
-        const CEILING: [f64; 10] = [
-            100.0, 100.0, 100.0, 100.0, 20.0, 12.0, 12.0, 12.0, 10.0, 8.0,
+        const CEILING: [f64; 14] = [
+            100.0, 100.0, 100.0, 100.0, 20.0, 12.0, 12.0, 12.0, 10.0, 8.0, 6.0, 6.0, 6.0, 5.0,
         ];
         use crate::rng::SplitMix64;
 
@@ -320,9 +320,9 @@ mod tests {
                 number + 1
             );
             assert!(
-                rate <= CEILING[number.min(9)],
+                rate <= CEILING[number.min(CEILING.len() - 1)],
                 "{name} is too easy: careless play lands {rate:.1}%, ceiling is {:.1}%",
-                CEILING[number.min(9)]
+                CEILING[number.min(CEILING.len() - 1)]
             );
         }
     }
