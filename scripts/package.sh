@@ -11,8 +11,8 @@ out="package"
 rm -rf "$out"
 mkdir -p "$out"
 cp target/dist/stardrop "$out/"
-cp README.md CREDITS.md "$out/"
+cp README.md "$out/"
 
 size=$(du -h "$out/stardrop" | cut -f1)
-echo "==> $out/stardrop ($size), plus the README and credits"
+echo "==> $out/stardrop ($size), plus the README"
 echo "    It needs nothing else: assets are inside the binary."

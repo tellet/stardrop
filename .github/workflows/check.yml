@@ -1,11 +1,19 @@
 # The quality gate, run on every push. Mirrors scripts/check.sh, and adds
 # the measurements that the brief sets budgets for (STARDROP.md §7.1).
+#
+# Binaries for the three desktops are built only when asked for, from the
+# Actions tab or `gh workflow run check -f binaries=true`.
 name: check
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      binaries:
+        description: Also build Linux, Windows and macOS binaries and attach them
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,60 +55,25 @@ jobs:
       - name: measurements
         run: cargo test --release --lib -- --ignored --nocapture
 
-  # `rust-version` in Cargo.toml says 1.95, so something has to hold us to
-  # it. A check, not a build: it catches our own code using anything newer
-  # without paying for codegen.
-  oldest-supported-rust:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y
-          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.95.0"
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - run: cargo check --all-targets
-
-  # Known vulnerabilities in anything we depend on. The licences of all 393
-  # crates are listed in docs/THIRD-PARTY.md (./scripts/third-party.sh).
+  # Something to hand to someone. The `dist` profile is what we ship: fat
+  # LTO, stripped, assets baked into the executable, so each artifact is one
+  # file that runs from an empty folder. Fat LTO is slow, which is why this
+  # waits to be asked.
   #
-  # cargo-audit runs directly rather than through rustsec/audit-check. That
-  # action reports by creating a check run, which needs a `checks: write`
-  # token it does not get by default, so the job died after the scan had
-  # already passed. Run directly it needs no token and works on forks too.
-  advisories:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.98.1"
-      # Caches ~/.cargo/bin as well, so cargo-audit is only compiled once.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - run: cargo install cargo-audit --locked
-      # Any new unmaintained or yanked crate fails the build. `ttf-parser` is
-      # the one exception: it is unmaintained with nothing to move to, and it
-      # arrives through winit's Wayland window decorations.
-      - run: cargo audit --deny warnings --ignore RUSTSEC-2026-0192
-
-  # The two platforms we have no machine for. Build and test only: nobody
-  # here can look at the result, so correctness of the picture is untested.
-  other-platforms:
+  # Windows and macOS are only ever compiled here, so the tests run first.
+  binaries:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.binaries }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.98.1"
@@ -108,4 +81,12 @@ jobs:
         with:
           cache-on-failure: true
       - run: cargo test
-      - run: cargo build --release
+      - run: cargo build --profile dist
+      # One of the two paths exists on any given runner; the other is ignored.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stardrop-${{ matrix.os }}
+          path: |
+            target/dist/stardrop
+            target/dist/stardrop.exe
+          if-no-files-found: error

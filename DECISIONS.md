@@ -581,6 +581,14 @@ more sky.
 - **Warnings now fail**, with one named exception. `cargo audit` exits 0 on an unmaintained or yanked crate, so those scroll past unread; `--deny warnings` makes them count. `ttf-parser` is unmaintained with no replacement upstream and reaches us through winit's Wayland window decorations, so it is ignored by advisory id rather than by switching the whole class off.
 - **One yanked crate removed:** `yoke-derive` 0.8.3 → 0.8.4, a lock-file line.
 
+## M10-9 · Master carries the game, `paperwork` carries the paperwork
+
+- **Why.** Stardrop is a pet project that is not going public: the point is a binary for each desktop to show friends. Licence files, a 393-crate licence inventory and an advisory job are the cost of publishing, not of playing, so they left master.
+- **The branch.** `paperwork` sits at 60278bf, the project with all of it still in place and working: `LICENSE-MIT`, `LICENSE-APACHE`, `CREDITS.md`, `TECH_DEBT.md`, `docs/THIRD-PARTY.md`, `scripts/third-party.{sh,py}`, and the `advisories` and `oldest-supported-rust` CI jobs. Nothing was deleted, only moved, so going public later means merging a branch rather than redoing the work.
+- **Master keeps the brief, this log and the level format.** They explain why the code looks like it does, which is still worth having in a year.
+- **CI on master.** The Linux gate still runs on every push: format, clippy, tests, a release build and the Section 7.1 budgets. The three desktop binaries build only when asked for, through a `workflow_dispatch` input, because fat LTO on three runners is 20 minutes nobody needs on an ordinary push. Windows and macOS are compiled nowhere else, so that job runs the tests before it builds.
+- **Two shortcuts that were in `TECH_DEBT.md` and are still open**, recorded here so they are not lost with the file: the long-session memory measurement is headless and judged only off CI (M10-6), and native Wayland is built in but has never run on a Wayland desktop (M0-2).
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
