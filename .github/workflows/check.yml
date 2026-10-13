@@ -67,14 +67,28 @@ jobs:
 
   # Known vulnerabilities in anything we depend on. The licences of all 393
   # crates are listed in docs/THIRD-PARTY.md (./scripts/third-party.sh).
+  #
+  # cargo-audit runs directly rather than through rustsec/audit-check. That
+  # action reports by creating a check run, which needs a `checks: write`
+  # token it does not get by default, so the job died after the scan had
+  # already passed. Run directly it needs no token and works on forks too.
   advisories:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: dtolnay/rust-toolchain@master
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: "1.98.1"
+      # Caches ~/.cargo/bin as well, so cargo-audit is only compiled once.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo install cargo-audit --locked
+      # Any new unmaintained or yanked crate fails the build. `ttf-parser` is
+      # the one exception: it is unmaintained with nothing to move to, and it
+      # arrives through winit's Wayland window decorations.
+      - run: cargo audit --deny warnings --ignore RUSTSEC-2026-0192
 
   # The two platforms we have no machine for. Build and test only: nobody
   # here can look at the result, so correctness of the picture is untested.
