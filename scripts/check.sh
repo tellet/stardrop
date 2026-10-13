@@ -29,8 +29,11 @@ if [[ "${1:-}" == "--smoke" ]]; then
     log="$(mktemp)"
     # `timeout` stopping the game is the expected outcome (exit code 124).
     BEVY_ASSET_ROOT="$PWD" timeout 6 ./target/release/stardrop >"$log" 2>&1 || true
-    if grep -qE "panicked|ERROR" "$log"; then
-        grep -E "panicked|ERROR" -A3 "$log"
+    # A game made of sound must not start silently. bevy_kira_audio only
+    # *warns* when it cannot open the audio device and then plays nothing,
+    # so that warning has to fail the check like an error would.
+    if grep -qE "panicked|ERROR|Failed to setup audio" "$log"; then
+        grep -E "panicked|ERROR|Failed to setup audio" -A3 "$log"
         rm -f "$log"
         echo "Smoke test FAILED."
         exit 1
