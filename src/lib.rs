@@ -22,6 +22,7 @@ mod journal;
 pub mod level;
 mod menu;
 pub mod music;
+mod note_signs;
 pub mod objects;
 mod particles;
 pub mod physics;
@@ -77,6 +78,7 @@ pub fn run() -> AppExit {
         objects::ObjectsPlugin,
         effects::EffectsPlugin,
         particles::ParticlesPlugin,
+        note_signs::NoteSignsPlugin,
         audio::GameAudioPlugin,
         camera::CameraPlugin,
         background::BackgroundPlugin,

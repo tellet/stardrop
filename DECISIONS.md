@@ -589,6 +589,16 @@ more sky.
 - **CI on master.** The Linux gate still runs on every push: format, clippy, tests, a release build and the Section 7.1 budgets. The three desktop binaries build only when asked for, through a `workflow_dispatch` input, because fat LTO on three runners is 20 minutes nobody needs on an ordinary push. Windows and macOS are compiled nowhere else, so that job runs the tests before it builds.
 - **Two shortcuts that were in `TECH_DEBT.md` and are still open**, recorded here so they are not lost with the file: the long-session memory measurement is headless and judged only off CI (M10-6), and native Wayland is built in but has never run on a Wayland desktop (M0-2).
 
+## M10-10 · One counter for the thing you pick up, notes for the thing you hear
+
+- **What was wrong.** The row along the top was the phrase: one mark per object the level asks you to touch. It was drawn with the same five-pointed star as a star you earn, and stardust, the thing you actually pick up, had no counter at all while you fell. Every level holds 3 motes and asks for a phrase of 2 to 5, so on most levels the row looked like a stardust counter that lit at the wrong moments. A playtest read it exactly that way.
+- **Stardust gets the only permanent counter**, in the top-left corner: one round mark per mote, the same shape and gold as the mote in the level, filling as they are collected. Round and small, so it can never be read as the row of notes above it.
+- **The phrase row is notes now**, and it shows itself when a note lands and fades out again a second and a half later. Two reasons. A star on screen should only ever mean a star earned, and the melody is the real feedback for that star: the row is for the player who hasn't noticed yet, so it gets out of the way once it has said its piece.
+- **Note signs.** A quaver rises from the astronaut on every touch and every mote, in the object's own colour, and the pitch it stands for decides how high it starts and how small it is. The sound was already a melody (M10-1); nothing on screen said so, so it read as sound effects.
+- **Drawn, not typed.** Bevy's built-in font has no musical glyphs, so the note is generated the same way the star is: signed distances for a tilted head, a stem and a flag, white with the shape in the alpha. `the_picture_is_a_note` probes six places in the image, which is what stops a change to the maths quietly producing a blob.
+- **Pooled, like the sparks.** Twelve sign entities spawned once and reused (`src/note_signs.rs`), so no amount of touching grows the world. They are taken down on a retry and on leaving the fall.
+- **Two melody counters, on purpose.** `audio.rs` counts touches to pick the note to play, and `note_signs.rs` counts them to pick the note to draw. Neither can read the other's count without an ordering rule between two plugins that are otherwise independent, and both reset on the same message. `steps_match_what_audio_plays` holds them to the same note, so the invariant is checked rather than hoped for.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
