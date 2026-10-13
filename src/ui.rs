@@ -5,9 +5,7 @@
 use bevy::prelude::*;
 
 use crate::app_state::AppState;
-use crate::collectibles::CurrentRun;
 use crate::level::{ActiveLevel, LevelPhase, LevelProblem};
-use crate::note_signs::NoteArt;
 use crate::settings::Settings;
 
 /// Soft coral: clearly a problem, but calm, like everything else.
@@ -35,42 +33,6 @@ struct ProblemText;
 #[derive(Component)]
 struct PlayOnly;
 
-/// One mark of the phrase, by its place in it.
-#[derive(Component)]
-struct PhraseMark(u32);
-
-/// One mark of the level's stardust, by its place in the list.
-#[derive(Component)]
-struct MoteMark(usize);
-
-/// How big the marks are, and how far apart.
-const MARK_SIZE: f32 = 20.0;
-const MARK_GAP: f32 = 10.0;
-/// Lit once that note has been played, dim before.
-const MARK_PLAYED: Color = Color::linear_rgba(2.4, 1.9, 0.9, 1.0);
-const MARK_WAITING: Color = Color::srgba(0.7, 0.7, 0.85, 0.22);
-
-/// The stardust marks: round, like the motes themselves, and smaller than
-/// the notes so the two rows can never be read as one.
-const MOTE_MARK_SIZE: f32 = 14.0;
-const MOTE_MARK_GAP: f32 = 8.0;
-/// How far the row sits from the corner, in pixels.
-const MOTE_ROW_INSET: f32 = 20.0;
-/// Collected motes keep the stardust's own gold; the rest are barely there.
-const MOTE_COLLECTED: Color = Color::linear_rgba(2.4, 1.8, 0.6, 1.0);
-const MOTE_WAITING: Color = Color::srgba(0.7, 0.7, 0.85, 0.18);
-
-/// How long the phrase row stays up after a note lands, and how long it
-/// takes to fade out again.
-const PHRASE_HOLD: f32 = 1.5;
-const PHRASE_FADE: f32 = 0.7;
-
-/// Seconds of phrase row left to show. The row is the melody's progress,
-/// which only matters just after a note: the rest of the time the sky is
-/// better empty.
-#[derive(Resource, Debug, Default)]
-struct PhraseShown(f32);
-
 /// The overlay every screen change fades in through.
 #[derive(Component)]
 struct ScreenFade;
@@ -85,7 +47,6 @@ pub(crate) struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ScreenFadeLeft>()
-            .init_resource::<PhraseShown>()
             .add_systems(
                 Startup,
                 (spawn_problem_text, spawn_screen_fade, prepare_star_art),
@@ -102,21 +63,7 @@ impl Plugin for UiPlugin {
             )
             .add_systems(
                 OnEnter(LevelPhase::Ready),
-                (spawn_drop_hint, spawn_level_name, show_the_phrase_now),
-            )
-            .add_systems(
-                Update,
-                (
-                    (rebuild_phrase_marks, rebuild_mote_marks)
-                        .run_if(resource_exists_and_changed::<ActiveLevel>),
-                    light_mote_marks,
-                    (
-                        show_the_phrase_on_a_note,
-                        fade_the_phrase,
-                        light_phrase_marks,
-                    )
-                        .chain(),
-                ),
+                (spawn_drop_hint, spawn_level_name),
             )
             .add_systems(Update, fade_in_level_name);
     }
@@ -180,168 +127,6 @@ fn run_screen_fade(
     let alpha = screen_fade_alpha(fade.0);
     for mut color in &mut overlay {
         color.0.set_alpha(alpha);
-    }
-}
-
-/// A note's place in the row. Phrases are a handful of notes long.
-fn note_offset(note: u32) -> f32 {
-    u16::try_from(note).map_or(0.0, f32::from)
-}
-
-/// The phrase, as a row of notes along the top: one per note the level asks
-/// for, lighting up as each object is touched.
-///
-/// Notes, not stars. A star on screen means a star earned, and the row was
-/// read as a stardust counter while it counted something else entirely.
-///
-/// The melody is the real feedback; the row is there for the player who
-/// hasn't noticed yet that the notes mean something, which is why it shows
-/// itself when one lands and then gets out of the way.
-fn rebuild_phrase_marks(
-    mut commands: Commands,
-    level: Res<ActiveLevel>,
-    art: Option<Res<NoteArt>>,
-    old: Query<Entity, With<PhraseMark>>,
-) {
-    for entity in &old {
-        commands.entity(entity).despawn();
-    }
-    let Some(art) = art else {
-        return;
-    };
-    for note in 0..u32::from(level.phrase) {
-        commands.spawn((
-            PlayOnly,
-            PhraseMark(note),
-            ImageNode::new(art.0.clone()).with_color(MARK_WAITING),
-            Node {
-                position_type: PositionType::Absolute,
-                // Along the top, out of the way of the beacon and of where
-                // the astronaut spends its time.
-                top: Val::Percent(3.0),
-                // Centred as a group: each mark steps right from the middle.
-                left: Val::Percent(50.0),
-                margin: UiRect::left(Val::Px(
-                    // Step right from the middle, so the row sits centred.
-                    (note_offset(note) - (f32::from(level.phrase) - 1.0) / 2.0)
-                        * (MARK_SIZE + MARK_GAP)
-                        - MARK_SIZE / 2.0,
-                )),
-                width: Val::Px(MARK_SIZE),
-                height: Val::Px(MARK_SIZE),
-                ..default()
-            },
-        ));
-    }
-}
-
-/// How much of the phrase row is showing, `left` seconds before it is gone:
-/// solid while it is held, then eased away.
-#[must_use]
-fn phrase_row_alpha(left: f32) -> f32 {
-    let t = (left / PHRASE_FADE).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
-/// Brings the row back whenever a note lands.
-fn show_the_phrase_on_a_note(
-    run: Res<CurrentRun>,
-    mut shown: ResMut<PhraseShown>,
-    mut last: Local<u32>,
-) {
-    if run.touches > *last {
-        shown.0 = PHRASE_HOLD + PHRASE_FADE;
-    }
-    *last = run.touches;
-}
-
-/// And shows it once at the start, so the player sees what the level asks
-/// for before they drop.
-fn show_the_phrase_now(mut shown: ResMut<PhraseShown>) {
-    shown.0 = PHRASE_HOLD + PHRASE_FADE;
-}
-
-fn fade_the_phrase(time: Res<Time>, mut shown: ResMut<PhraseShown>) {
-    if shown.0 > 0.0 {
-        shown.0 = (shown.0 - time.delta_secs()).max(0.0);
-    }
-}
-
-/// Lights one mark per object touched this attempt, under the row's own
-/// fade. Does nothing at all once the row is gone and the run is quiet.
-fn light_phrase_marks(
-    run: Res<CurrentRun>,
-    shown: Res<PhraseShown>,
-    mut marks: Query<(&PhraseMark, &mut ImageNode)>,
-) {
-    if !run.is_changed() && !shown.is_changed() {
-        return;
-    }
-    let alpha = phrase_row_alpha(shown.0);
-    for (mark, mut image) in &mut marks {
-        let base = if run.touches > mark.0 {
-            MARK_PLAYED
-        } else {
-            MARK_WAITING
-        };
-        let wanted = base.with_alpha(base.alpha() * alpha);
-        if image.color != wanted {
-            image.color = wanted;
-        }
-    }
-}
-
-/// The stardust, as a row of motes in the top corner: one per mote in the
-/// level, filling as they are collected. The only counter that stays up,
-/// because stardust is the thing the player picks up.
-fn rebuild_mote_marks(
-    mut commands: Commands,
-    level: Res<ActiveLevel>,
-    old: Query<Entity, With<MoteMark>>,
-) {
-    for entity in &old {
-        commands.entity(entity).despawn();
-    }
-    for index in 0..level.stardust.len() {
-        commands.spawn((
-            PlayOnly,
-            MoteMark(index),
-            BackgroundColor(MOTE_WAITING),
-            Node {
-                position_type: PositionType::Absolute,
-                // A circle: the same shape as the mote in the level.
-                border_radius: BorderRadius::MAX,
-                top: Val::Percent(3.0),
-                left: Val::Px(
-                    MOTE_ROW_INSET + mote_offset(index) * (MOTE_MARK_SIZE + MOTE_MARK_GAP),
-                ),
-                width: Val::Px(MOTE_MARK_SIZE),
-                height: Val::Px(MOTE_MARK_SIZE),
-                ..default()
-            },
-        ));
-    }
-}
-
-/// A mote's place in the row. A level holds at most 64.
-fn mote_offset(index: usize) -> f32 {
-    u16::try_from(index).map_or(0.0, f32::from)
-}
-
-/// Fills the marks of the motes collected this attempt.
-fn light_mote_marks(run: Res<CurrentRun>, mut marks: Query<(&MoteMark, &mut BackgroundColor)>) {
-    if !run.is_changed() {
-        return;
-    }
-    for (mark, mut color) in &mut marks {
-        let wanted = if run.stardust.contains(mark.0) {
-            MOTE_COLLECTED
-        } else {
-            MOTE_WAITING
-        };
-        if color.0 != wanted {
-            color.0 = wanted;
-        }
     }
 }
 

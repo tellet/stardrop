@@ -48,10 +48,6 @@ const PITCH_SHRINK: f32 = 0.3;
 /// How big the drawn note is, in pixels. Made once, shown at any size.
 const NOTE_PIXELS: u32 = 64;
 
-/// The note picture, made once and used by the signs and by the phrase row.
-#[derive(Resource)]
-pub(crate) struct NoteArt(pub Handle<Image>);
-
 /// A sign in flight: how long it has been up, where it started, and the
 /// pitch it stands for.
 #[derive(Component, Debug, Default, Clone, Copy)]
@@ -168,7 +164,6 @@ fn prepare_signs(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         })
         .collect();
     commands.insert_resource(SignPool { slots, next: 0 });
-    commands.insert_resource(NoteArt(art));
 }
 
 /// Puts one sign in the air. The oldest slot makes way when they are all busy.
