@@ -82,11 +82,27 @@ jobs:
           cache-on-failure: true
       - run: cargo test
       - run: cargo build --profile dist
-      # One of the two paths exists on any given runner; the other is ignored.
+      # GitHub wraps every artifact in a zip of its own, and that zip drops
+      # the executable bit. Linux and macOS therefore ship a tar inside it,
+      # which keeps the bit; Windows has no such bit to lose.
+      - if: runner.os == 'Linux'
+        run: |
+          mkdir -p package
+          tar -czf package/stardrop-linux.tar.gz -C target/dist stardrop
+      # macOS gets a real .app, so it can be double-clicked and so the
+      # "right-click, Open" that gets past Gatekeeper is offered at all.
+      - if: runner.os == 'macOS'
+        run: |
+          mkdir -p package
+          ./scripts/macos-app.sh target/dist/stardrop package/Stardrop.app
+          tar -czf package/stardrop-macos.tar.gz -C package Stardrop.app
+          rm -rf package/Stardrop.app
+      - if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force package
+          Copy-Item target/dist/stardrop.exe package/
       - uses: actions/upload-artifact@v4
         with:
-          name: stardrop-${{ matrix.os }}
-          path: |
-            target/dist/stardrop
-            target/dist/stardrop.exe
+          name: stardrop-${{ runner.os }}
+          path: package/
           if-no-files-found: error

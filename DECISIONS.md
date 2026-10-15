@@ -599,6 +599,13 @@ more sky.
 - **Pooled, like the sparks.** Twelve sign entities spawned once and reused (`src/note_signs.rs`), so no amount of touching grows the world. They are taken down on a retry and on leaving the fall.
 - **Two melody counters, on purpose.** `audio.rs` counts touches to pick the note to play, and `note_signs.rs` counts them to pick the note to draw. Neither can read the other's count without an ordering rule between two plugins that are otherwise independent, and both reset on the same message. `steps_match_what_audio_plays` holds them to the same note, so the invariant is checked rather than hoped for.
 
+## M10-11 · Handing the game to someone
+
+- **The zip eats the executable bit.** `actions/upload-artifact` wraps every artifact in a zip of its own and that zip stores no permissions: the Windows artifact came back `-rw-rw-rw-`, and so did the Linux and macOS ones. Anyone downloading a build had to work out `chmod +x` for themselves. Linux and macOS now ship a tar inside that zip, which keeps the bit. Windows has no such bit, so the `.exe` goes in plain.
+- **macOS gets a real `.app`** (`scripts/macos-app.sh`): the binary, the smallest `Info.plist` that counts as a bundle, and an ad-hoc signature. The signature is what lets Apple Silicon load it at all. It is *not* a developer identity, so Gatekeeper still objects to anything downloaded, and the answer is the one-time "right-click, Open" the README now explains. Notarising for real costs $99 a year, which is not worth it for a game shown to friends.
+- **Left undone:** the macOS build is Apple Silicon only, because that is what `macos-latest` runners are. A universal binary means a second fat-LTO compile on that runner, and nobody here has an Intel Mac to need it.
+- **Also fixed:** the smoke test now fails on `Failed to setup audio`. `bevy_kira_audio` only *warns* when it cannot open the device and then plays nothing, so a build that starts stone silent used to pass every gate. Checked by feeding the check a log with that line and watching it go red.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.

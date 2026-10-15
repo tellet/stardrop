@@ -36,6 +36,19 @@ with the assets inside, which runs from an empty folder. CI builds the same
 thing for Linux, Windows and macOS when you tick `binaries` on a manual run
 of the `check` workflow.
 
+## Running a build someone sent you
+
+Nothing here is signed by Apple or Microsoft, so both will stop it the first
+time. This is what to do about it.
+
+| | |
+|---|---|
+| Linux | `tar -xzf stardrop-linux.tar.gz && ./stardrop` |
+| macOS | unpack, then right-click `Stardrop.app` and choose **Open**, then **Open Anyway**. Or `xattr -dr com.apple.quarantine Stardrop.app` once. |
+| Windows | **More info**, then **Run anyway**, when SmartScreen says it protected your PC |
+
+The macOS build is for Apple Silicon and will not start on an Intel Mac.
+
 `cargo run --features dev` keeps assets on disk and reloads levels when they
 change. `./scripts/check.sh` is the quality gate: formatting, clippy, tests
 and a release build. Add `--smoke` to start the real game for a few seconds
