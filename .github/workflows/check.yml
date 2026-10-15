@@ -7,6 +7,8 @@ name: check
 
 on:
   push:
+    # Every branch, but no tags: a tag is a release, and release.yml has it.
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
     inputs:
