@@ -82,15 +82,16 @@ jobs:
           cache-on-failure: true
       - run: cargo test
       - run: cargo build --profile dist
-      # GitHub wraps every artifact in a zip of its own, and that zip drops
-      # the executable bit. Linux and macOS therefore ship a tar inside it,
-      # which keeps the bit; Windows has no such bit to lose.
+      # The artifact zip keeps the executable bit, so the binary goes in as
+      # it is and arrives ready to run.
       - if: runner.os == 'Linux'
         run: |
           mkdir -p package
-          tar -czf package/stardrop-linux.tar.gz -C target/dist stardrop
+          cp target/dist/stardrop package/
       # macOS gets a real .app, so it can be double-clicked and so the
-      # "right-click, Open" that gets past Gatekeeper is offered at all.
+      # "right-click, Open" that gets past Gatekeeper is offered at all. It
+      # ships as a tar: a bundle is a tree with a signature inside it, and a
+      # tar is the one container certain to hand it back unchanged.
       - if: runner.os == 'macOS'
         run: |
           mkdir -p package

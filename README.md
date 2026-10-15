@@ -38,13 +38,13 @@ of the `check` workflow.
 
 ## Running a build someone sent you
 
-Nothing here is signed by Apple or Microsoft, so both will stop it the first
-time. This is what to do about it.
+Linux just runs. Nothing is signed by Apple or Microsoft, so those two stop
+it the first time.
 
 | | |
 |---|---|
-| Linux | `tar -xzf stardrop-linux.tar.gz && ./stardrop` |
-| macOS | unpack, then right-click `Stardrop.app` and choose **Open**, then **Open Anyway**. Or `xattr -dr com.apple.quarantine Stardrop.app` once. |
+| Linux | unzip and run `./stardrop` |
+| macOS | `tar -xzf stardrop-macos.tar.gz`, then right-click `Stardrop.app` and choose **Open**, then **Open Anyway**. Or `xattr -dr com.apple.quarantine Stardrop.app` once. |
 | Windows | **More info**, then **Run anyway**, when SmartScreen says it protected your PC |
 
 The macOS build is for Apple Silicon and will not start on an Intel Mac.
