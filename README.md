@@ -36,6 +36,18 @@ with the assets inside, which runs from an empty folder. CI builds the same
 thing for Linux, Windows and macOS when you tick `binaries` on a manual run
 of the `check` workflow.
 
+## Releasing it
+
+Tag a version and CI builds all three desktops and publishes them:
+
+```
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+A release asset downloads without a GitHub account and never expires, unlike
+the artifacts from a `check` run. The tag has to match `version` in
+`Cargo.toml`, or the build stops before publishing anything.
+
 ## Running a build someone sent you
 
 Linux just runs. Nothing is signed by Apple or Microsoft, so those two stop
@@ -43,7 +55,7 @@ it the first time.
 
 | | |
 |---|---|
-| Linux | unzip and run `./stardrop` |
+| Linux | `tar -xzf stardrop-linux-*.tar.gz && ./stardrop` |
 | macOS | `tar -xzf stardrop-macos.tar.gz`, then right-click `Stardrop.app` and choose **Open**, then **Open Anyway**. Or `xattr -dr com.apple.quarantine Stardrop.app` once. |
 | Windows | **More info**, then **Run anyway**, when SmartScreen says it protected your PC |
 

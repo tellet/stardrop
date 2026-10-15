@@ -1,0 +1,147 @@
+# Publishes a build of each desktop for a tagged version.
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# A release asset downloads with no GitHub account and never expires, which
+# is the whole point: an Actions artifact needs a login and is deleted after
+# 90 days, so nobody but the author can ever get one.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # For re-running a release whose build failed halfway.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to build and publish
+        required: true
+
+permissions:
+  # Only to create the release and attach the builds to it.
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build:
+    strategy:
+      # One platform failing shouldn't hide whether the others worked.
+      fail-fast: false
+      matrix:
+        include:
+          # Archived, not bare: a browser download loses the executable bit,
+          # and a tar is what carries it back.
+          - os: ubuntu-latest
+            asset: stardrop-linux-x86_64.tar.gz
+          - os: macos-latest
+            asset: stardrop-macos-aarch64.tar.gz
+          # Windows has no such bit, so the exe goes up as it is and needs
+          # no unpacking at all.
+          - os: windows-latest
+            asset: stardrop-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      # The tag and the version in Cargo.toml have to agree, or what someone
+      # downloads says one thing and the page they got it from says another.
+      - if: runner.os == 'Linux'
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          crate="v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          if [ "$tag" != "$crate" ]; then
+            echo "tag is $tag but Cargo.toml says $crate"
+            exit 1
+          fi
+      # Rare enough to be worth the minutes: nobody should be handed a build
+      # whose tests were never run on its own platform.
+      - run: cargo test
+      - run: cargo build --profile dist
+      - if: runner.os == 'Linux'
+        run: tar -czf "${{ matrix.asset }}" -C target/dist stardrop
+      - if: runner.os == 'macOS'
+        run: |
+          ./scripts/macos-app.sh target/dist/stardrop Stardrop.app
+          tar -czf "${{ matrix.asset }}" Stardrop.app
+      - if: runner.os == 'Windows'
+        run: Copy-Item target/dist/stardrop.exe "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  # Only runs if all three built, so a release is never half a release.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ls -l assets
+          notes="$(mktemp)"
+          cat >"$notes" <<'NOTES'
+          A calm falling game. One screen of sky at a time, steering past
+          clouds, crystals and gravity wells towards the beacon below.
+
+          ## Getting it running
+
+          Nothing here is signed by Apple or Microsoft, so those two stop it
+          the first time. Each of these is a one-off.
+
+          **Linux** — unpack and run it.
+
+          ```
+          tar -xzf stardrop-linux-x86_64.tar.gz && ./stardrop
+          ```
+
+          **macOS** — unpack, then **right-click `Stardrop.app` and choose
+          Open**, and **Open Anyway**. Double-clicking it the normal way will
+          be refused. Apple Silicon only; it will not start on an Intel Mac.
+
+          ```
+          tar -xzf stardrop-macos-aarch64.tar.gz
+          ```
+
+          **Windows** — run the `.exe`. When SmartScreen says it protected
+          your PC, choose **More info**, then **Run anyway**.
+
+          Each build is one file with the whole game inside it, so it runs
+          from wherever you put it and installs nothing. Progress is saved in
+          your own user folder, and nothing else is written anywhere.
+
+          ## Playing
+
+          Left and right, A and D, or a gamepad stick to steer, and the first
+          press starts the fall. R starts the attempt again, Esc goes back,
+          F1 shows frame times.
+          NOTES
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --clobber
+          else
+            gh release create "$TAG" --title "Stardrop $TAG" \
+              --notes-file "$notes" assets/*
+          fi
+          echo "https://github.com/$GH_REPO/releases/tag/$TAG"

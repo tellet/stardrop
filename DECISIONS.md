@@ -607,6 +607,16 @@ more sky.
 - **The Linux build was reported silent, and is not.** Running the downloaded artifact here, it opens the device with no warning and registers a PipeWire stream, unmuted at full volume. PipeWire remembers an output per application name, so a stream pointed once at an inaudible sink goes there every time; `pactl list sink-inputs` is what to look at, not the build.
 - **Also fixed:** the smoke test now fails on `Failed to setup audio`. `bevy_kira_audio` only *warns* when it cannot open the device and then plays nothing, so a build that starts stone silent used to pass every gate. Checked by feeding the check a log with that line and watching it go red.
 
+## M10-12 · Releases, because an artifact is only for the author
+
+- **The problem with what we had.** A build from the `check` workflow is an Actions artifact: downloading one needs a GitHub account with read access to the repository, and it is deleted after 90 days. Nobody the game is meant for could ever fetch one. A release asset needs no account, no login and never expires.
+- **Tag to publish.** `git tag v0.1.0 && git push origin v0.1.0` builds all three desktops and publishes them with notes that carry the first-run instructions (`.github/workflows/release.yml`). The `check` workflow keeps its `binaries` button for trying a build without tagging anything.
+- **The tag must match `version` in `Cargo.toml`**, checked before anything is built. Otherwise the file someone downloads says one thing and the page they got it from says another.
+- **Tests run on each platform before its build is published.** Releases are rare and the minutes are cheap; handing someone a binary whose tests never ran on its own operating system is not.
+- **Nothing is published unless all three built**, because `publish` waits on the whole matrix. A release with two of the three files in it is worse than no release.
+- **Archived except on Windows.** A browser download of a bare binary loses the executable bit, so Linux and macOS ship a tar; Windows has no such bit and gets the `.exe` straight, which is one less step for the person running it.
+- **The repository has to be public** for any of this to reach anyone. That is the price of the whole approach, and the alternative (itch.io, free, keeps the repository private, and its app installs builds so macOS never flags them) is written down here in case the price turns out to be the wrong one.
+
 ## Measurements (M8)
 
 Measured 2026-09-24, same machine as the M0 baseline.
