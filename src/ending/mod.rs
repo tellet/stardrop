@@ -12,6 +12,7 @@
 
 use bevy::math::Vec2;
 
+mod art;
 mod planet;
 
 /// When the astronaut touches the ground.
