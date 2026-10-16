@@ -23,6 +23,7 @@ use crate::astronaut::Astronaut;
 use crate::attempt::{AttemptFailed, AttemptRestarted};
 use crate::background::CurrentTheme;
 use crate::collectibles::StardustCollected;
+use crate::ending::{Beat, EndingBeat};
 use crate::level::{ActiveLevel, LevelCompleted, LevelPhase, Theme};
 use crate::music::{Key, key_for, landing_chord, menu_key, stardust_step, step_hz, touch_step};
 use crate::objects::{ObjectKind, ObjectTouched};
@@ -159,6 +160,7 @@ impl Plugin for GameAudioPlugin {
                     play_object_notes.run_if(on_message::<ObjectTouched>),
                     ring_stardust.run_if(on_message::<StardustCollected>),
                     play_the_landing.run_if(on_message::<LevelCompleted>),
+                    play_the_ending.run_if(on_message::<EndingBeat>),
                     sigh_on_a_failed_attempt.run_if(on_message::<AttemptFailed>),
                     play_interface_sounds.run_if(on_message::<Interface>),
                     pop_when_a_bubble_lets_go,
@@ -501,6 +503,52 @@ fn play_the_landing(
     }
 }
 
+/// What each beat of the landing cartoon sounds like. The descent and the
+/// hold are silent on purpose: the first is a long way from anywhere, and the
+/// second is someone looking at a flag.
+fn voice_for(beat: Beat) -> Option<synth::Sound> {
+    match beat {
+        // The landing is a chord rather than one voice; `play_the_ending` has it.
+        Beat::Descent | Beat::Settle | Beat::Hold => None,
+        // Something far too heavy coming off a shoulder.
+        Beat::Pack => Some(synth::Sound::Muffled),
+        Beat::Flag => Some(synth::Sound::Shimmer),
+        Beat::Plant => Some(synth::Sound::Marimba),
+    }
+}
+
+/// The cartoon's sound: one voice a beat, and the landing chord under the
+/// moment they touch down.
+fn play_the_ending(
+    mut beats: MessageReader<EndingBeat>,
+    voices: Res<Voices>,
+    bed: Res<MusicBed>,
+    channel: Res<AudioChannel<SfxChannel>>,
+) {
+    for EndingBeat(beat) in beats.read() {
+        if let Some(sound) = voice_for(*beat)
+            && let Some(source) = voices.0.get(&sound)
+        {
+            channel.play(source.clone());
+        }
+        if *beat != Beat::Settle {
+            continue;
+        }
+        // Touchdown: the low sound of arriving, and the chord that closes the
+        // fall, the same one a beacon plays.
+        if let Some(whoosh) = voices.0.get(&synth::Sound::Whoosh) {
+            channel.play(whoosh.clone());
+        }
+        if let Some(bell) = voices.0.get(&synth::Sound::Bell) {
+            for note in landing_chord(current_key(&bed)) {
+                channel
+                    .play(bell.clone())
+                    .with_playback_rate(playable_rate(note, synth::Sound::Bell.reference_hz()));
+            }
+        }
+    }
+}
+
 /// A failed attempt sighs; it never buzzes.
 fn sigh_on_a_failed_attempt(voices: Res<Voices>, channel: Res<AudioChannel<SfxChannel>>) {
     if let Some(source) = voices.0.get(&synth::Sound::Sigh) {
@@ -568,6 +616,31 @@ mod tests {
     /// However high the melody climbs, no sound is ever played more than an
     /// octave from the pitch it was built at: beyond that a sample turns
     /// into a chirp.
+    /// Every beat that should make a sound has a voice the mixer has built,
+    /// and the two that should stay quiet have none.
+    #[test]
+    fn the_cartoon_has_a_voice_for_each_of_its_beats() {
+        for beat in [
+            Beat::Descent,
+            Beat::Settle,
+            Beat::Pack,
+            Beat::Flag,
+            Beat::Plant,
+            Beat::Hold,
+        ] {
+            if let Some(sound) = voice_for(beat) {
+                assert!(
+                    synth::Sound::ALL.contains(&sound),
+                    "{beat:?} wants {sound:?}, which the mixer never builds"
+                );
+            }
+        }
+        // The landing is a chord, not one voice, so it is played apart.
+        assert_eq!(voice_for(Beat::Settle), None, "the landing is its own case");
+        assert_eq!(voice_for(Beat::Pack), Some(synth::Sound::Muffled));
+        assert_eq!(voice_for(Beat::Descent), None, "coming down is silent");
+    }
+
     #[test]
     fn notes_stay_within_an_octave_of_the_sound_they_came_from() {
         for (note, reference) in [
