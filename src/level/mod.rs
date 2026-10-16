@@ -92,6 +92,7 @@ pub(crate) struct LevelPlugin;
 
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
+        free_the_level_on(app);
         add_play_rules(app);
         app.init_asset::<LevelAsset>()
             .init_asset_loader::<LevelLoader>()
@@ -112,14 +113,6 @@ impl Plugin for LevelPlugin {
             )
             // Pausing also leaves `Playing`, so the level is freed when a
             // menu is *entered* instead, never when play is merely paused.
-            .add_systems(
-                OnEnter(AppState::LevelSelect),
-                unload_level.run_if(resource_exists::<LevelHandle>),
-            )
-            .add_systems(
-                OnEnter(AppState::MainMenu),
-                unload_level.run_if(resource_exists::<LevelHandle>),
-            )
             .add_systems(
                 Update,
                 (
@@ -213,7 +206,20 @@ fn load_selected_level(
     commands.insert_resource(LoadedLevel(*selected));
 }
 
-/// Going back to a menu frees the level, its scenery and its objects.
+/// The screens that free the level. The two menus are the way out of a
+/// level; the cartoon is a different place altogether, and the level would
+/// otherwise draw over it (M10-13).
+fn free_the_level_on(app: &mut App) {
+    for state in [AppState::MainMenu, AppState::LevelSelect, AppState::Ending] {
+        app.add_systems(
+            OnEnter(state),
+            unload_level.run_if(resource_exists::<LevelHandle>),
+        );
+    }
+}
+
+/// Going back to a menu, or on to the cartoon, frees the level, its scenery
+/// and its objects.
 fn unload_level(mut commands: Commands, scenery: Query<Entity, With<LevelEntity>>) {
     for entity in &scenery {
         commands.entity(entity).despawn();
@@ -331,6 +337,37 @@ fn report_unreadable_file(
 
 #[cfg(test)]
 pub(crate) mod tests {
+
+    /// The cartoon is a different place. The level it came from has to be
+    /// freed or it draws straight over the planet, beacon and all (M10-13).
+    #[test]
+    fn leaving_a_level_for_the_cartoon_frees_it() {
+        for state in [AppState::MainMenu, AppState::LevelSelect, AppState::Ending] {
+            let mut app = App::new();
+            app.add_plugins((MinimalPlugins, StatesPlugin));
+            // Start in the level, so only the screen under test can free it.
+            app.insert_state(AppState::Playing);
+            free_the_level_on(&mut app);
+            app.update();
+            app.insert_resource(ActiveLevel(Level::for_tests()));
+            app.insert_resource(LevelHandle(Handle::default()));
+            app.world_mut().spawn(LevelEntity);
+            app.world_mut()
+                .resource_mut::<NextState<AppState>>()
+                .set(state);
+            app.update();
+            assert!(
+                app.world().get_resource::<ActiveLevel>().is_none(),
+                "{state:?} kept the level loaded"
+            );
+            let left = app
+                .world_mut()
+                .query_filtered::<(), With<LevelEntity>>()
+                .iter(app.world())
+                .count();
+            assert_eq!(left, 0, "{state:?} kept its scenery");
+        }
+    }
     use core::time::Duration;
 
     use bevy::asset::AssetPlugin;

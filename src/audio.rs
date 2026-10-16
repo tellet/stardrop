@@ -613,11 +613,8 @@ fn pop_when_a_bubble_lets_go(
 mod tests {
     use super::*;
 
-    /// However high the melody climbs, no sound is ever played more than an
-    /// octave from the pitch it was built at: beyond that a sample turns
-    /// into a chirp.
     /// Every beat that should make a sound has a voice the mixer has built,
-    /// and the two that should stay quiet have none.
+    /// and the quiet ones have none.
     #[test]
     fn the_cartoon_has_a_voice_for_each_of_its_beats() {
         for beat in [
@@ -641,6 +638,9 @@ mod tests {
         assert_eq!(voice_for(Beat::Descent), None, "coming down is silent");
     }
 
+    /// However high the melody climbs, no sound is ever played more than an
+    /// octave from the pitch it was built at: beyond that a sample turns
+    /// into a chirp.
     #[test]
     fn notes_stay_within_an_octave_of_the_sound_they_came_from() {
         for (note, reference) in [

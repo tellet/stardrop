@@ -99,6 +99,12 @@ fn through(t: f32, from: f32, to: f32) -> f32 {
     ((t - from) / (to - from)).clamp(0.0, 1.0)
 }
 
+/// Eased 0 to 1: still at both ends, quickest in the middle.
+#[must_use]
+fn smooth(u: f32) -> f32 {
+    u * u * (3.0 - 2.0 * u)
+}
+
 /// The astronaut's height: down from above the frame to their feet on the
 /// ground at `feet`, slowing into the landing rather than speeding up. A fall
 /// this is not; they are bringing themselves down.
@@ -154,20 +160,76 @@ fn flag_rise(t: f32) -> f32 {
 
 /// How far the flag climbs out of the pack, in world units.
 const FLAG_LIFT: f32 = 62.0;
+/// How long the pack takes to slide off a shoulder, in seconds.
+const SLIDE_SECONDS: f32 = 0.5;
+/// How far the astronaut leans into their drift, in radians.
+const LEAN: f32 = 0.25;
+/// And in towards the pole as they push it in.
+const PLANT_LEAN: f32 = 0.3;
+/// How far they bob as they straighten up, in world units.
+const BOB: f32 = 8.0;
+/// How hard the landing pushes nearby props away, in radians, how long that
+/// takes to die away, and how far it carries.
+const RECOIL: f32 = 0.35;
+const RECOIL_SECONDS: f32 = 0.9;
+const RECOIL_REACH: f32 = 500.0;
 /// How long it takes to carry the flag across and push it in, in seconds.
 const CARRY_SECONDS: f32 = 0.5;
 
 /// Where the flag is: climbing out of the pack while it rises, then carried
-/// across to where it is planted and pushed back down into the ground.
+/// across to where it is planted and pushed into the ground there. `from` and
+/// `to` each sit on their own ground, which is rarely the same height.
 #[must_use]
-fn flag_at(t: f32, pack_x: f32, plant_x: f32, ground_y: f32) -> Vec2 {
-    let lifted = ground_y + FLAG_LIFT * flag_rise(t);
-    let across = through(t, PLANT, PLANT + CARRY_SECONDS);
-    let eased = across * across * (3.0 - 2.0 * across);
+fn flag_at(t: f32, from: Vec2, to: Vec2) -> Vec2 {
+    let lifted = from.y + FLAG_LIFT * flag_rise(t);
+    let eased = smooth(through(t, PLANT, PLANT + CARRY_SECONDS));
     Vec2::new(
-        pack_x + (plant_x - pack_x) * eased,
-        lifted + (ground_y - lifted) * eased,
+        from.x + (to.x - from.x) * eased,
+        lifted + (to.y - lifted) * eased,
     )
+}
+
+/// Where the pack is: it slides off their shoulder and settles on the ground
+/// beside them.
+#[must_use]
+fn pack_at(t: f32, shoulder: Vec2, ground: Vec2) -> Vec2 {
+    shoulder.lerp(ground, smooth(through(t, SETTLED, SETTLED + SLIDE_SECONDS)))
+}
+
+/// How far the astronaut leans: into their own drift on the way down, upright
+/// to land, and in towards the pole while they push it into the ground.
+#[must_use]
+fn figure_lean(t: f32) -> f32 {
+    if t < TOUCHDOWN {
+        let u = through(t, 0.0, TOUCHDOWN);
+        // The same curve their drift follows, so the lean belongs to it.
+        return -LEAN * (1.0 - u) * (u * 6.0).sin();
+    }
+    let into = through(t, PLANT, PLANT + CARRY_SECONDS);
+    let out = through(t, HOLD, HOLD + 0.4);
+    PLANT_LEAN * into * (1.0 - out)
+}
+
+/// The one bob as they straighten up after landing, in world units.
+#[must_use]
+fn figure_bob(t: f32) -> f32 {
+    let u = through(t, TOUCHDOWN + 0.2, SETTLED);
+    if u <= 0.0 || u >= 1.0 {
+        return 0.0;
+    }
+    BOB * (u * core::f32::consts::PI).sin() * (1.0 - u)
+}
+
+/// How far the landing pushes a prop `distance` away from it: hardest right
+/// next to the touchdown, gone a few hundred units out, and over quickly.
+#[must_use]
+fn prop_recoil(t: f32, distance: f32) -> f32 {
+    let u = through(t, TOUCHDOWN, TOUCHDOWN + RECOIL_SECONDS);
+    if u <= 0.0 || u >= 1.0 {
+        return 0.0;
+    }
+    let reach = (1.0 - distance / RECOIL_REACH).clamp(0.0, 1.0);
+    RECOIL * reach * (1.0 - u) * (1.0 - u)
 }
 
 /// How far the planted cloth is swung, in radians. `motion` is the player's
@@ -238,6 +300,8 @@ struct Cloth;
 struct Swaying {
     /// Where in the sway it starts, so no two move together.
     phase: f32,
+    /// How far it stands from the landing spot, for the recoil.
+    from_landing: f32,
 }
 
 /// A crack in the ground that breathes steam.
@@ -254,15 +318,16 @@ struct Showing {
     planet: Planet,
     /// World y of the astronaut's middle once they are standing.
     feet: f32,
-    /// Where the pack sits, and where the flag ends up.
-    pack_x: f32,
-    plant_x: f32,
-    /// The ground under the landing spot.
-    ground_y: f32,
+    /// Where the pack ends up, and where the flag is planted. Each sits on
+    /// the ground under itself, not the ground under the astronaut.
+    pack: Vec2,
+    plant: Vec2,
     /// Set once the cartoon has asked to leave, so it only asks once.
     leaving: bool,
     /// Seconds until the next spark comes off the suit.
     trail: f32,
+    /// Seconds until the vents breathe again.
+    steam: f32,
     /// Whether the pack has landed yet, which is worth one puff of dust.
     thumped: bool,
 }
@@ -366,7 +431,10 @@ fn open_the_scene(
         if prop.kind == PropKind::SteamVent {
             entity.insert(Vent);
         } else {
-            entity.insert(Swaying { phase });
+            entity.insert(Swaying {
+                phase,
+                from_landing: (prop.at.x - planet.landing_x).abs(),
+            });
         }
     }
 
@@ -374,13 +442,18 @@ fn open_the_scene(
     let landing_x = planet.landing_x;
     let ground = planet.height_at(landing_x);
     let radius = config.astronaut_radius;
-    let pack_x = landing_x + radius * 2.6;
+    // The pack and the pole stand on the ground beneath each of them, which
+    // on a rocky planet is nowhere near the height under the astronaut.
+    let pack = Vec2::new(landing_x + radius * 2.6, 0.0);
+    let pack = Vec2::new(pack.x, planet.height_at(pack.x));
+    let plant = Vec2::new(landing_x + radius * 1.4, 0.0);
+    let plant = Vec2::new(plant.x, planet.height_at(plant.x));
     commands.spawn((
         EndingEntity,
         Pack,
         Mesh2d(meshes.add(pack_mesh(&palette))),
         MeshMaterial2d(tint.clone()),
-        Transform::from_xyz(pack_x, ground, PACK_DEPTH).with_scale(Vec3::splat(0.0)),
+        Transform::from_translation(pack.extend(PACK_DEPTH)).with_scale(Vec3::splat(0.0)),
     ));
     // The flag, still inside it.
     let flag = commands
@@ -389,7 +462,7 @@ fn open_the_scene(
             Flag,
             Mesh2d(meshes.add(flag_mesh(&palette))),
             MeshMaterial2d(tint.clone()),
-            Transform::from_xyz(pack_x, ground, FLAG_DEPTH),
+            Transform::from_translation(pack.extend(FLAG_DEPTH)),
             Visibility::Hidden,
         ))
         .id();
@@ -413,7 +486,7 @@ fn open_the_scene(
                     color: color(palette.sky[0]),
                     ..default()
                 },
-                Transform::from_xyz(radius * 0.5, 0.0, 0.1),
+                Transform::from_xyz(radius * 0.5, -radius * 0.3, 0.1),
             ))
             .id();
         commands.entity(cloth).add_child(mark);
@@ -425,11 +498,11 @@ fn open_the_scene(
         beat: Beat::Descent,
         planet,
         feet,
-        pack_x,
-        plant_x: landing_x + radius * 1.4,
-        ground_y: ground,
+        pack,
+        plant,
         leaving: false,
         trail: 0.0,
+        steam: 0.0,
         thumped: false,
     });
     // Spawn the astronaut last: `spawn_figure` takes the asset stores.
@@ -505,9 +578,11 @@ fn bring_them_down(
     let elapsed = showing.elapsed;
     let at = Vec2::new(descent_x(elapsed, landing_x), descent_y(elapsed, feet));
     for mut transform in &mut figure {
-        transform.translation = at.extend(transform.translation.z);
+        let bob = figure_bob(elapsed);
+        transform.translation = (at + Vec2::new(0.0, bob)).extend(transform.translation.z);
         let squash = squash(elapsed);
         transform.scale = Vec3::new(squash.x, squash.y, 1.0);
+        transform.rotation = Quat::from_rotation_z(figure_lean(elapsed));
     }
     // A trail of sparks while they are still coming down.
     if elapsed < TOUCHDOWN {
@@ -552,7 +627,7 @@ fn settle_the_dust(
             // The pole going in.
             Beat::Plant => {
                 bursts.write(Burst {
-                    at: ground + Vec2::new(60.0, 0.0),
+                    at: showing.plant,
                     color: dust,
                     count: 10,
                     speed: 90.0,
@@ -564,7 +639,7 @@ fn settle_the_dust(
             // Standing back from it.
             Beat::Hold => {
                 bursts.write(Burst {
-                    at: ground + Vec2::new(60.0, 70.0),
+                    at: showing.plant + Vec2::new(0.0, 70.0),
                     color: color(showing.planet.palette.accent),
                     count: 8,
                     speed: 60.0,
@@ -580,7 +655,7 @@ fn settle_the_dust(
     if !showing.thumped && pack_scale(showing.elapsed) > 0.95 {
         showing.thumped = true;
         bursts.write(Burst {
-            at: ground + Vec2::new(70.0, 0.0),
+            at: showing.pack,
             color: dust,
             count: 16,
             speed: 140.0,
@@ -598,32 +673,40 @@ fn settle_the_dust(
 fn sway_the_props(
     time: Res<Time>,
     settings: Res<Settings>,
+    showing: Res<Showing>,
     mut props: Query<(&Swaying, &mut Transform)>,
 ) {
     let motion = settings.motion_scale();
     let now = time.elapsed_secs();
+    let landing_x = showing.planet.landing_x;
     for (swaying, mut transform) in &mut props {
-        let lean = SWAY_LEAN * motion * (now * SWAY_SPEED + swaying.phase).sin();
-        transform.rotation = Quat::from_rotation_z(lean);
+        let sway = SWAY_LEAN * motion * (now * SWAY_SPEED + swaying.phase).sin();
+        // Whatever is near the touchdown bends away from it.
+        let away = if transform.translation.x < landing_x {
+            -1.0
+        } else {
+            1.0
+        };
+        let flinch = away * prop_recoil(showing.elapsed, swaying.from_landing) * motion;
+        transform.rotation = Quat::from_rotation_z(sway + flinch);
     }
 }
 
 /// The vents breathe all the way through, and harder when the dust is up.
 fn breathe_the_vents(
     time: Res<Time>,
-    showing: Res<Showing>,
-    mut vents: Query<(&Transform, &mut Vent)>,
-    mut timer: Local<f32>,
+    mut showing: ResMut<Showing>,
+    vents: Query<&Transform, With<Vent>>,
     mut bursts: MessageWriter<Burst>,
 ) {
-    *timer -= time.delta_secs();
-    if *timer > 0.0 {
+    showing.steam -= time.delta_secs();
+    if showing.steam > 0.0 {
         return;
     }
-    *timer = STEAM_EVERY;
+    showing.steam = STEAM_EVERY;
     let hard = showing.beat == Beat::Settle;
     let steam = color(showing.planet.palette.accent);
-    for (transform, _) in &mut vents {
+    for transform in &vents {
         bursts.write(Burst {
             at: transform.translation.truncate(),
             color: steam,
@@ -638,8 +721,12 @@ fn breathe_the_vents(
 
 fn unpack(showing: Res<Showing>, mut pack: Query<&mut Transform, With<Pack>>) {
     let scale = pack_scale(showing.elapsed);
+    // It comes off their shoulder, so it starts where they are standing.
+    let shoulder = Vec2::new(showing.planet.landing_x, showing.feet);
+    let at = pack_at(showing.elapsed, shoulder, showing.pack);
     for mut transform in &mut pack {
         transform.scale = Vec3::new(scale, scale, 1.0);
+        transform.translation = at.extend(transform.translation.z);
     }
 }
 
@@ -648,19 +735,13 @@ fn unpack(showing: Res<Showing>, mut pack: Query<&mut Transform, With<Pack>>) {
     reason = "Bevy systems take their resources by value"
 )]
 fn raise_the_flag(
-    time: Res<Time>,
     settings: Res<Settings>,
     showing: Res<Showing>,
     mut flag: Query<(&mut Transform, &mut Visibility), With<Flag>>,
     mut cloth: Query<&mut Transform, (With<Cloth>, Without<Flag>)>,
 ) {
     let risen = flag_rise(showing.elapsed);
-    let at = flag_at(
-        showing.elapsed,
-        showing.pack_x,
-        showing.plant_x,
-        showing.ground_y,
-    );
+    let at = flag_at(showing.elapsed, showing.pack, showing.plant);
     for (mut transform, mut visibility) in &mut flag {
         visibility.set_if_neq(if risen > 0.0 {
             Visibility::Inherited
@@ -669,7 +750,7 @@ fn raise_the_flag(
         });
         transform.translation = at.extend(transform.translation.z);
     }
-    let wave = flag_wave(time.elapsed_secs(), settings.motion_scale());
+    let wave = flag_wave(showing.elapsed, settings.motion_scale());
     for mut transform in &mut cloth {
         transform.rotation = Quat::from_rotation_z(wave);
     }
@@ -702,7 +783,9 @@ mod tests {
         count
     }
 
-    fn cartoon_app() -> App {
+    /// The game's screens and the plugins the cartoon leans on, before any
+    /// cartoon has been watched.
+    fn app_before_the_cartoon() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, StatesPlugin, AssetPlugin::default()))
             .init_asset::<Mesh>()
@@ -714,11 +797,21 @@ mod tests {
             .insert_resource(TimeUpdateStrategy::ManualDuration(FRAME))
             .init_state::<AppState>()
             .add_plugins((ParticlesPlugin, EndingPlugin));
-        app.world_mut()
-            .resource_mut::<NextState<AppState>>()
-            .set(AppState::Ending);
         app.update();
         app
+    }
+
+    fn cartoon_app() -> App {
+        let mut app = app_before_the_cartoon();
+        enter(&mut app, AppState::Ending);
+        app
+    }
+
+    fn enter(app: &mut App, state: AppState) {
+        app.world_mut()
+            .resource_mut::<NextState<AppState>>()
+            .set(state);
+        app.update();
     }
 
     fn scene_size(app: &mut App) -> usize {
@@ -735,22 +828,156 @@ mod tests {
     /// The cartoon is watched from the main menu as well, where no level is
     /// loaded, so it must never reach for one.
     #[test]
+    fn the_beats_tile_the_whole_cartoon() {
+        let mut seen = Vec::new();
+        let mut t = 0.0;
+        while t <= TOTAL {
+            let beat = beat_at(t);
+            if seen.last() != Some(&beat) {
+                seen.push(beat);
+            }
+            t += 1.0 / 240.0;
+        }
+        assert_eq!(
+            seen,
+            vec![
+                Beat::Descent,
+                Beat::Settle,
+                Beat::Pack,
+                Beat::Flag,
+                Beat::Plant,
+                Beat::Hold
+            ],
+            "the beats must come once each, in order"
+        );
+    }
+
+    #[test]
+    fn the_astronaut_arrives_as_the_dust_does() {
+        let feet = -1400.0;
+        assert!(
+            descent_y(0.0, feet) >= ENTRY_Y,
+            "they start above the frame"
+        );
+        assert!(
+            (descent_y(TOUCHDOWN, feet) - feet).abs() < 0.5,
+            "and land on the ground"
+        );
+        assert!(
+            (descent_y(TOTAL, feet) - feet).abs() < 0.5,
+            "and stay there"
+        );
+        // Slowing into the landing, not speeding up: the first half covers more.
+        let half = descent_y(0.0, feet) - descent_y(TOUCHDOWN / 2.0, feet);
+        let all = descent_y(0.0, feet) - feet;
+        assert!(half > all / 2.0, "{half} of {all}");
+        // They come down where they are going to stand.
+        assert!((descent_x(TOUCHDOWN, 120.0) - 120.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn the_squash_is_one_bounce_and_then_nothing() {
+        assert!(
+            (squash(0.0) - Vec2::ONE).length() < 1e-6,
+            "nothing before the landing"
+        );
+        assert!(squash(TOUCHDOWN + 0.05).y < 0.9, "it gives on impact");
+        assert!(squash(TOUCHDOWN + 0.05).x > 1.05, "and spreads sideways");
+        assert!(
+            (squash(SETTLED).y - 1.0).abs() < 0.01,
+            "and is over by the settle"
+        );
+    }
+
+    #[test]
+    fn the_pack_and_the_flag_wait_their_turn() {
+        assert!(pack_scale(SETTLED - 0.01) < 1e-6, "no pack before its beat");
+        assert!(
+            pack_scale(FLAG) > 0.99,
+            "full size by the time the flag comes"
+        );
+        assert!(flag_rise(FLAG - 0.01) < 1e-6);
+        assert!(flag_rise(PLANT) > 0.99, "up before it is planted");
+        assert!(
+            flag_wave(PLANT - 0.01, 1.0).abs() < 1e-6,
+            "still in the pack"
+        );
+        // Reduce motion calms the wave instead of stopping it.
+        let calm = flag_wave(HOLD + 0.2, 0.0);
+        let full = flag_wave(HOLD + 0.2, 1.0);
+        assert!(calm.abs() > 1e-3, "it still moves when motion is reduced");
+        assert!(calm.abs() < full.abs(), "{calm} against {full}");
+    }
+
+    #[test]
     fn the_flag_climbs_out_then_goes_into_the_ground() {
-        let pack = 100.0;
-        let plant = 200.0;
-        let ground = -1400.0;
-        // It starts inside the pack, on the ground.
-        let start = flag_at(FLAG, pack, plant, ground);
-        assert!((start.x - pack).abs() < 0.5);
-        assert!((start.y - ground).abs() < 1.0);
-        // By its own beat it has climbed, and is still over the pack.
-        let up = flag_at(PLANT, pack, plant, ground);
-        assert!(up.y > ground + 20.0, "it climbed to {}", up.y);
-        assert!((up.x - pack).abs() < 0.5, "and is at {}", up.x);
-        // Then it is carried across and pushed into the ground.
-        let planted = flag_at(HOLD, pack, plant, ground);
-        assert!((planted.x - plant).abs() < 0.5, "at {}", planted.x);
-        assert!((planted.y - ground).abs() < 1.0, "at {}", planted.y);
+        // The pack and the planting spot sit on ground of their own heights.
+        let from = Vec2::new(100.0, -1400.0);
+        let to = Vec2::new(200.0, -1430.0);
+        let start = flag_at(FLAG, from, to);
+        assert!((start - from).length() < 1.0, "it starts in the pack");
+        let up = flag_at(PLANT, from, to);
+        assert!(up.y > from.y + 20.0, "it climbed to {}", up.y);
+        assert!((up.x - from.x).abs() < 0.5, "and is still at {}", up.x);
+        // Then it is carried across and pushed into the ground it ends on.
+        let planted = flag_at(HOLD, from, to);
+        assert!(
+            (planted - to).length() < 1.0,
+            "planted at {planted}, not {to}"
+        );
+    }
+
+    #[test]
+    fn the_pack_slides_off_their_shoulder_onto_the_ground() {
+        let shoulder = Vec2::new(0.0, -1380.0);
+        let ground = Vec2::new(70.0, -1420.0);
+        assert!(
+            (pack_at(SETTLED, shoulder, ground) - shoulder).length() < 1.0,
+            "it starts on their back"
+        );
+        assert!(
+            (pack_at(FLAG, shoulder, ground) - ground).length() < 1.0,
+            "and is down by the time the flag comes"
+        );
+    }
+
+    #[test]
+    fn they_lean_on_the_way_down_and_straighten_to_land() {
+        assert!(figure_lean(0.6).abs() > 0.02, "leaning into the drift");
+        assert!(figure_lean(TOUCHDOWN).abs() < 0.01, "upright to land");
+        assert!(figure_lean(PLANT + 0.2) > 0.05, "leaning in to plant it");
+        assert!(figure_lean(TOTAL).abs() < 0.01, "standing beside it again");
+    }
+
+    #[test]
+    fn they_straighten_up_with_one_bob() {
+        assert!(
+            figure_bob(TOUCHDOWN - 0.1).abs() < 1e-6,
+            "not before they land"
+        );
+        let mid = figure_bob((TOUCHDOWN + SETTLED) / 2.0);
+        assert!(mid > 1.0, "they come back up: {mid}");
+        assert!(figure_bob(SETTLED).abs() < 1e-6, "and are still by the end");
+        assert!(figure_bob(TOTAL).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_landing_pushes_the_nearest_props_away() {
+        assert!(
+            prop_recoil(TOUCHDOWN - 0.1, 50.0).abs() < 1e-6,
+            "nothing before it lands"
+        );
+        let near = prop_recoil(TOUCHDOWN + 0.05, 50.0);
+        let far = prop_recoil(TOUCHDOWN + 0.05, 400.0);
+        assert!(near > far, "{near} against {far}");
+        assert!(
+            prop_recoil(TOUCHDOWN + 0.05, 2_000.0).abs() < 1e-6,
+            "and nothing to anything far away"
+        );
+        assert!(
+            prop_recoil(SETTLED, 50.0).abs() < 1e-3,
+            "over well before the pack comes off"
+        );
     }
 
     #[test]
@@ -765,10 +992,7 @@ mod tests {
     #[test]
     fn leaving_takes_the_whole_scene_with_it() {
         let mut app = cartoon_app();
-        app.world_mut()
-            .resource_mut::<NextState<AppState>>()
-            .set(AppState::MainMenu);
-        app.update();
+        enter(&mut app, AppState::MainMenu);
         app.update();
         assert_eq!(scene_size(&mut app), 0, "entities outlived the cartoon");
         assert!(app.world().get_resource::<Showing>().is_none());
@@ -824,6 +1048,67 @@ mod tests {
             ],
             "every beat once, in order"
         );
+    }
+
+    /// Nothing hovers: the pack and the pole stand on the ground beneath
+    /// them, which is not the ground under the astronaut's feet.
+    #[test]
+    fn the_pack_and_the_pole_stand_on_their_own_ground() {
+        let mut app = cartoon_app();
+        for _ in 0..frames(TOTAL) - 4 {
+            app.update();
+        }
+        let (pack_ground, plant_ground) = {
+            let showing = app.world().resource::<Showing>();
+            (
+                showing.planet.height_at(showing.pack.x),
+                showing.planet.height_at(showing.plant.x),
+            )
+        };
+        let pack = app
+            .world_mut()
+            .query_filtered::<&Transform, With<Pack>>()
+            .iter(app.world())
+            .next()
+            .map(|transform| transform.translation.y);
+        assert!(
+            pack.is_some_and(|y| (y - pack_ground).abs() < 1.0),
+            "the pack is at {pack:?}, the ground under it at {pack_ground}"
+        );
+        let flag = app
+            .world_mut()
+            .query_filtered::<&Transform, With<Flag>>()
+            .iter(app.world())
+            .next()
+            .map(|transform| transform.translation.y);
+        assert!(
+            flag.is_some_and(|y| (y - plant_ground).abs() < 1.0),
+            "the pole is at {flag:?}, the ground under it at {plant_ground}"
+        );
+    }
+
+    /// The menu offers the cartoon again, so watching it five times must
+    /// cost no more than watching it once: nothing left in the world and no
+    /// meshes left in the store. The count after a watch is no guide (every
+    /// planet grows a different number of props); the count with no cartoon
+    /// loaded is.
+    #[test]
+    fn watching_it_again_leaves_nothing_behind() {
+        let mut app = app_before_the_cartoon();
+        let baseline = app.world().resource::<Assets<Mesh>>().len();
+        for watch in 1..=5 {
+            enter(&mut app, AppState::Ending);
+            assert!(scene_size(&mut app) > 10, "watch {watch} drew nothing");
+            enter(&mut app, AppState::MainMenu);
+            // One more frame, so the dropped handles are collected.
+            app.update();
+            assert_eq!(scene_size(&mut app), 0, "watch {watch} left entities");
+            assert_eq!(
+                app.world().resource::<Assets<Mesh>>().len(),
+                baseline,
+                "watch {watch} left meshes behind"
+            );
+        }
     }
 
     /// The astronaut's feet meet the ground they land on.

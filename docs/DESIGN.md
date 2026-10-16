@@ -323,6 +323,9 @@ lands on an unknown planet, the dust settles, and they plant a flag.
 - Landing the last level shows the usual "Landed" screen. Continuing from it
   goes to the cartoon rather than the level list, but only when every level in
   the order is completed.
+- Entering the cartoon frees the level it came from, the way going back to a
+  menu does: otherwise the beacon, every object and the astronaut who just
+  landed all draw on top of the planet.
 - The cartoon fades to the main menu when it ends.
 - Any key, mouse button or gamepad button skips straight to that fade.
 - A **The landing** row appears on the main menu once all fourteen levels are
@@ -341,6 +344,7 @@ y ∈ [0, -1920], and the whole scene is built inside it.
 | The astronaut enters at | y = +120, above the frame |
 | Total length | 8.5 s |
 | Sizes below | in astronaut radii, r = 28 world units |
+| The pack and the pole | stand on the ground under each of them, which on a rocky planet is nowhere near the height under the astronaut's feet |
 
 ### The script
 
@@ -350,7 +354,7 @@ function. Progress inside a beat is eased, never linear (§5).
 | t | Beat | What happens |
 |---|---|---|
 | 0.00 | Descent | The astronaut drifts down from above the frame, leaning with `Tumble`, shedding a spark every 0.12 s. Props sway, steam vents breathe. |
-| 2.20 | Touchdown | Dust bursts in the ground's own colour, the suit squashes to 0.8 and recovers, reeds bend away from the impact, water ripples, vents puff hard. |
+| 2.20 | Touchdown | Dust bursts in the ground's own colour, the suit squashes and recovers, whatever grows near the landing bends away from it, vents puff hard. |
 | 2.20–3.60 | Settle | The dust dies out. The astronaut straightens up and bobs once. |
 | 3.60 | The pack | It slides off their back and eases up to 3.5 r tall and 4.5 r wide, far larger than the astronaut. It thumps down with a ground puff. The size is the joke. |
 | 5.00 | The flag rises | A hatch opens and a flag lifts out: a 2 r pole with a 1 r cloth, comically small against the pack. |
@@ -372,8 +376,10 @@ GroundKind = Rock | Desert | Water | Overgrowth
 PropKind   = Mushroom | GrapeCluster | Flower | Boulder | SteamVent | Reed
 ```
 
-- **Ground:** 96 height samples across the width, 11.25 units apart, from two
-  octaves of value noise over `SplitMix64` (`src/rng.rs`).
+- **Ground:** height samples 11.25 units apart across the generated width,
+  which is 154 of them, from two octaves of value noise over `SplitMix64`
+  (`src/rng.rs`). The ground is generated 1.6x the playfield's width so a
+  window of any shape sees ground to both edges.
 
 | Ground | Height | Shape |
 |---|---|---|
@@ -403,8 +409,12 @@ PropKind   = Mushroom | GrapeCluster | Flower | Boulder | SteamVent | Reed
 | Reed | 2–5 r tall, 0.1 r thick |
 | Steam vent | a 1–2 r crack in the ground, an emitter and nothing else |
 
-- **The landing spot:** an x where the ground's slope stays under 0.15 across
-  three samples, with no prop within 3 r of it.
+- **The landing spot:** the sample nearest the middle of the screen whose
+  slope is under 0.15, with no prop within 3 r of it. Looked for within 324
+  units of the middle first, then within 400, and if a planet of jagged rock
+  offers nothing that gentle anywhere in reach, the flattest sample there is.
+  Three planets in a thousand land on something steeper than 0.15 (worst
+  measured 0.31 over 20,000 seeds), which beats landing off screen.
 - **Palette:** three hues from the seed under constraints: the ground is at
   least 0.2 darker than the sky, saturation never above 0.7, and props sit at
   the complementary hue ±30°, so no planet is ugly and no two look alike.
@@ -1081,7 +1091,8 @@ more sky.
 - **Nothing new in the mixer.** Each beat is a message, and `audio.rs` answers it with a voice that already exists: `Whoosh` and the beacon's own landing chord at touchdown, `Muffled` for the pack, `Shimmer` for the flag, `Marimba` as it goes in. The descent and the hold are silent on purpose.
 - **A fresh seed every watch**, not one saved per player. A planet that is always the same is a place; a different one each time is a reason to press it again. The main menu grows a **The landing** row once all fourteen levels are done.
 - **What it cost.** The `dist` binary goes from 47.91 MB to 48.08 MB (+167 KB). The scene is 16 to 30 entities, all geometry built once on entering the state and despawned on leaving it, with the dust, steam and sparkles coming from the existing spark pool, so nothing here can grow the world. Frame cost is unmeasured: the busiest-level budget test (0.112 ms of 1 ms) does not cover this screen.
-- **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no golden-image check: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag) and by a human watching it.
+- **What a fresh review caught**, after every test passed: entering the cartoon did not free the level, so the beacon, every object and the astronaut who had just landed drew straight over the planet. The level is now freed on entering `Ending` (`free_the_level_on`, `src/level/mod.rs`), which also hides the old astronaut, restores the menu theme and brings back the menu pad. Four smaller things went with it: the pack and the pole took their height from the ground under the astronaut rather than the ground under themselves (up to 266 units out, a pack and a half in the air), the 0.15 slope rule was not actually implemented, the rewatch row was missing from the first main menu after launch because the level list is an asset that arrives later, and the astronaut stood still from the landing to the end.
+- **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no water ripple at the touchdown: the water is one static mesh, and rippling it means rebuilding geometry every frame, which Section 7.2 forbids. No golden-image check either: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag), and **nobody has watched it on a screen yet**.
 
 ## Measurements (M8)
 

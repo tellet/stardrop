@@ -10,8 +10,10 @@ use crate::config::ASTRONAUT_RADIUS;
 use crate::level::LEVEL_WIDTH;
 use crate::rng::SplitMix64;
 
-/// Height samples across the generated ground.
-pub(super) const SAMPLES: usize = 96;
+/// Height samples across the generated ground, 11.25 world units apart
+/// (Section 11). The ground is wider than the playfield, so it takes more
+/// than the 96 the playfield alone would need.
+pub(super) const SAMPLES: usize = 154;
 /// The most props one planet can carry: nothing here is unbounded (Section 7.2).
 pub(super) const PROPS_MAX: usize = 24;
 /// The fewest, so a planet is never bare.
@@ -23,6 +25,10 @@ pub(super) const GROUND_WIDTH: f32 = LEVEL_WIDTH * 1.6;
 pub(super) const SURFACE_Y: f32 = -1450.0;
 /// How far the ground may rise or fall from the surface.
 pub(super) const MAX_RELIEF: f32 = 320.0;
+/// The slope Section 11 asks the astronaut to land on. A planet of jagged
+/// rock may offer nothing this gentle, and then the flattest ground within
+/// reach is used instead.
+const MAX_SLOPE: f32 = 0.15;
 /// Props keep this far from the landing spot: three astronaut radii.
 const CLEARANCE: f32 = 84.0;
 /// Heights are blended across this many samples where two grounds meet, so a
@@ -36,6 +42,10 @@ const BANK: f32 = 60.0;
 const MAX_WATER: f32 = 0.4;
 /// The landing spot is looked for this far either side of the middle.
 const LANDING_REACH: f32 = LEVEL_WIDTH * 0.3;
+/// And this far, if nothing gentle enough is any nearer. The pack stands
+/// 2.6 radii to the right of the astronaut and is 4.5 wide, so this is as far
+/// out as the whole scene still fits on a portrait screen.
+const WIDER_REACH: f32 = 400.0;
 /// Prop sizes are written in astronaut radii, so they read as "twice as tall
 /// as the person" rather than as numbers.
 const R: f32 = ASTRONAUT_RADIUS;
@@ -192,6 +202,13 @@ fn weight(ground: GroundKind, prop: PropKind) -> u8 {
     row[prop as usize]
 }
 
+/// Where a height sample sits, in world x.
+pub(super) fn sample_x(index: usize) -> f32 {
+    #[expect(clippy::cast_precision_loss, reason = "SAMPLES is 154")]
+    let along = index as f32 / (SAMPLES - 1) as f32;
+    -GROUND_WIDTH / 2.0 + along * GROUND_WIDTH
+}
+
 /// The space between two height samples, in world units.
 fn step() -> f32 {
     #[expect(clippy::cast_precision_loss, reason = "SAMPLES is 96")]
@@ -343,40 +360,49 @@ fn mean(heights: &[f32; SAMPLES]) -> f32 {
 /// Where the astronaut puts their feet: the flattest dry sample near the
 /// middle of the screen. Always answers, because a planet always has land.
 fn landing_spot(heights: &[f32; SAMPLES], spans: &[GroundSpan]) -> f32 {
-    let half = GROUND_WIDTH / 2.0;
-    let dry: Vec<(f32, f32)> = (1..SAMPLES - 1)
-        .filter_map(|index| {
-            #[expect(clippy::cast_precision_loss, reason = "SAMPLES is 96")]
-            let x = -half + index as f32 * step();
-            if kind_of(spans, x) == GroundKind::Water {
-                return None;
-            }
-            let slope = (heights[index + 1] - heights[index - 1]) / (2.0 * step());
-            Some((x, slope.abs()))
-        })
-        .collect();
-    // Near the middle first; anywhere dry if the middle is all water.
-    // Flattest wins, and a tie goes to whichever is nearer the centre.
+    let dry = |reach: f32| -> Vec<(f32, f32)> {
+        (1..SAMPLES - 1)
+            .filter_map(|index| {
+                let x = sample_x(index);
+                // On screen, and never in the water.
+                if x.abs() > reach || kind_of(spans, x) == GroundKind::Water {
+                    return None;
+                }
+                let slope = (heights[index + 1] - heights[index - 1]) / (2.0 * step());
+                Some((x, slope.abs()))
+            })
+            .collect()
+    };
+    // Gentle enough to stand on, as near the middle of the screen as can be.
+    let gentlest = |candidates: &[(f32, f32)]| {
+        candidates
+            .iter()
+            .filter(|(_, slope)| *slope < MAX_SLOPE)
+            .min_by(|(left, _), (right, _)| left.abs().total_cmp(&right.abs()))
+            .map(|(x, _)| *x)
+    };
     let flattest = |candidates: &[(f32, f32)]| {
         candidates
             .iter()
-            .copied()
             .min_by(|(left_x, left_slope), (right_x, right_slope)| {
                 left_slope
                     .total_cmp(right_slope)
                     .then_with(|| left_x.abs().total_cmp(&right_x.abs()))
             })
-            .map(|(x, _)| x)
+            .map(|(x, _)| *x)
     };
-    let middle: Vec<(f32, f32)> = dry
-        .iter()
-        .copied()
-        .filter(|(x, _)| x.abs() <= LANDING_REACH)
-        .collect();
-    flattest(&middle)
-        .or_else(|| flattest(&dry))
+    let near = dry(LANDING_REACH);
+    if let Some(x) = gentlest(&near) {
+        return x;
+    }
+    // Nothing gentle in the middle: look further out before settling for a
+    // slope, because a planet of jagged rock usually has a shelf somewhere.
+    let wide = dry(WIDER_REACH);
+    gentlest(&wide)
+        .or_else(|| flattest(&wide))
+        // A planet always has dry land in the middle (`spans_of`), so this
+        // answers; zero is the centre of the screen if it somehow could not.
         .unwrap_or(0.0)
-        .clamp(-LANDING_REACH, LANDING_REACH)
 }
 
 /// Which ground covers this x.
@@ -484,10 +510,12 @@ fn props_of(
         }
         // On water, only the bank is planted.
         if ground == GroundKind::Water {
+            // The outer edges of the planet are not shores, so a lake that
+            // runs off the side of the world is open water all the way.
             let to_shore = spans
                 .iter()
-                .flat_map(|span| [span.from, span.to])
-                .map(|edge| (x - edge).abs())
+                .skip(1)
+                .map(|span| (x - span.from).abs())
                 .fold(f32::MAX, f32::min);
             if to_shore > BANK {
                 continue;
@@ -544,7 +572,11 @@ fn palette_of(rng: &mut SplitMix64) -> Palette {
     ];
     // The ground is the same hue, and always well darker than the sky it sits
     // against: the silhouette of a horizon is the whole picture.
-    let ground_light = (horizon - rng.range(0.22, 0.34)).clamp(0.06, horizon - 0.2);
+    // Written as min then max, never `clamp`: `clamp` panics if its bounds
+    // cross, and a panic in game logic is not allowed (Section 7.4).
+    let ground_light = (horizon - rng.range(0.22, 0.34))
+        .min(horizon - 0.2)
+        .max(0.03);
     let opposite = wrap_hue(hue + 180.0 + rng.range(-30.0, 30.0));
     Palette {
         sky,
@@ -584,7 +616,7 @@ fn wrap_hue(hue: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::level::{LEVEL_HEIGHT, LEVEL_WIDTH};
+    use crate::level::LEVEL_HEIGHT;
 
     #[test]
     fn one_seed_is_always_the_same_planet() {
@@ -645,7 +677,7 @@ mod tests {
             let planet = Planet::generate(seed);
             let x = planet.landing_x;
             assert!(
-                x.abs() <= LEVEL_WIDTH / 2.0,
+                x.abs() <= WIDER_REACH,
                 "seed {seed} lands off screen at {x}"
             );
             let slope = (planet.height_at(x + step) - planet.height_at(x - step)) / (2.0 * step);
@@ -654,6 +686,66 @@ mod tests {
                 assert!(
                     (prop.at.x - x).abs() >= CLEARANCE,
                     "seed {seed}: a {:?} sits on the landing spot",
+                    prop.kind
+                );
+            }
+        }
+    }
+
+    /// Section 11 asks for a slope under 0.15. On a planet of jagged rock
+    /// there may be nothing that gentle within reach, and then the flattest
+    /// ground available is the right answer; it is never worse than that.
+    #[test]
+    fn the_landing_spot_is_as_gentle_as_the_planet_allows() {
+        let step = step();
+        for seed in 0..2_000 {
+            let planet = Planet::generate(seed);
+            let slope_at = |x: f32| {
+                ((planet.height_at(x + step) - planet.height_at(x - step)) / (2.0 * step)).abs()
+            };
+            let candidates: Vec<f32> = (1..SAMPLES - 1)
+                .map(sample_x)
+                .filter(|x| {
+                    x.abs() <= WIDER_REACH && kind_of(&planet.spans, *x) != GroundKind::Water
+                })
+                .collect();
+            let flattest = candidates
+                .iter()
+                .map(|x| slope_at(*x))
+                .fold(f32::MAX, f32::min);
+            let chosen = slope_at(planet.landing_x);
+            if flattest < MAX_SLOPE {
+                assert!(
+                    chosen < MAX_SLOPE,
+                    "seed {seed}: landed on {chosen} with {flattest} going spare"
+                );
+            } else {
+                assert!(
+                    (chosen - flattest).abs() < 1e-3,
+                    "seed {seed}: landed on {chosen}, flattest within reach was {flattest}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_bank_of_a_lake_is_planted() {
+        for seed in 0..2_000 {
+            let planet = Planet::generate(seed);
+            // The shorelines, which are the boundaries between spans. The
+            // outer edges of the planet are not shores.
+            let shores: Vec<f32> = planet.spans.iter().skip(1).map(|span| span.from).collect();
+            for prop in &planet.props {
+                if kind_of(&planet.spans, prop.at.x) != GroundKind::Water {
+                    continue;
+                }
+                let to_shore = shores
+                    .iter()
+                    .map(|shore| (prop.at.x - shore).abs())
+                    .fold(f32::MAX, f32::min);
+                assert!(
+                    to_shore <= BANK,
+                    "seed {seed}: a {:?} stands {to_shore} out in open water",
                     prop.kind
                 );
             }

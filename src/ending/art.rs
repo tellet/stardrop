@@ -7,7 +7,9 @@
 
 use bevy::prelude::*;
 
-use super::planet::{GROUND_WIDTH, GroundKind, Palette, Planet, Prop, PropKind, SAMPLES, Shade};
+use super::planet::{
+    GROUND_WIDTH, GroundKind, Palette, Planet, Prop, PropKind, SAMPLES, Shade, sample_x,
+};
 use crate::config::ASTRONAUT_RADIUS;
 use crate::level::LEVEL_HEIGHT;
 use crate::soft_mesh::{MeshBuilder, gradient_mesh, soft_disc, soft_polygon};
@@ -58,13 +60,6 @@ fn slab(builder: &mut MeshBuilder, center: Vec2, size: Vec2, color: [f32; 4]) {
         builder.vertex(center + Vec2::new(half.x, half.y), color),
     ];
     builder.quad(corners);
-}
-
-/// The x of a height sample.
-fn sample_x(index: usize) -> f32 {
-    #[expect(clippy::cast_precision_loss, reason = "SAMPLES is 96")]
-    let along = index as f32 / (SAMPLES - 1) as f32;
-    -GROUND_WIDTH / 2.0 + along * GROUND_WIDTH
 }
 
 /// The sky: four bands of the planet's hue. A 1×1 quad, scaled into place by

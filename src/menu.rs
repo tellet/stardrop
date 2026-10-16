@@ -175,6 +175,7 @@ pub(crate) struct MenuPlugin;
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
+        keep_the_main_menu_current(app);
         app.init_resource::<Focus>()
             .add_systems(OnEnter(AppState::MainMenu), spawn_main_menu)
             .add_systems(OnEnter(AppState::LevelSelect), spawn_level_select)
@@ -525,6 +526,30 @@ fn spawn_settings_menu(mut commands: Commands, mut focus: ResMut<Focus>, setting
     focus.index = keep.min(focus.count.saturating_sub(1));
 }
 
+/// The level list is an asset, so it lands a frame or more after the main
+/// menu is first built, and whether every level is finished cannot be known
+/// until it does. Redraw the menu when it arrives.
+fn keep_the_main_menu_current(app: &mut App) {
+    app.add_systems(
+        Update,
+        rebuild_main_menu.run_if(in_state(AppState::MainMenu).and_then(resource_added::<Levels>)),
+    );
+}
+
+/// Redraws the main menu, keeping the focused row.
+fn rebuild_main_menu(
+    mut commands: Commands,
+    focus: ResMut<Focus>,
+    levels: Option<Res<Levels>>,
+    progress: Res<Progress>,
+    screens: Query<Entity, With<MenuScreen>>,
+) {
+    for screen in &screens {
+        commands.entity(screen).despawn();
+    }
+    spawn_main_menu(commands, focus, levels, progress);
+}
+
 /// Redraws the settings rows after a change, keeping the focused row.
 fn rebuild_settings(
     mut commands: Commands,
@@ -830,6 +855,11 @@ fn pause_on_escape(
 
 #[cfg(test)]
 mod tests {
+    use bevy::state::app::StatesPlugin;
+
+    use super::*;
+    use crate::level::{LevelEntry, LevelList};
+    use crate::scoring::Stars;
 
     /// Landing the last level leads to the cartoon. Replaying an earlier one
     /// after the game is finished stays ordinary.
@@ -840,7 +870,56 @@ mod tests {
         assert_eq!(after_landing(false, false), MenuAction::BackToLevels);
         assert_eq!(after_landing(true, true), MenuAction::NextLevel);
     }
-    use super::*;
+
+    /// The level list is an asset, so it arrives a frame or more after the
+    /// main menu is first built. The rewatch row has to appear when it does,
+    /// or a player who finished the game and relaunched never sees it.
+    #[test]
+    fn the_landing_row_appears_when_the_level_list_turns_up() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, StatesPlugin))
+            .init_state::<AppState>()
+            .init_resource::<Focus>()
+            .init_resource::<Progress>();
+        keep_the_main_menu_current(&mut app);
+        app.add_systems(OnEnter(AppState::MainMenu), spawn_main_menu);
+        app.update();
+        assert_eq!(
+            rows_leading_to(&mut app, MenuAction::WatchEnding),
+            0,
+            "nothing is finished yet"
+        );
+        // The save says the one level is done, and the list arrives.
+        app.world_mut().resource_mut::<Progress>().record_landing(
+            "only.ron",
+            1.0,
+            0,
+            Stars {
+                landed: true,
+                ..Stars::default()
+            },
+        );
+        app.insert_resource(Levels(LevelList {
+            levels: vec![LevelEntry {
+                name: "Only".to_owned(),
+                file: "only.ron".to_owned(),
+            }],
+        }));
+        app.update();
+        assert_eq!(
+            rows_leading_to(&mut app, MenuAction::WatchEnding),
+            1,
+            "the landing is missing from the menu"
+        );
+    }
+
+    fn rows_leading_to(app: &mut App, action: MenuAction) -> usize {
+        app.world_mut()
+            .query::<&MenuAction>()
+            .iter(app.world())
+            .filter(|row| **row == action)
+            .count()
+    }
 
     /// Esc must do something on every screen that isn't the top one or the
     /// fall itself, and the hint must name where it goes.
