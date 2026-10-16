@@ -745,8 +745,9 @@ fn back_from(state: AppState) -> Option<(AppState, &'static str)> {
         }
         AppState::Paused => Some((AppState::Playing, "the fall")),
         AppState::LevelComplete => Some((AppState::LevelSelect, "the level list")),
-        // Nowhere left to go back to.
-        AppState::MainMenu | AppState::Playing => None,
+        // Nowhere left to go back to. The cartoon is left by any key at all,
+        // which `ending.rs` handles itself.
+        AppState::MainMenu | AppState::Playing | AppState::Ending => None,
     }
 }
 

@@ -91,6 +91,7 @@ pub fn run() -> AppExit {
         save::SavePlugin,
         settings::SettingsPlugin,
         menu::MenuPlugin,
+        ending::EndingPlugin,
         ui::UiPlugin,
     ))
     .run()

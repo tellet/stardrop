@@ -440,11 +440,6 @@ impl Planet {
         let fraction = at - index as f32;
         SURFACE_Y + self.ground[index] * (1.0 - fraction) + self.ground[next] * fraction
     }
-
-    /// Which ground covers this x.
-    pub(super) fn kind_at(&self, x: f32) -> GroundKind {
-        kind_of(&self.spans, x)
-    }
 }
 
 /// Everything standing on one planet: rolled against the ground each one
@@ -626,7 +621,7 @@ mod tests {
         for seed in 0..2_000 {
             let planet = Planet::generate(seed);
             assert_ne!(
-                planet.kind_at(planet.landing_x),
+                kind_of(&planet.spans, planet.landing_x),
                 GroundKind::Water,
                 "seed {seed} lands in the water"
             );
@@ -676,7 +671,7 @@ mod tests {
             }
             for prop in &planet.props {
                 // A mushroom belongs to overgrowth, a boulder never grows in a lake.
-                let ground = planet.kind_at(prop.at.x);
+                let ground = kind_of(&planet.spans, prop.at.x);
                 assert!(
                     weight(ground, prop.kind) > 0,
                     "seed {seed}: a {:?} on {ground:?}",

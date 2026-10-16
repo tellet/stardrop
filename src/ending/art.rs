@@ -7,16 +7,17 @@
 
 use bevy::prelude::*;
 
-use super::planet::{
-    GROUND_WIDTH, GroundKind, Palette, Planet, Prop, PropKind, SAMPLES, SURFACE_Y, Shade,
-};
+use super::planet::{GROUND_WIDTH, GroundKind, Palette, Planet, Prop, PropKind, SAMPLES, Shade};
 use crate::config::ASTRONAUT_RADIUS;
 use crate::level::LEVEL_HEIGHT;
 use crate::soft_mesh::{MeshBuilder, gradient_mesh, soft_disc, soft_polygon};
 
-/// The ground is drawn down to here, well under the playfield, so no sky can
-/// show beneath a valley however the window is shaped.
-const GROUND_BOTTOM: f32 = -LEVEL_HEIGHT - 200.0;
+/// The ground is drawn down to here, far under the playfield, so no sky can
+/// show beneath it however tall the window is.
+const GROUND_BOTTOM: f32 = -LEVEL_HEIGHT - 2_000.0;
+/// And out to here either side, for the same reason on a wide window. The
+/// camera shows more scenery the wider the window gets (Section 5).
+const GROUND_REACH: f32 = 5_000.0;
 /// Corners on a round prop. They are small on screen; a dozen is plenty.
 const SEGMENTS: usize = 14;
 /// How far the soft blobs along the skyline reach, in world units.
@@ -86,6 +87,18 @@ pub(super) fn ground_mesh(planet: &Planet) -> Mesh {
             builder.vertex(Vec2::new(left, GROUND_BOTTOM), far),
             builder.vertex(Vec2::new(right, GROUND_BOTTOM), far),
             builder.vertex(Vec2::new(right, planet.height_at(right)), near),
+        ];
+        builder.quad(corners);
+    }
+    // Skirts, so a window of any shape still sees ground to both edges.
+    for (edge, inward) in [(-GROUND_REACH, 0_usize), (GROUND_REACH, SAMPLES - 1)] {
+        let inner = sample_x(inward);
+        let height = planet.height_at(inner);
+        let corners = [
+            builder.vertex(Vec2::new(edge, height), near),
+            builder.vertex(Vec2::new(edge, GROUND_BOTTOM), far),
+            builder.vertex(Vec2::new(inner, GROUND_BOTTOM), far),
+            builder.vertex(Vec2::new(inner, height), near),
         ];
         builder.quad(corners);
     }
@@ -341,8 +354,6 @@ pub(super) fn cloth_mesh(palette: &Palette) -> Mesh {
 
 /// Where the top of the pole is, so the cloth and the star can hang there.
 pub(super) const FLAG_TOP: f32 = R * 2.0;
-/// Where the ground is, for anything that needs to meet it.
-pub(super) const SURFACE: f32 = SURFACE_Y;
 
 #[cfg(test)]
 mod tests {

@@ -23,13 +23,15 @@ pub(crate) enum AppState {
     Paused,
     /// The results of a finished level.
     LevelComplete,
+    /// The cartoon that plays once every level is done.
+    Ending,
 }
 
 impl AppState {
     /// Whether this screen animates constantly. Everything else only redraws
     /// when something happens, which keeps laptops quiet (Section 7.1).
     fn needs_continuous_updates(self) -> bool {
-        matches!(self, Self::Playing)
+        matches!(self, Self::Playing | Self::Ending)
     }
 }
 
