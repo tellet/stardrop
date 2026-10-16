@@ -18,6 +18,7 @@ pub mod collision;
 pub mod config;
 pub mod debug;
 mod effects;
+mod ending;
 mod journal;
 pub mod level;
 mod menu;
