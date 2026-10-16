@@ -8,8 +8,10 @@ against, and what was considered instead.
 The brief is kept as it was written, so a few of its details are now history:
 it asks for ten levels and the game has fourteen, and it plans for sprite and
 sound files where everything ended up generated in code. Where the game went
-somewhere else, Part 2 says so and why. `CREDITS.md`, `TECH_DEBT.md` and the
-licences it mentions live on the `paperwork` branch.
+somewhere else, Part 2 says so and why. Section 11 is the exception: it was
+written after the game was finished, for the one thing added since.
+`CREDITS.md`, `TECH_DEBT.md` and the licences it mentions live on the
+`paperwork` branch.
 
 # Part 1 — the brief
 
@@ -294,6 +296,7 @@ Stretch goals, none of them promised:
 - **Bonus levels** unlocked by collecting all stardust.
 - **Alternate characters** (the ninja, the frog) with their own visual themes; identical physics.
 - **Web (WASM) build** so friends can play in a browser.
+- **The landing cartoon** for finishing every level. Specified in Section 11.
 
 ---
 
@@ -306,6 +309,148 @@ Stretch goals, none of them promised:
 - New modules and public items are documented.
 - New Rust concepts used in the step have been explained to me.
 - At the end of a milestone: the self-review from Section 7.5 has been done and reported, and Part 2 is up to date.
+
+---
+
+## 11. The landing cartoon
+
+Added after Milestone 9, once the fourteen levels were done. A wordless
+8.5-second scene, the only part of the game that is not a level: the astronaut
+lands on an unknown planet, the dust settles, and they plant a flag.
+
+### When it plays
+
+- Landing the last level shows the usual "Landed" screen. Continuing from it
+  goes to the cartoon rather than the level list, but only when every level in
+  the order is completed.
+- The cartoon fades to the main menu when it ends.
+- Any key, mouse button or gamepad button skips straight to that fade.
+- A **The landing** row appears on the main menu once all fourteen levels are
+  done, so it can be watched again. The journal stays a book of objects.
+- Nothing is written on the screen at any point (Part 2, M10-10). The scene
+  says it or it goes unsaid.
+
+### The stage
+
+The camera does not move. The playfield is fixed at x ∈ [-540, 540] and
+y ∈ [0, -1920], and the whole scene is built inside it.
+
+| | |
+|---|---|
+| Surface top | y = -1450: sky fills the upper three quarters |
+| The astronaut enters at | y = +120, above the frame |
+| Total length | 8.5 s |
+| Sizes below | in astronaut radii, r = 28 world units |
+
+### The script
+
+Every boundary is a named constant, and `beat_at(t) -> Beat` is a pure
+function. Progress inside a beat is eased, never linear (§5).
+
+| t | Beat | What happens |
+|---|---|---|
+| 0.00 | Descent | The astronaut drifts down from above the frame, leaning with `Tumble`, shedding a spark every 0.12 s. Props sway, steam vents breathe. |
+| 2.20 | Touchdown | Dust bursts in the ground's own colour, the suit squashes to 0.8 and recovers, reeds bend away from the impact, water ripples, vents puff hard. |
+| 2.20–3.60 | Settle | The dust dies out. The astronaut straightens up and bobs once. |
+| 3.60 | The pack | It slides off their back and eases up to 3.5 r tall and 4.5 r wide, far larger than the astronaut. It thumps down with a ground puff. The size is the joke. |
+| 5.00 | The flag rises | A hatch opens and a flag lifts out: a 2 r pole with a 1 r cloth, comically small against the pack. |
+| 6.40 | Planting | They lean in and push the pole into the ground. A small puff, and the cloth unfurls and starts waving. |
+| 7.40 | Hold | They stand beside it. The flag waves, one last sparkle. |
+| 8.50 | — | The fade to the main menu. |
+
+The cloth carries the same star the level-complete screen uses.
+
+### The planet
+
+`src/ending/planet.rs`: plain Rust using only `bevy::math`, so it is tested
+without an `App`. One seed, one planet; the seed is fresh on every watch, so
+rewatching gives a new world.
+
+```rust
+Planet { palette, ground: [f32; 96], spans: [GroundSpan; 2], props: Vec<Prop>, landing_x: f32 }
+GroundKind = Rock | Desert | Water | Overgrowth
+PropKind   = Mushroom | GrapeCluster | Flower | Boulder | SteamVent | Reed
+```
+
+- **Ground:** 96 height samples across the width, 11.25 units apart, from two
+  octaves of value noise over `SplitMix64` (`src/rng.rs`).
+
+| Ground | Height | Shape |
+|---|---|---|
+| Rock | ±260 | Two octaves, the second at half weight: jagged ridges and canyons |
+| Desert | ±120 | One long octave: smooth dunes |
+| Overgrowth | ±90 | Soft mounds |
+| Water | flat | A level surface 40 units below the ground it cuts into |
+
+- **Spans:** one or two, meeting at a seeded x. Two spans are always different
+  kinds, so a mixed planet reads as a mix.
+- **Props:** drawn from a weight table per ground kind, so a planet's life
+  belongs to its ground. Capped at 24.
+
+| Ground | Mushroom | Grapes | Flower | Boulder | Steam vent | Reed |
+|---|---|---|---|---|---|---|
+| Rock | 0 | 0 | 1 | 6 | 3 | 0 |
+| Desert | 0 | 0 | 1 | 3 | 1 | 2 |
+| Overgrowth | 5 | 4 | 5 | 1 | 1 | 3 |
+| Water's edge | 1 | 1 | 2 | 1 | 0 | 6 |
+
+| Prop | Size |
+|---|---|
+| Mushroom | cap 1.4–4.0 r across, stem 2–6 r tall |
+| Grape cluster | 7–13 blobs of 0.5–1.1 r, hanging |
+| Flower | a 0.6–1.2 r head on a 1–2.5 r stem |
+| Boulder | 0.8–2.5 r |
+| Reed | 2–5 r tall, 0.1 r thick |
+| Steam vent | a 1–2 r crack in the ground, an emitter and nothing else |
+
+- **The landing spot:** an x where the ground's slope stays under 0.15 across
+  three samples, with no prop within 3 r of it.
+- **Palette:** three hues from the seed under constraints: the ground is at
+  least 0.2 darker than the sky, saturation never above 0.7, and props sit at
+  the complementary hue ±30°, so no planet is ugly and no two look alike.
+
+### Drawing it
+
+All geometry is built once on entering the state, with `MeshBuilder` and the
+soft blobs of `src/soft_mesh.rs`. Colours are baked into the vertices, so every
+prop shares one material. One mesh for the sky gradient, one for the ground,
+one for water, one per prop, and a handful for the pack and the flag: under 50
+entities, no per-frame allocation, and everything despawned on leaving the
+state.
+
+Dust, steam and sparkles all go through the existing `Burst` message
+(`src/particles.rs`), which the quality setting already thins. `reduce_motion`
+calms the sway and the dust; there is no screen shake to switch off.
+
+### Sound
+
+No new synth recipes. The cartoon writes one message per beat and `audio.rs`
+plays the matching voice, the same way objects do.
+
+| Beat | Voice |
+|---|---|
+| Touchdown | `Whoosh`, and the landing chord on `Bell` |
+| The pack | `Muffled` |
+| The flag rises | `Shimmer` |
+| Planting | `Marimba`, then a `Bell` chord as it goes in |
+
+The menu pad keeps playing underneath.
+
+### Files and tests
+
+New: `src/ending/mod.rs` (the plugin and the timeline), `planet.rs` (the
+generator), `art.rs` (the meshes). Touched: `lib.rs`, `app_state.rs`
+(the new state animates continuously), `menu.rs` (where continuing goes, and
+the rewatch row), `audio.rs`.
+
+Tests:
+
+- The generator is deterministic: one seed, one planet.
+- No prop sits on the landing spot, and every height stays inside the playfield.
+- Every ground kind appears across many seeds, and the prop cap holds.
+- The beats tile the timeline with no gap and none runs past the end.
+- The astronaut's feet meet the ground height at the landing x at touchdown.
+- An `App` test: entering and leaving the state leaks no entities.
 
 # Part 2 — decisions
 
