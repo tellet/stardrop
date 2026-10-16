@@ -296,7 +296,7 @@ Stretch goals, none of them promised:
 - **Bonus levels** unlocked by collecting all stardust.
 - **Alternate characters** (the ninja, the frog) with their own visual themes; identical physics.
 - **Web (WASM) build** so friends can play in a browser.
-- **The landing cartoon** for finishing every level. Specified in Section 11.
+- **The landing cartoon** for finishing every level. Done: Section 11 and M10-13.
 
 ---
 
@@ -1070,6 +1070,18 @@ more sky.
 - **Nothing is published unless all three built**, because `publish` waits on the whole matrix. A release with two of the three files in it is worse than no release.
 - **Archived except on Windows.** A browser download of a bare binary loses the executable bit, so Linux and macOS ship a tar; Windows has no such bit and gets the `.exe` straight, which is one less step for the person running it.
 - **The repository has to be public** for any of this to reach anyone. That is the price of the whole approach, and the alternative (itch.io, free, keeps the repository private, and its app installs builds so macOS never flags them) is written down here in case the price turns out to be the wrong one.
+
+## M10-13 · The landing cartoon
+
+- **What.** Finishing every level plays an 8.5-second wordless scene (Section 11): the astronaut comes down on a generated planet, the dust settles, a pack far larger than them comes off their back, and a very small flag goes into the ground. `src/ending/` is one plugin in three files — the generator (`planet.rs`), the meshes (`art.rs`) and the plugin with the timeline (`mod.rs`) — plus a new `AppState::Ending`.
+- **Why generate the planet instead of drawing one.** Fourteen hand-made levels earn a surprise at the end, and a surprise the player has seen once is not one. The generator is a fifth of the work of an illustration and gives a different world every watch: four ground kinds (rock, desert, water, overgrowth) across one or two spans, six props placed by a weight table per ground, and a palette of one hue with its opposite for everything growing.
+- **The two ways a generated planet can be unplayable**, both closed by rules rather than by retrying: a planet of nothing but water (a single span is never water, and a water span is an edge span of at most 40% of the width), and a planet with nowhere flat (the landing spot is the flattest dry sample near the middle, and falls back to the flattest dry sample anywhere). 2,000 seeds are checked for both in the tests, along with the heights staying inside the playfield and no prop standing on the landing spot.
+- **Every motion is a pure function of elapsed seconds** (`beat_at`, `descent_y`, `squash`, `pack_scale`, `flag_at`, `flag_wave`), tested without an `App`, and the systems only apply them. The same reason the physics is written this way: the shape of a motion is worth arguing about in a test, not in a window.
+- **Drawn in front of the game's own background.** `background.rs` paints the sky at z -900 and the scenery panels beside the playfield at -540; the cartoon starts at -520, so the menu theme's stars cannot float over a daylit planet. The ground reaches 5,000 units either side and 2,000 below the playfield, because the camera shows more scenery the wider or taller the window is.
+- **Nothing new in the mixer.** Each beat is a message, and `audio.rs` answers it with a voice that already exists: `Whoosh` and the beacon's own landing chord at touchdown, `Muffled` for the pack, `Shimmer` for the flag, `Marimba` as it goes in. The descent and the hold are silent on purpose.
+- **A fresh seed every watch**, not one saved per player. A planet that is always the same is a place; a different one each time is a reason to press it again. The main menu grows a **The landing** row once all fourteen levels are done.
+- **What it cost.** The `dist` binary goes from 47.91 MB to 48.08 MB (+167 KB). The scene is 16 to 30 entities, all geometry built once on entering the state and despawned on leaving it, with the dust, steam and sparkles coming from the existing spark pool, so nothing here can grow the world. Frame cost is unmeasured: the busiest-level budget test (0.112 ms of 1 ms) does not cover this screen.
+- **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no golden-image check: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag) and by a human watching it.
 
 ## Measurements (M8)
 
