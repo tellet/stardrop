@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quality gate (STARDROP.md §10). Run before every commit: ./scripts/check.sh
+# Quality gate (docs/DESIGN.md §10). Run before every commit: ./scripts/check.sh
 #   --smoke   also start the real game for a few seconds and fail if it panics
 #             (opens a window; catches startup problems unit tests can't see).
 #   --visual  also check that the shapes still look like themselves

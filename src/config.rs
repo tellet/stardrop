@@ -13,7 +13,7 @@ use crate::objects::{
 };
 use crate::physics::movement::MovementConfig;
 
-/// Falling and drifting feel (world units, seconds). See DECISIONS.md M1-2
+/// Falling and drifting feel (world units, seconds). See docs/DESIGN.md M1-2
 /// for the reasoning behind each value.
 const MOVEMENT: MovementConfig = MovementConfig {
     // ~1 s from rest to full fall speed: a gentle start after respawning.

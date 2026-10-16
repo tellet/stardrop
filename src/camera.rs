@@ -101,7 +101,7 @@ fn spawn_camera(mut commands: Commands) {
         // than "white"; bloom turns that extra brightness into a soft glow.
         Hdr,
         // Maps HDR colors back to the screen. TonyMcMapface desaturates very
-        // bright colors gracefully instead of clipping them (see DECISIONS.md).
+        // bright colors gracefully instead of clipping them (see docs/DESIGN.md).
         Tonemapping::TonyMcMapface,
         bloom(crate::theme::art(crate::theme::MENU_THEME).bloom),
         Projection::Orthographic(OrthographicProjection {

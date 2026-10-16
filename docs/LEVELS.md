@@ -81,7 +81,7 @@ More object types arrive in Milestones 3 and 4.
 
 A level that breaks any of these rules is rejected, and the message says what's wrong:
 
-- The file must be valid RON with exactly these fields. **Unknown fields are errors.** This is deliberate: a level can only *place* things and can never change how anything *behaves* (see the consistency rule in `STARDROP.md` §3.3). All behavior tuning lives in `src/config.rs`.
+- The file must be valid RON with exactly these fields. **Unknown fields are errors.** This is deliberate: a level can only *place* things and can never change how anything *behaves* (see the consistency rule in `docs/DESIGN.md` §3.3). All behavior tuning lives in `src/config.rs`.
 - `name` isn't empty.
 - `phrase` asks for no more touches than the level has objects, so the third star can always be earned.
 - All numbers are ordinary numbers: no `NaN` and no `inf`.

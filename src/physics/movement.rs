@@ -122,7 +122,7 @@ pub struct Capture {
 ///
 /// At most one of each kind at a time: touching the same kind again resets
 /// its timer instead of stacking (Section 3.3 in the brief, and the rules in
-/// DECISIONS.md). Every value is "seconds left", counted down each step.
+/// docs/DESIGN.md). Every value is "seconds left", counted down each step.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Effects {
     /// Left and right are swapped (spore flower).

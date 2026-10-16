@@ -136,7 +136,7 @@ impl SaveData {
     #[must_use]
     pub fn migrated(mut self) -> Self {
         // Version 1 kept a "fast run" star, which version 2 replaced with
-        // the phrase star (DECISIONS.md M10-1). They mean different things,
+        // the phrase star (docs/DESIGN.md M10-1). They mean different things,
         // so the old one is dropped rather than carried across: a star has
         // to have been earned at the thing it is for.
         if self.version < 2 {

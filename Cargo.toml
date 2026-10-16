@@ -36,7 +36,7 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "x11",                   # Linux X11 support...
     "wayland",               # ...and native Wayland. Both on: one binary picks whichever
                              # the desktop runs. Building needs libwayland-dev and
-                             # libxkbcommon-dev (DECISIONS.md M0-2).
+                             # libxkbcommon-dev (docs/DESIGN.md M0-2).
     "keyboard",              # Keyboard input.
     "mouse",                 # Mouse input (menus).
     "gamepad",               # Gamepad input types.
@@ -53,7 +53,7 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "bevy_sprite",           # 2D API: `Mesh2d`, `ColorMaterial`, sprites.
     "bevy_sprite_render",    # Rendering for the above.
     "bevy_post_process",     # Bloom.
-    "tonemapping_luts",      # Lookup tables for the TonyMcMapface tonemapper (see DECISIONS.md).
+    "tonemapping_luts",      # Lookup tables for the TonyMcMapface tonemapper (see docs/DESIGN.md).
     "ktx2",                  # Needed to load the tonemapping lookup tables...
     "zstd_rust",             # ...which are zstd-compressed (pure-Rust decoder, no C toolchain).
     # --- UI & text (F1 overlay, later menus) ---
@@ -68,7 +68,7 @@ bevy = { version = "=0.19.1", default-features = false, features = [
 # exact versions add no build time or binary size.
 ron = { version = "=0.12.2", default-features = false }   # Reads the RON level format.
 serde = { version = "=1.0.229", features = ["derive"] }    # Turns parsed text into our structs.
-# Finds the per-OS folder for the save file (DECISIONS.md M5-4).
+# Finds the per-OS folder for the save file (docs/DESIGN.md M5-4).
 dirs = "=7.0.0"
 # Bakes `assets/` into the binary so the game ships as one file (M5-7).
 # Switched off by the `dev` feature, which keeps the folder and hot reload.
@@ -105,7 +105,7 @@ debug = false
 opt-level = 3
 
 # Everyday optimized build (quality checks, playtesting). Thin LTO keeps
-# rebuilds at ~30 s instead of ~3 min, for a slightly larger binary (DECISIONS.md M0-10).
+# rebuilds at ~30 s instead of ~3 min, for a slightly larger binary (docs/DESIGN.md M0-10).
 [profile.release]
 opt-level = 3       # Optimize for speed.
 lto = "thin"        # Cross-crate optimization, done in parallel: most of the benefit, far faster to build.
@@ -136,7 +136,7 @@ unused_qualifications = "warn"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
-# Curated pedantic lints (reasons in DECISIONS.md).
+# Curated pedantic lints (reasons in docs/DESIGN.md).
 cast_lossless = "warn"
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"

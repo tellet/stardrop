@@ -1,5 +1,5 @@
 # The quality gate, run on every push. Mirrors scripts/check.sh, and adds
-# the measurements that the brief sets budgets for (STARDROP.md §7.1).
+# the measurements that the brief sets budgets for (docs/DESIGN.md §7.1).
 #
 # Binaries for the three desktops are built only when asked for, from the
 # Actions tab or `gh workflow run check -f binaries=true`.

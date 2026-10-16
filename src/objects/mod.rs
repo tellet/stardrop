@@ -221,7 +221,7 @@ fn touch_objects(
         }
         let kind = placement.kind();
         // Inside a bubble, only hazards reach the astronaut: nothing else
-        // pushes, pulls or carries it (DECISIONS.md M4-2).
+        // pushes, pulls or carries it (docs/DESIGN.md M4-2).
         if body.effects.held_by_bubble() && kind != ObjectKind::StaticCloud {
             continue;
         }
