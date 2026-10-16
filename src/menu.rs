@@ -64,6 +64,8 @@ enum MenuAction {
     Locked,
     /// Open the settings screen.
     OpenSettings,
+    /// Watch the landing cartoon.
+    WatchEnding,
     /// Change one setting.
     Change(Setting),
 }
@@ -83,6 +85,18 @@ enum Setting {
 /// "on" or "off", for a setting row.
 fn on_off(value: bool) -> &'static str {
     if value { "on" } else { "off" }
+}
+
+/// Where the first row of the level-complete screen leads. Finishing the
+/// last level leads to the cartoon; anything else carries on as usual.
+fn after_landing(all_done: bool, has_next: bool) -> MenuAction {
+    if has_next {
+        MenuAction::NextLevel
+    } else if all_done {
+        MenuAction::WatchEnding
+    } else {
+        MenuAction::BackToLevels
+    }
 }
 
 /// Three slots, filled in as the stars are earned: `*` earned, `-` not.
@@ -360,20 +374,42 @@ fn spawn_screen_with(
         });
 }
 
-fn spawn_main_menu(mut commands: Commands, mut focus: ResMut<Focus>) {
+fn spawn_main_menu(
+    mut commands: Commands,
+    mut focus: ResMut<Focus>,
+    levels: Option<Res<Levels>>,
+    progress: Res<Progress>,
+) {
+    let mut items = vec![
+        Row::new("Descend", MenuAction::ChooseLevel),
+        Row::new("Journal", MenuAction::OpenJournal),
+    ];
+    // Once every level is done, the cartoon can be watched again.
+    if progress.finished_everything(&level_order(levels.as_deref())) {
+        items.insert(1, Row::new("The landing", MenuAction::WatchEnding));
+    }
+    items.push(Row::new("Settings", MenuAction::OpenSettings));
+    items.push(Row::new("Quit", MenuAction::Quit));
     spawn_screen(
         &mut commands,
         &mut focus,
         AppState::MainMenu,
         "Stardrop",
         Some("arrows or mouse to choose, Enter to pick".to_owned()),
-        vec![
-            Row::new("Descend", MenuAction::ChooseLevel),
-            Row::new("Journal", MenuAction::OpenJournal),
-            Row::new("Settings", MenuAction::OpenSettings),
-            Row::new("Quit", MenuAction::Quit),
-        ],
+        items,
     );
+}
+
+/// The level files in the order they are played, for asking `Progress` what
+/// has been finished.
+fn level_order(levels: Option<&Levels>) -> Vec<String> {
+    levels.map_or_else(Vec::new, |levels| {
+        levels
+            .levels
+            .iter()
+            .map(|entry| entry.file.clone())
+            .collect()
+    })
 }
 
 fn spawn_level_select(
@@ -540,10 +576,17 @@ fn spawn_level_complete(
             ),
         ],
     };
+    let order = level_order(levels.as_deref());
     let has_next = levels.is_some_and(|levels| selected.0 + 1 < levels.levels.len());
+    let onwards = after_landing(progress.finished_everything(&order), has_next);
     let mut items = vec![Row::new("Retry", MenuAction::RetryLevel)];
-    if has_next {
-        items.insert(0, Row::new("Next level", MenuAction::NextLevel));
+    if onwards != MenuAction::BackToLevels {
+        let label = if onwards == MenuAction::WatchEnding {
+            "Onwards"
+        } else {
+            "Next level"
+        };
+        items.insert(0, Row::new(label, onwards));
     }
     items.push(Row::new("Level select", MenuAction::BackToLevels));
     let star_art = star_art.map(|art| art.0.clone());
@@ -698,6 +741,7 @@ fn activate(
         }
         MenuAction::OpenJournal => next_state.set(AppState::Journal),
         MenuAction::OpenSettings => next_state.set(AppState::Settings),
+        MenuAction::WatchEnding => next_state.set(AppState::Ending),
         MenuAction::Change(setting) => change_setting(setting, &mut settings),
         MenuAction::Quit => {
             exit.write(AppExit::Success);
@@ -786,6 +830,16 @@ fn pause_on_escape(
 
 #[cfg(test)]
 mod tests {
+
+    /// Landing the last level leads to the cartoon. Replaying an earlier one
+    /// after the game is finished stays ordinary.
+    #[test]
+    fn the_last_landing_leads_to_the_cartoon() {
+        assert_eq!(after_landing(true, false), MenuAction::WatchEnding);
+        assert_eq!(after_landing(false, true), MenuAction::NextLevel);
+        assert_eq!(after_landing(false, false), MenuAction::BackToLevels);
+        assert_eq!(after_landing(true, true), MenuAction::NextLevel);
+    }
     use super::*;
 
     /// Esc must do something on every screen that isn't the top one or the

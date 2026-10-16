@@ -181,6 +181,13 @@ impl SaveData {
         }
     }
 
+    /// Whether every level has been landed. An empty list is not a finished
+    /// game: it means the levels never loaded.
+    #[must_use]
+    pub fn finished_everything(&self, order: &[String]) -> bool {
+        !order.is_empty() && order.iter().all(|file| self.level(file).completed)
+    }
+
     /// Notes that an object type has been seen. Returns `true` the first time.
     pub fn discover(&mut self, kind: ObjectKind) -> bool {
         let name = format!("{kind:?}");
@@ -401,6 +408,25 @@ mod tests {
         assert_eq!(record.best_time, Some(12.0), "the fastest time");
         assert_eq!(record.most_stardust, 3, "the best collection");
         assert_eq!(record.stars().count(), 3, "stars from both attempts");
+    }
+
+    #[test]
+    fn finishing_the_last_level_finishes_everything() {
+        let order: Vec<String> = ["a.ron", "b.ron"].map(str::to_owned).to_vec();
+        let mut save = SaveData::default();
+        assert!(!save.finished_everything(&order));
+        let (time, dust, stars) = landing(10.0, 3);
+        save.record_landing("a.ron", time, dust, stars);
+        assert!(
+            !save.finished_everything(&order),
+            "one of two is not everything"
+        );
+        save.record_landing("b.ron", time, dust, stars);
+        assert!(save.finished_everything(&order));
+        assert!(
+            !SaveData::default().finished_everything(&[]),
+            "no levels at all is not a finished game"
+        );
     }
 
     #[test]
