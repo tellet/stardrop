@@ -295,6 +295,14 @@ pub(super) const CHUTE_LIFT: f32 = R * 3.4;
 /// Panels around the canopy. Enough to read as a dome, few enough to count.
 const CHUTE_PANELS: usize = 10;
 
+/// The letter on the cloth: the outer radius of its ring, how thick the
+/// stroke is, and where it sits on the cloth.
+const Q_RADIUS: f32 = R * 0.3;
+const Q_STROKE: f32 = R * 0.1;
+/// Corners around the ring.
+const Q_SEGMENTS: usize = 18;
+pub(super) const Q_AT: Vec2 = Vec2::new(R * 0.55, -R * 0.5);
+
 /// The pack's body, before the parts that stick out of it.
 pub(super) const PACK_BODY: Vec2 = Vec2::new(R * 4.6, R * 4.2);
 /// How far the pack reaches either side of where it stands, every part of it
@@ -304,6 +312,44 @@ pub(super) const PACK_REACH: f32 = R * 3.0;
 pub(super) const CLOTH_WIDTH: f32 = R * 1.4;
 /// How far the cloth hangs below it.
 const CLOTH_DROP: f32 = R * 1.05;
+
+/// The letter Q on the cloth: a ring with a tail across it, drawn rather
+/// than typed, because nothing else in the cartoon is written.
+pub(super) fn letter_q_mesh(palette: &Palette) -> Mesh {
+    // The cloth is the brightest thing in the scene, so the letter on it is
+    // the darkest colour the planet has.
+    let stroke = ink(palette.sky[0], 1.0);
+    let mut builder = MeshBuilder::with_capacity(Q_SEGMENTS * 2 + 6);
+    let inner = Q_RADIUS - Q_STROKE;
+    let around = |step: usize| {
+        #[expect(clippy::cast_precision_loss, reason = "a small segment count")]
+        let angle = step as f32 / Q_SEGMENTS as f32 * core::f32::consts::TAU;
+        Vec2::new(angle.cos(), angle.sin())
+    };
+    let mut first = (0, 0);
+    let mut previous = (0, 0);
+    for step in 0..Q_SEGMENTS {
+        let out = builder.vertex(around(step) * Q_RADIUS, stroke);
+        let into = builder.vertex(around(step) * inner, stroke);
+        if step == 0 {
+            first = (out, into);
+        } else {
+            builder.quad([previous.0, previous.1, into, out]);
+        }
+        previous = (out, into);
+    }
+    builder.quad([previous.0, previous.1, first.1, first.0]);
+    // The tail, crossing the rim at the bottom right.
+    let corner = Vec2::new(0.7, -0.7);
+    blade(
+        &mut builder,
+        corner * inner,
+        corner * (Q_RADIUS * 1.75),
+        Q_STROKE * 0.9,
+        stroke,
+    );
+    builder.into_mesh()
+}
 
 /// The parachute: a dome of panels with lines running down to the
 /// astronaut's shoulders, built with the shoulders at the origin's `-y` so
@@ -602,6 +648,30 @@ mod tests {
                 "{kind:?} has no faces"
             );
         }
+    }
+
+    /// A Q is a ring with a tail: it has a hole in the middle, and something
+    /// crossing its rim at the bottom.
+    #[test]
+    fn the_cloth_carries_a_letter_q() {
+        let letter = letter_q_mesh(&Planet::generate(5).palette);
+        assert!(
+            letter.indices().is_some_and(|indices| indices.len() >= 3),
+            "the letter has no faces"
+        );
+        let points = points(&letter);
+        let nearest = points
+            .iter()
+            .map(|point| Vec2::new(point[0], point[1]).length())
+            .fold(f32::MAX, f32::min);
+        assert!(
+            nearest > Q_RADIUS - Q_STROKE * 1.5,
+            "the ring is filled in: something sits {nearest} from the middle"
+        );
+        let tail = points
+            .iter()
+            .any(|point| point[1] < 0.0 && Vec2::new(point[0], point[1]).length() > Q_RADIUS * 1.3);
+        assert!(tail, "the ring has no tail, which makes it an O");
     }
 
     /// The canopy is wide enough to hold somebody up, and its lines reach

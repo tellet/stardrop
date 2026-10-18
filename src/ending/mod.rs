@@ -12,10 +12,9 @@ use crate::app_state::AppState;
 use crate::config::GameConfig;
 use crate::particles::Burst;
 use crate::settings::Settings;
-use crate::ui::StarArt;
 use art::{
-    CHUTE_LIFT, FLAG_TOP, chute_mesh, cloth_mesh, color, flag_mesh, ground_mesh, pack_mesh,
-    prop_mesh, sky_mesh, water_mesh,
+    CHUTE_LIFT, FLAG_TOP, Q_AT, chute_mesh, cloth_mesh, color, flag_mesh, ground_mesh,
+    letter_q_mesh, pack_mesh, prop_mesh, sky_mesh, water_mesh,
 };
 use planet::{Planet, PropKind, SURFACE_Y};
 
@@ -445,7 +444,6 @@ fn open_the_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     config: Res<GameConfig>,
-    star: Option<Res<StarArt>>,
 ) {
     let planet = Planet::generate(fresh_seed());
     let palette = planet.palette;
@@ -538,27 +536,20 @@ fn open_the_scene(
         .spawn((
             Cloth,
             Mesh2d(meshes.add(cloth_mesh(&palette))),
-            MeshMaterial2d(tint),
+            MeshMaterial2d(tint.clone()),
             Transform::from_xyz(0.0, FLAG_TOP, 0.1),
         ))
         .id();
     commands.entity(flag).add_child(cloth);
-    // The game's own star, on the cloth. Without the UI plugin there is no
-    // star to hang, and the flag is simply plain.
-    if let Some(star) = star {
-        let mark = commands
-            .spawn((
-                Sprite {
-                    image: star.0.clone(),
-                    custom_size: Some(Vec2::splat(radius * 0.55)),
-                    color: color(palette.sky[0]),
-                    ..default()
-                },
-                Transform::from_xyz(radius * 0.55, -radius * 0.45, 0.1),
-            ))
-            .id();
-        commands.entity(cloth).add_child(mark);
-    }
+    // A letter on the cloth, drawn like everything else here.
+    let mark = commands
+        .spawn((
+            Mesh2d(meshes.add(letter_q_mesh(&palette))),
+            MeshMaterial2d(tint),
+            Transform::from_translation(Q_AT.extend(0.1)),
+        ))
+        .id();
+    commands.entity(cloth).add_child(mark);
 
     let feet = ground + radius;
     commands.insert_resource(Showing {
