@@ -23,6 +23,14 @@ sudo apt install libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
 cargo run --release
 ```
 
+## Licence
+
+MIT, in [LICENSE](LICENSE). The one asset that came from anywhere else is the
+UI font, Bevy's built-in Fira Mono subset, under the SIL Open Font License
+1.1. Every sound and every shape is generated at runtime, so nothing else is
+shipped. The crates compiled into a release build are listed with their
+licences in `docs/THIRD-PARTY.md` on the `paperwork` branch.
+
 ## The rest
 
 | | |

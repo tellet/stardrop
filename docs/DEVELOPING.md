@@ -64,7 +64,8 @@ carry the per-OS first-run steps from
 
 ## The paperwork branch
 
-Licences, the third-party crate list, the known-shortcuts log and the audit
+The third-party crate list, the known-shortcuts log and the audit
 and oldest-supported-rust CI jobs live on the `paperwork` branch, which is
-this project with all of that still in place. Going public later means
-merging a branch, not redoing the work.
+this project with all of that still in place. Picking any of it up means
+merging a branch, not redoing the work. Note that the branch still carries
+the old dual MIT or Apache-2.0 licence, where master is MIT alone.

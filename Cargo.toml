@@ -4,6 +4,7 @@ version = "0.2.1"
 edition = "2024"
 rust-version = "1.95"
 description = "A calm, dreamy falling game about discovery."
+license = "MIT"
 publish = false
 
 [features]
