@@ -315,7 +315,7 @@ Stretch goals, none of them promised:
 ## 11. The landing cartoon
 
 Added after Milestone 9, once the fourteen levels were done. A wordless
-8.5-second scene, the only part of the game that is not a level: the astronaut
+9.9-second scene, the only part of the game that is not a level: the astronaut
 lands on an unknown planet, the dust settles, and they plant a flag.
 
 ### When it plays
@@ -342,7 +342,7 @@ y ∈ [0, -1920], and the whole scene is built inside it.
 |---|---|
 | Surface top | y = -1450: sky fills the upper three quarters |
 | The astronaut enters at | y = +120, above the frame |
-| Total length | 8.5 s |
+| Total length | 9.9 s |
 | Sizes below | in astronaut radii, r = 28 world units |
 | The pack and the pole | stand on the ground under each of them, which on a rocky planet is nowhere near the height under the astronaut's feet |
 
@@ -353,14 +353,15 @@ function. Progress inside a beat is eased, never linear (§5).
 
 | t | Beat | What happens |
 |---|---|---|
-| 0.00 | Descent | The astronaut drifts down from above the frame, leaning with `Tumble`, shedding a spark every 0.12 s. Props sway, steam vents breathe. |
-| 2.20 | Touchdown | Dust bursts in the ground's own colour, the suit squashes and recovers, whatever grows near the landing bends away from it, vents puff hard. |
-| 2.20–3.60 | Settle | The dust dies out. The astronaut straightens up and bobs once. |
-| 3.60 | The pack | It slides off their back, 4.2 r to their left, and eases up to a 4.6 by 4.2 r body with a handle, two feet and an aerial on it: 6 r wide and 6.1 r tall all told, far larger than the astronaut. It thumps down with a ground puff. The size is the joke, and the parts are what make it read as a bag of stuff rather than a box. |
-| 5.00 | The flag rises | A hatch opens and a flag lifts out: a 3.2 r pole, nearly white whatever the planet's colours are, with a 1.4 r cloth notched at the fly, bright against anything. Comically small against the pack, which still stands half again as tall and three times as wide. |
-| 6.40 | Planting | They carry it across and push the pole into the ground 1.6 r to their right, where nothing stands behind it. A small puff, and the cloth unfurls and starts waving. |
-| 7.40 | Hold | They stand beside it. The flag waves, one last sparkle. |
-| 8.50 | — | The fade to the main menu. |
+| 0.00 | Descent | The astronaut comes down from above the frame under a parachute: a 5 r canopy of ten panels on four lines, pale whatever the planet's colours are, breathing as it carries them. They lean with `Tumble` and shed a spark every 0.12 s. Props sway, steam vents breathe. The descent is even rather than accelerating, and takes 3.6 s, because being brought down is not falling. |
+| 3.60 | Touchdown | Dust bursts in the ground's own colour, the suit squashes and recovers, whatever grows near the landing bends away from it, vents puff hard. The canopy is cut away. |
+| 3.60–5.00 | Cut away | The canopy collapses, drifts 160 units clear, sinks to the ground and fades out, so the pack comes off on a clean screen. |
+| 3.60–5.00 | Settle | The dust dies out. The astronaut straightens up and bobs once. |
+| 5.00 | The pack | It slides off their back, 4.2 r to their left, and eases up to a 4.6 by 4.2 r body with a handle, two feet and an aerial on it: 6 r wide and 6.1 r tall all told, far larger than the astronaut. It thumps down with a ground puff. The size is the joke, and the parts are what make it read as a bag of stuff rather than a box. |
+| 6.40 | The flag rises | A hatch opens and a flag lifts out: a 3.2 r pole, nearly white whatever the planet's colours are, with a 1.4 r cloth notched at the fly, bright against anything. Comically small against the pack, which still stands half again as tall and three times as wide. |
+| 7.80 | Planting | They carry it across and push the pole into the ground 1.6 r to their right, where nothing stands behind it. A small puff, and the cloth unfurls and starts waving. |
+| 8.80 | Hold | They stand beside it. The flag waves, one last sparkle. |
+| 9.90 | — | The fade to the main menu. |
 
 The cloth carries the same star the level-complete screen uses.
 
@@ -1085,7 +1086,7 @@ more sky.
 
 ## M10-13 · The landing cartoon
 
-- **What.** Finishing every level plays an 8.5-second wordless scene (Section 11): the astronaut comes down on a generated planet, the dust settles, a pack far larger than them comes off their back, and a very small flag goes into the ground. `src/ending/` is one plugin in three files — the generator (`planet.rs`), the meshes (`art.rs`) and the plugin with the timeline (`mod.rs`) — plus a new `AppState::Ending`.
+- **What.** Finishing every level plays a 9.9-second wordless scene (Section 11): the astronaut comes down on a generated planet, the dust settles, a pack far larger than them comes off their back, and a very small flag goes into the ground. `src/ending/` is one plugin in three files — the generator (`planet.rs`), the meshes (`art.rs`) and the plugin with the timeline (`mod.rs`) — plus a new `AppState::Ending`.
 - **Why generate the planet instead of drawing one.** Fourteen hand-made levels earn a surprise at the end, and a surprise the player has seen once is not one. The generator is a fifth of the work of an illustration and gives a different world every watch: four ground kinds (rock, desert, water, overgrowth) across one or two spans, six props placed by a weight table per ground, and a palette of one hue with its opposite for everything growing.
 - **The two ways a generated planet can be unplayable**, both closed by rules rather than by retrying: a planet of nothing but water (a single span is never water, and a water span is an edge span of at most 40% of the width), and a planet with nowhere flat (the landing spot is the flattest dry sample near the middle, and falls back to the flattest dry sample anywhere). 2,000 seeds are checked for both in the tests, along with the heights staying inside the playfield and no prop standing on the landing spot.
 - **Every motion is a pure function of elapsed seconds** (`beat_at`, `descent_y`, `squash`, `pack_scale`, `flag_at`, `flag_wave`), tested without an `App`, and the systems only apply them. The same reason the physics is written this way: the shape of a motion is worth arguing about in a test, not in a window.
@@ -1096,6 +1097,7 @@ more sky.
 - **What a fresh review caught**, after every test passed: entering the cartoon did not free the level, so the beacon, every object and the astronaut who had just landed drew straight over the planet. The level is now freed on entering `Ending` (`free_the_level_on`, `src/level/mod.rs`), which also hides the old astronaut, restores the menu theme and brings back the menu pad. Four smaller things went with it: the pack and the pole took their height from the ground under the astronaut rather than the ground under themselves (up to 266 units out, a pack and a half in the air), the 0.15 slope rule was not actually implemented, the rewatch row was missing from the first main menu after launch because the level list is an asset that arrives later, and the astronaut stood still from the landing to the end.
 - **Watching it without finishing the game.** F3 in a `--features dev` build opens the cartoon from any screen, the way F1 and F2 open the other debug tools. Fourteen levels is too long a wait to see one change to the art, and the alternative was editing the save file. Nothing in a shipped build is bound to it.
 - **What the first watch changed.** Two things that no test could have told me: the flag was too small and too dull to be the point of the scene, and the pack read as a plain box. The pole went from 2 r to 3.2 r and turned nearly white (a planet's own colours can leave a coloured pole darker than the ground it stands in: on seed 3 it was), the cloth grew to 1.4 r, took a notch in its far edge and a fold along its bottom, and the pole gained a ball on top. The pack grew to 4.6 by 4.2 r and gained a handle, two feet, an aerial, a seam and a latched hatch, with both lamps moved to one side because symmetrical ones read as eyes. They also swapped sides: the pack now lands to the astronaut's left and the flag goes in to their right, so neither stands in front of the other. That costs 65 units of landing search (400 to 335), and the planets that land on a slope went from 3 in a thousand to 5.
+- **The parachute.** Asked for after the first watch: the astronaut dropped too fast and arrived out of nowhere. The descent went from 2.2 s to 3.6 s (and the whole cartoon from 8.5 to 9.9, still inside the brief's five to ten), its easing from accelerating to nearly even, and a canopy now carries them: a half ellipse of ten alternating panels on four lines, with its own material because it is the one thing in the scene that fades. A kite was the other option and lost, because a kite needs wind the rest of the scene has not got, and its line has to go somewhere once they land.
 - **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no water ripple at the touchdown: the water is one static mesh, and rippling it means rebuilding geometry every frame, which Section 7.2 forbids. No golden-image check either: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag, the flag outshines the ground it stands in).
 
 ## Measurements (M8)

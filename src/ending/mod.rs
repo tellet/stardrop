@@ -14,34 +14,45 @@ use crate::particles::Burst;
 use crate::settings::Settings;
 use crate::ui::StarArt;
 use art::{
-    FLAG_TOP, cloth_mesh, color, flag_mesh, ground_mesh, pack_mesh, prop_mesh, sky_mesh, water_mesh,
+    CHUTE_LIFT, FLAG_TOP, chute_mesh, cloth_mesh, color, flag_mesh, ground_mesh, pack_mesh,
+    prop_mesh, sky_mesh, water_mesh,
 };
 use planet::{Planet, PropKind, SURFACE_Y};
 
 mod art;
 mod planet;
 
-/// When the astronaut touches the ground.
-const TOUCHDOWN: f32 = 2.2;
+/// When the astronaut touches the ground. They come down under a canopy, so
+/// this is a long, slow arrival rather than a drop.
+const TOUCHDOWN: f32 = 3.6;
 /// When the dust has settled and the pack comes off.
-const SETTLED: f32 = 3.6;
+const SETTLED: f32 = 5.0;
 /// When the flag starts rising out of the pack.
-const FLAG: f32 = 5.0;
+const FLAG: f32 = 6.4;
 /// When they lean in and push it into the ground.
-const PLANT: f32 = 6.4;
+const PLANT: f32 = 7.8;
 /// When they stand back and look at it.
-const HOLD: f32 = 7.4;
+const HOLD: f32 = 8.8;
 /// The whole cartoon, in seconds.
-const TOTAL: f32 = 8.5;
+const TOTAL: f32 = 9.9;
 // The brief asks for five to ten seconds (Section 11), checked when compiling.
 const _: () = assert!(TOTAL >= 5.0 && TOTAL <= 10.0, "the cartoon runs 5-10 s");
 // The last beat needs time on screen to be a beat at all.
 const _: () = assert!(HOLD < TOTAL);
+// They come down under a canopy, which is a slow way to arrive.
+const _: () = assert!(TOUCHDOWN >= 3.0, "the descent is a slow one");
 
 /// Where the astronaut enters, in world y: above the top of the frame.
 const ENTRY_Y: f32 = 120.0;
 /// How far they drift sideways on the way down, in world units.
 const SWAY: f32 = 90.0;
+/// How long the cut-away canopy takes to sink to the ground, in seconds, and
+/// how far it drifts off while it does.
+const CUTAWAY_SECONDS: f32 = 1.2;
+const CUTAWAY_DRIFT: f32 = 160.0;
+/// How much the open canopy breathes on the way down, and how fast.
+const CHUTE_BREATH: f32 = 0.035;
+const CHUTE_BREATH_SPEED: f32 = 2.0;
 /// How long the landing squash lasts, in seconds.
 const SQUASH_SECONDS: f32 = 0.35;
 /// How much they give on impact, as a fraction of their height.
@@ -111,7 +122,9 @@ fn smooth(u: f32) -> f32 {
 #[must_use]
 fn descent_y(t: f32, feet: f32) -> f32 {
     let u = through(t, 0.0, TOUCHDOWN);
-    let eased = 1.0 - (1.0 - u) * (1.0 - u);
+    // Mostly even, easing off into the ground: a canopy brings someone down
+    // at a steady rate, where a fall would keep gathering speed.
+    let eased = 0.7 * u + 0.3 * (1.0 - (1.0 - u) * (1.0 - u));
     ENTRY_Y + (feet - ENTRY_Y) * eased
 }
 
@@ -121,6 +134,32 @@ fn descent_y(t: f32, feet: f32) -> f32 {
 fn descent_x(t: f32, landing_x: f32) -> f32 {
     let u = through(t, 0.0, TOUCHDOWN);
     landing_x + SWAY * (1.0 - u) * (u * 6.0).sin()
+}
+
+/// Where the canopy is: over their shoulders on the way down, then cut away,
+/// sinking to the ground and drifting off as the dust settles.
+#[must_use]
+fn chute_at(t: f32, over: Vec2, ground: f32) -> Vec2 {
+    let gone = smooth(through(t, TOUCHDOWN, TOUCHDOWN + CUTAWAY_SECONDS));
+    Vec2::new(
+        over.x - CUTAWAY_DRIFT * gone,
+        over.y + (ground - over.y) * gone,
+    )
+}
+
+/// How solid the canopy is. It is gone before the pack comes off, so the
+/// joke lands on a clean screen.
+#[must_use]
+fn chute_fade(t: f32) -> f32 {
+    1.0 - through(t, TOUCHDOWN + 0.3, SETTLED)
+}
+
+/// How the canopy breathes on the way down, and collapses once it is cut.
+#[must_use]
+fn chute_scale(t: f32) -> Vec2 {
+    let breath = 1.0 + CHUTE_BREATH * (t * CHUTE_BREATH_SPEED).sin();
+    let gone = smooth(through(t, TOUCHDOWN, TOUCHDOWN + CUTAWAY_SECONDS));
+    Vec2::new(breath * (1.0 - 0.55 * gone), 1.0 - 0.7 * gone)
 }
 
 /// The landing squash: they give on impact and spread sideways, keeping their
@@ -257,6 +296,8 @@ const PROP_DEPTH: f32 = -200.0;
 /// neither hides the other.
 const PACK_RADII: f32 = -4.2;
 const PLANT_RADII: f32 = 1.6;
+/// The canopy hangs behind everyone, so its lines pass behind the astronaut.
+const CHUTE_DEPTH: f32 = 7.0;
 const PACK_DEPTH: f32 = 8.0;
 const FLAG_DEPTH: f32 = 9.0;
 
@@ -287,6 +328,10 @@ struct EndingEntity;
 /// that one is hidden whenever no level is loaded.
 #[derive(Component)]
 struct Figure;
+
+/// The parachute that brings them down.
+#[derive(Component)]
+struct Chute;
 
 /// The pack, which scales up out of nothing.
 #[derive(Component)]
@@ -352,6 +397,7 @@ impl Plugin for EndingPlugin {
                     advance,
                     skip,
                     bring_them_down,
+                    fly_the_chute,
                     settle_the_dust,
                     sway_the_props,
                     breathe_the_vents,
@@ -527,6 +573,16 @@ fn open_the_scene(
         steam: 0.0,
         thumped: false,
     });
+    // The canopy carries its own material, because it is the one thing here
+    // that fades out.
+    let here = Vec2::new(descent_x(0.0, landing_x), descent_y(0.0, feet));
+    commands.spawn((
+        EndingEntity,
+        Chute,
+        Mesh2d(meshes.add(chute_mesh(&palette))),
+        MeshMaterial2d(materials.add(ColorMaterial::from_color(Color::WHITE))),
+        Transform::from_translation((here + Vec2::Y * (radius + CHUTE_LIFT)).extend(CHUTE_DEPTH)),
+    ));
     // Spawn the astronaut last: `spawn_figure` takes the asset stores.
     crate::astronaut::spawn_figure(
         &mut commands,
@@ -585,6 +641,46 @@ fn skip(
     if asked {
         showing.leaving = true;
         next_state.set(AppState::MainMenu);
+    }
+}
+
+/// The canopy: over their shoulders on the way down, cut away when they
+/// land, and faded out before the pack comes off.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Bevy systems take their resources by value"
+)]
+fn fly_the_chute(
+    showing: Res<Showing>,
+    config: Res<GameConfig>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    canopy: Single<
+        (
+            &mut Transform,
+            &mut Visibility,
+            &MeshMaterial2d<ColorMaterial>,
+        ),
+        With<Chute>,
+    >,
+) {
+    let (mut transform, mut visibility, material) = canopy.into_inner();
+    let t = showing.elapsed;
+    let fade = chute_fade(t);
+    if fade <= 0.0 {
+        *visibility = Visibility::Hidden;
+        return;
+    }
+    let radius = config.astronaut_radius;
+    let shoulders = Vec2::new(
+        descent_x(t, showing.planet.landing_x),
+        descent_y(t, showing.feet) + radius,
+    );
+    let at = chute_at(t, shoulders + Vec2::Y * CHUTE_LIFT, showing.feet - radius);
+    transform.translation = at.extend(CHUTE_DEPTH);
+    let scale = chute_scale(t);
+    transform.scale = Vec3::new(scale.x, scale.y, 1.0);
+    if let Some(mut canopy) = materials.get_mut(&material.0) {
+        canopy.color = canopy.color.with_alpha(fade);
     }
 }
 
@@ -897,6 +993,62 @@ mod tests {
         assert!(half > all / 2.0, "{half} of {all}");
         // They come down where they are going to stand.
         assert!((descent_x(TOUCHDOWN, 120.0) - 120.0).abs() < 0.5);
+    }
+
+    /// They are brought down by a canopy, not dropped: the descent is long,
+    /// and no part of it is much faster than any other.
+    #[test]
+    fn the_descent_is_slow_and_even() {
+        let feet = -1400.0;
+        let average = (descent_y(0.0, feet) - feet) / TOUCHDOWN;
+        let mut fastest: f32 = 0.0;
+        let mut t = 0.0;
+        while t + 0.1 <= TOUCHDOWN {
+            let speed = (descent_y(t, feet) - descent_y(t + 0.1, feet)) / 0.1;
+            fastest = fastest.max(speed);
+            t += 0.05;
+        }
+        assert!(
+            fastest < average * 1.6,
+            "{fastest} at the fastest against {average} on average"
+        );
+    }
+
+    #[test]
+    fn the_canopy_carries_them_down_and_is_cut_away() {
+        let over = Vec2::new(40.0, -200.0);
+        let ground = -520.0;
+        assert!(
+            (chute_at(0.0, over, ground) - over).length() < 0.5,
+            "it flies over them"
+        );
+        assert!(
+            (chute_at(TOUCHDOWN, over, ground) - over).length() < 0.5,
+            "and stays there until they land"
+        );
+        let settled = chute_at(TOUCHDOWN + CUTAWAY_SECONDS, over, ground);
+        assert!(
+            (settled.y - ground).abs() < 1.0,
+            "it should come to rest on the ground, not at {}",
+            settled.y
+        );
+        assert!(
+            settled.x < over.x - CUTAWAY_DRIFT * 0.9,
+            "it should drift clear of them, not stop at {}",
+            settled.x
+        );
+        assert!(
+            chute_fade(TOUCHDOWN) > 0.9,
+            "it is solid while it carries them"
+        );
+        assert!(
+            chute_fade(SETTLED) <= 0.0,
+            "it should be gone before the pack comes off"
+        );
+        assert!(
+            chute_scale(TOUCHDOWN + CUTAWAY_SECONDS).y < 0.4,
+            "it should collapse as it falls"
+        );
     }
 
     #[test]

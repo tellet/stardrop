@@ -287,6 +287,14 @@ pub(super) fn prop_mesh(prop: &Prop, palette: &Palette) -> Mesh {
     builder.into_mesh()
 }
 
+/// How wide the open canopy is, and how far it rises over the astronaut.
+pub(super) const CHUTE_WIDTH: f32 = R * 5.0;
+const CHUTE_RISE: f32 = R * 2.4;
+/// How far above the astronaut the canopy flies: the length of the lines.
+pub(super) const CHUTE_LIFT: f32 = R * 3.4;
+/// Panels around the canopy. Enough to read as a dome, few enough to count.
+const CHUTE_PANELS: usize = 10;
+
 /// The pack's body, before the parts that stick out of it.
 pub(super) const PACK_BODY: Vec2 = Vec2::new(R * 4.6, R * 4.2);
 /// How far the pack reaches either side of where it stands, every part of it
@@ -296,6 +304,52 @@ pub(super) const PACK_REACH: f32 = R * 3.0;
 pub(super) const CLOTH_WIDTH: f32 = R * 1.4;
 /// How far the cloth hangs below it.
 const CLOTH_DROP: f32 = R * 1.05;
+
+/// The parachute: a dome of panels with lines running down to the
+/// astronaut's shoulders, built with the shoulders at the origin's `-y` so
+/// the whole thing hangs from where it is placed.
+pub(super) fn chute_mesh(palette: &Palette) -> Mesh {
+    // Pale, like the flagpole: a canopy against a dark hillside has to read
+    // whatever colours the planet picked.
+    let pale = ink(
+        Shade {
+            saturation: 0.1,
+            lightness: 0.92,
+            ..palette.accent
+        },
+        1.0,
+    );
+    let panel = ink(
+        Shade {
+            saturation: 0.55,
+            lightness: 0.72,
+            ..palette.accent
+        },
+        1.0,
+    );
+    let cord = ink(palette.ground_far, 1.0);
+    let mut builder = MeshBuilder::with_capacity(CHUTE_PANELS * 3 + 16);
+    // The rim runs left to right over the top of a half ellipse.
+    let rim = |step: usize| {
+        #[expect(clippy::cast_precision_loss, reason = "ten panels")]
+        let angle = core::f32::consts::PI * (step as f32 / CHUTE_PANELS as f32);
+        Vec2::new(-angle.cos() * CHUTE_WIDTH / 2.0, angle.sin() * CHUTE_RISE)
+    };
+    let hub = builder.vertex(Vec2::ZERO, pale);
+    for step in 0..CHUTE_PANELS {
+        let color = if step % 2 == 0 { pale } else { panel };
+        let left = builder.vertex(rim(step), color);
+        let right = builder.vertex(rim(step + 1), color);
+        builder.triangle(hub, right, left);
+    }
+    // Four lines down to the shoulders, solid at the canopy and fading into
+    // each other where they meet.
+    let shoulders = Vec2::new(0.0, -CHUTE_LIFT);
+    for step in [1, 3, CHUTE_PANELS - 3, CHUTE_PANELS - 1] {
+        blade(&mut builder, rim(step), shoulders, R * 0.08, cord);
+    }
+    builder.into_mesh()
+}
 
 /// The pack: far more stuff than any suit could have held, built from its
 /// base up so it can be scaled out of nothing.
@@ -548,6 +602,30 @@ mod tests {
                 "{kind:?} has no faces"
             );
         }
+    }
+
+    /// The canopy is wide enough to hold somebody up, and its lines reach
+    /// all the way down to their shoulders.
+    #[test]
+    fn the_canopy_is_wide_and_hangs_on_lines() {
+        let chute = chute_mesh(&Planet::generate(5).palette);
+        assert!(
+            chute.indices().is_some_and(|indices| indices.len() >= 3),
+            "the canopy has no faces"
+        );
+        assert!(
+            width(&chute) >= CHUTE_WIDTH * 0.98,
+            "the canopy is only {} wide",
+            width(&chute)
+        );
+        let low = points(&chute)
+            .iter()
+            .map(|point| point[1])
+            .fold(f32::MAX, f32::min);
+        assert!(
+            low <= -CHUTE_LIFT * 0.9,
+            "the lines stop at {low}, short of their shoulders"
+        );
     }
 
     /// The flag is the point of the whole cartoon, so it has to be read from
