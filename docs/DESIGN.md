@@ -363,7 +363,7 @@ function. Progress inside a beat is eased, never linear (§5).
 | 8.80 | Hold | They stand beside it. The flag waves, one last sparkle. |
 | 9.90 | — | The fade to the main menu. |
 
-The cloth carries a letter Q, drawn as a ring with a tail across it.
+The cloth carries a letter Q, set in the game's own font.
 
 ### The planet
 
@@ -1098,7 +1098,7 @@ more sky.
 - **Watching it without finishing the game.** F3 in a `--features dev` build opens the cartoon from any screen, the way F1 and F2 open the other debug tools. Fourteen levels is too long a wait to see one change to the art, and the alternative was editing the save file. Nothing in a shipped build is bound to it.
 - **What the first watch changed.** Two things that no test could have told me: the flag was too small and too dull to be the point of the scene, and the pack read as a plain box. The pole went from 2 r to 3.2 r and turned nearly white (a planet's own colours can leave a coloured pole darker than the ground it stands in: on seed 3 it was), the cloth grew to 1.4 r, took a notch in its far edge and a fold along its bottom, and the pole gained a ball on top. The pack grew to 4.6 by 4.2 r and gained a handle, two feet, an aerial, a seam and a latched hatch, with both lamps moved to one side because symmetrical ones read as eyes. They also swapped sides: the pack now lands to the astronaut's left and the flag goes in to their right, so neither stands in front of the other. That costs 65 units of landing search (400 to 335), and the planets that land on a slope went from 3 in a thousand to 5.
 - **The parachute.** Asked for after the first watch: the astronaut dropped too fast and arrived out of nowhere. The descent went from 2.2 s to 3.6 s (and the whole cartoon from 8.5 to 9.9, still inside the brief's five to ten), its easing from accelerating to nearly even, and a canopy now carries them: a half ellipse of ten alternating panels on four lines, with its own material because it is the one thing in the scene that fades. A kite was the other option and lost, because a kite needs wind the rest of the scene has not got, and its line has to go somewhere once they land.
-- **The letter on the cloth.** It was the game's own star, the one the level-complete screen shows. It is a Q now, asked for after the first watch, drawn in `art.rs` as a ring of 18 segments with a tapered tail rather than typed in a font: nothing else in the cartoon is written, and the game's own star picture is an image where everything here is a mesh. The cartoon no longer needs `StarArt` at all.
+- **The letter on the cloth.** It was the game's own star, the one the level-complete screen shows. It is a Q now, asked for after the first watch. Drawing one as a ring with a tail was the first attempt and looked like a drawing of a Q, so it is a `Text2d` in the font the rest of the game is written in: the one typed thing in the cartoon, and the one place a letterform beats geometry. The cartoon no longer needs `StarArt`.
 - **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no water ripple at the touchdown: the water is one static mesh, and rippling it means rebuilding geometry every frame, which Section 7.2 forbids. No golden-image check either: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag, the flag outshines the ground it stands in).
 
 ## Measurements (M8)

@@ -13,8 +13,8 @@ use crate::config::GameConfig;
 use crate::particles::Burst;
 use crate::settings::Settings;
 use art::{
-    CHUTE_LIFT, FLAG_TOP, Q_AT, chute_mesh, cloth_mesh, color, flag_mesh, ground_mesh,
-    letter_q_mesh, pack_mesh, prop_mesh, sky_mesh, water_mesh,
+    CHUTE_LIFT, FLAG_TOP, Q_AT, Q_SIZE, chute_mesh, cloth_mesh, color, flag_mesh, ground_mesh,
+    pack_mesh, prop_mesh, sky_mesh, water_mesh,
 };
 use planet::{Planet, PropKind, SURFACE_Y};
 
@@ -541,11 +541,12 @@ fn open_the_scene(
         ))
         .id();
     commands.entity(flag).add_child(cloth);
-    // A letter on the cloth, drawn like everything else here.
+    // A letter on the cloth, set in the game's own font.
     let mark = commands
         .spawn((
-            Mesh2d(meshes.add(letter_q_mesh(&palette))),
-            MeshMaterial2d(tint),
+            Text2d::new("Q"),
+            TextFont::from_font_size(Q_SIZE),
+            TextColor(color(palette.sky[0])),
             Transform::from_translation(Q_AT.extend(0.1)),
         ))
         .id();
@@ -1194,6 +1195,18 @@ mod tests {
                 "seed {seed}: the flag hangs off the screen at {right}"
             );
         }
+    }
+
+    /// The cloth says Q, in the game's own letters.
+    #[test]
+    fn the_flag_carries_a_q() {
+        let mut app = cartoon_app();
+        let said = app
+            .world_mut()
+            .query::<&Text2d>()
+            .iter(app.world())
+            .any(|text| text.0 == "Q");
+        assert!(said, "nothing on the cloth says Q");
     }
 
     #[test]
