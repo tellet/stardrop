@@ -54,7 +54,9 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The tag has to match `version` in `Cargo.toml`, and all three builds have to
-pass their own tests, or nothing is published. A release asset downloads
+pass their own tests, or nothing is published. The tests and the shipped
+build run as separate jobs: on Windows they are about 53 and 36 minutes, and
+together they overrun the 90 a job is given. A release asset downloads
 without a GitHub account and never expires, unlike the artifacts from a
 `check` run. `.github/workflows/release.yml` does it, and its release notes
 carry the per-OS first-run steps from

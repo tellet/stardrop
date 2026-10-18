@@ -25,9 +25,61 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
-  build:
+  # Seconds, and it goes first: a mistyped tag should not cost an hour of
+  # compiling. The tag and the version in Cargo.toml have to agree, or what
+  # someone downloads says one thing and the page they got it from says
+  # another.
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          crate="v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          if [ "$tag" != "$crate" ]; then
+            echo "tag is $tag but Cargo.toml says $crate"
+            exit 1
+          fi
+
+  # The tests and the shipped build are two jobs, not two steps of one. On
+  # Windows they took 53 and 36 minutes, and together with the setup around
+  # them that is past the 90 the job is allowed: the v0.1.1 release was
+  # killed at the line with both steps green. Apart they fit, they run at
+  # the same time, and each one finally reaches the cache's save step, which
+  # a cancelled job never does.
+  #
+  # Rare enough to be worth the minutes: nobody should be handed a build
+  # whose tests were never run on its own platform.
+  test:
+    needs: version
     strategy:
       # One platform failing shouldn't hide whether the others worked.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo test
+
+  build:
+    needs: version
+    strategy:
       fail-fast: false
       matrix:
         include:
@@ -56,19 +108,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      # The tag and the version in Cargo.toml have to agree, or what someone
-      # downloads says one thing and the page they got it from says another.
-      - if: runner.os == 'Linux'
-        run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          crate="v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
-          if [ "$tag" != "$crate" ]; then
-            echo "tag is $tag but Cargo.toml says $crate"
-            exit 1
-          fi
-      # Rare enough to be worth the minutes: nobody should be handed a build
-      # whose tests were never run on its own platform.
-      - run: cargo test
       - run: cargo build --profile dist
       - if: runner.os == 'Linux'
         run: tar -czf "${{ matrix.asset }}" -C target/dist stardrop
@@ -84,9 +123,10 @@ jobs:
           path: ${{ matrix.asset }}
           if-no-files-found: error
 
-  # Only runs if all three built, so a release is never half a release.
+  # Only runs if all three built and all three passed their tests, so a
+  # release is never half a release and never an untested one.
   publish:
-    needs: build
+    needs: [test, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
