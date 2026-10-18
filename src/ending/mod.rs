@@ -356,6 +356,23 @@ impl Plugin for EndingPlugin {
                     .chain()
                     .run_if(in_state(AppState::Ending)),
             );
+        #[cfg(feature = "dev")]
+        app.add_systems(
+            Update,
+            open_it_for_a_look.run_if(not(in_state(AppState::Ending))),
+        );
+    }
+}
+
+/// F3 (with `--features dev`): watch the cartoon from any screen, without
+/// finishing every level first.
+#[cfg(feature = "dev")]
+fn open_it_for_a_look(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    if keys.just_pressed(KeyCode::F3) {
+        next_state.set(AppState::Ending);
     }
 }
 
@@ -1019,6 +1036,26 @@ mod tests {
         app.update();
         assert_eq!(state(&app), AppState::MainMenu);
         assert_eq!(scene_size(&mut app), 0);
+    }
+
+    /// In dev builds F3 opens the cartoon from any screen, so it can be
+    /// watched without finishing every level first.
+    #[cfg(feature = "dev")]
+    #[test]
+    fn f3_opens_the_cartoon() {
+        let mut app = app_before_the_cartoon();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::F3);
+        app.update();
+        // The real game clears `just_pressed` every frame; this app has no
+        // input plugin to do it, and a key still down would skip the cartoon.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
+        app.update();
+        assert_eq!(state(&app), AppState::Ending);
+        assert!(scene_size(&mut app) > 0, "the planet is standing");
     }
 
     /// Bevy 0.19 renamed events to messages. If `Messages<T>` is not how they

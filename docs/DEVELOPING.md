@@ -22,7 +22,9 @@ cargo run --features dev
 ```
 
 Keeps the assets on disk instead of inside the executable, so editing a level
-file reloads it in the running game. F2 draws the collision shapes.
+file reloads it in the running game. F2 draws the collision shapes, and
+F3 plays the landing cartoon from any screen, with a fresh planet each
+press, so it can be watched without finishing every level.
 
 ## Making levels
 
