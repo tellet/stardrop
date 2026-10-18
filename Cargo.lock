@@ -4690,7 +4690,7 @@ dependencies = [
 
 [[package]]
 name = "stardrop"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "bevy",
  "bevy_embedded_assets",

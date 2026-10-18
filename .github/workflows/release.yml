@@ -44,12 +44,7 @@ jobs:
             exit 1
           fi
 
-  # The tests and the shipped build are two jobs, not two steps of one. On
-  # Windows they took 53 and 36 minutes, and together with the setup around
-  # them that is past the 90 the job is allowed: the v0.1.1 release was
-  # killed at the line with both steps green. Apart they fit, they run at
-  # the same time, and each one finally reaches the cache's save step, which
-  # a cancelled job never does.
+  # The tests and the shipped build are two jobs, not two steps of one.
   #
   # Rare enough to be worth the minutes: nobody should be handed a build
   # whose tests were never run on its own platform.
