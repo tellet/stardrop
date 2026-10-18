@@ -287,68 +287,178 @@ pub(super) fn prop_mesh(prop: &Prop, palette: &Palette) -> Mesh {
     builder.into_mesh()
 }
 
-/// The pack: far more equipment than any suit could have held, built from its
+/// The pack's body, before the parts that stick out of it.
+pub(super) const PACK_BODY: Vec2 = Vec2::new(R * 4.6, R * 4.2);
+/// How far the pack reaches either side of where it stands, every part of it
+/// counted. Whatever places it leaves this much room.
+pub(super) const PACK_REACH: f32 = R * 3.0;
+/// How far the cloth reaches from the pole.
+pub(super) const CLOTH_WIDTH: f32 = R * 1.4;
+/// How far the cloth hangs below it.
+const CLOTH_DROP: f32 = R * 1.05;
+
+/// The pack: far more stuff than any suit could have held, built from its
 /// base up so it can be scaled out of nothing.
+///
+/// A box reads as a box, so the silhouette carries the handle, the feet and
+/// the aerial, and the face is broken up by a seam, a band and a hatch.
 pub(super) fn pack_mesh(palette: &Palette) -> Mesh {
     let body = ink(palette.ground, 1.0);
     let trim = ink(palette.prop, 1.0);
+    let dark = ink(palette.ground_far, 1.0);
     let lamp = ink(palette.accent, 1.0);
-    let size = Vec2::new(R * 4.5, R * 3.5);
-    let mut builder = MeshBuilder::with_capacity(48);
+    let size = PACK_BODY;
+    let mut builder = MeshBuilder::with_capacity(96);
+    // The feet first, so the body sits over them.
+    for side in [-1.0, 1.0] {
+        slab(
+            &mut builder,
+            Vec2::new(side * (PACK_REACH - R * 0.5), R * 0.25),
+            Vec2::new(R, R * 0.5),
+            dark,
+        );
+    }
     slab(&mut builder, Vec2::new(0.0, size.y / 2.0), size, body);
-    // A band across it, and the hatch the flag comes out of.
+    // A seam down it, and a band across it.
+    slab(
+        &mut builder,
+        Vec2::new(0.0, size.y * 0.52),
+        Vec2::new(R * 0.14, size.y * 0.86),
+        dark,
+    );
     slab(
         &mut builder,
         Vec2::new(0.0, size.y * 0.62),
         Vec2::new(size.x, R * 0.5),
         trim,
     );
+    // The hatch the flag comes out of, and the latch holding it shut.
+    soft_disc(
+        &mut builder,
+        Vec2::new(0.0, size.y * 0.87),
+        Vec2::splat(R * 0.6),
+        trim,
+        SEGMENTS,
+    );
     slab(
         &mut builder,
-        Vec2::new(0.0, size.y * 0.93),
-        Vec2::new(size.x * 0.42, R * 0.3),
-        trim,
+        Vec2::new(0.0, size.y * 0.87),
+        Vec2::new(R * 0.9, R * 0.14),
+        dark,
     );
-    for side in [-1.0, 1.0] {
+    // Both lamps together on one side: apart, they read as a pair of eyes.
+    for step in [0.0, 1.0] {
         soft_disc(
             &mut builder,
-            Vec2::new(side * size.x * 0.32, size.y * 0.3),
-            Vec2::splat(R * 0.42),
+            Vec2::new(-size.x * 0.3 + step * R * 0.75, size.y * 0.28),
+            Vec2::splat(R * 0.3),
             lamp,
             12,
         );
     }
+    // A handle over the top...
+    for side in [-1.0, 1.0] {
+        slab(
+            &mut builder,
+            Vec2::new(side * R, size.y + R * 0.3),
+            Vec2::new(R * 0.18, R * 0.6),
+            dark,
+        );
+    }
+    slab(
+        &mut builder,
+        Vec2::new(0.0, size.y + R * 0.55),
+        Vec2::new(R * 2.2, R * 0.25),
+        dark,
+    );
+    // ...and an aerial with a light on the end of it.
+    slab(
+        &mut builder,
+        Vec2::new(size.x * 0.37, size.y + R * 0.85),
+        Vec2::new(R * 0.1, R * 1.7),
+        dark,
+    );
+    soft_disc(
+        &mut builder,
+        Vec2::new(size.x * 0.37, size.y + R * 1.7),
+        Vec2::splat(R * 0.22),
+        lamp,
+        10,
+    );
     builder.into_mesh()
 }
 
 /// The flag: a pole and nothing else. The cloth is its own entity, because it
 /// waves.
 pub(super) fn flag_mesh(palette: &Palette) -> Mesh {
-    let mut builder = MeshBuilder::with_capacity(8);
+    // Nearly white, whatever colours the planet picked: the pole has to read
+    // against a dark hillside as well as against the sky.
+    let pole = ink(
+        Shade {
+            saturation: 0.12,
+            lightness: 0.9,
+            ..palette.accent
+        },
+        1.0,
+    );
+    let mut builder = MeshBuilder::with_capacity(20);
     slab(
         &mut builder,
-        Vec2::new(0.0, R),
-        Vec2::new(R * 0.12, R * 2.0),
-        ink(palette.prop, 1.0),
+        Vec2::new(0.0, FLAG_TOP / 2.0),
+        Vec2::new(R * 0.16, FLAG_TOP),
+        pole,
+    );
+    // A ball on top, which is what makes a pole look finished.
+    soft_disc(
+        &mut builder,
+        Vec2::new(0.0, FLAG_TOP),
+        Vec2::splat(R * 0.26),
+        pole,
+        12,
     );
     builder.into_mesh()
 }
 
 /// The cloth, built hanging from the top of the pole at the origin so it can
-/// be swung from there.
+/// be swung from there. Its far edge is notched, so even this small the
+/// shape says flag.
 pub(super) fn cloth_mesh(palette: &Palette) -> Mesh {
-    let mut builder = MeshBuilder::with_capacity(8);
+    let bright = ink(
+        Shade {
+            saturation: 0.85,
+            lightness: 0.86,
+            ..palette.accent
+        },
+        1.0,
+    );
+    let fold = ink(
+        Shade {
+            lightness: 0.5,
+            ..palette.accent
+        },
+        1.0,
+    );
+    let mut builder = MeshBuilder::with_capacity(12);
+    let near_top = builder.vertex(Vec2::ZERO, bright);
+    let near_bottom = builder.vertex(Vec2::new(0.0, -CLOTH_DROP), bright);
+    let far_top = builder.vertex(Vec2::new(CLOTH_WIDTH, 0.0), bright);
+    let far_bottom = builder.vertex(Vec2::new(CLOTH_WIDTH, -CLOTH_DROP), fold);
+    let notch = builder.vertex(Vec2::new(CLOTH_WIDTH * 0.72, -CLOTH_DROP * 0.5), bright);
+    builder.triangle(near_top, near_bottom, notch);
+    builder.triangle(near_top, notch, far_top);
+    builder.triangle(near_bottom, far_bottom, notch);
+    // A darker band along the bottom, so the cloth has a fold in it.
     slab(
         &mut builder,
-        Vec2::new(R * 0.5, -R * 0.3),
-        Vec2::new(R, R * 0.6),
-        ink(palette.accent, 1.0),
+        Vec2::new(CLOTH_WIDTH / 2.0, -CLOTH_DROP + R * 0.1),
+        Vec2::new(CLOTH_WIDTH, R * 0.2),
+        fold,
     );
     builder.into_mesh()
 }
 
 /// Where the top of the pole is, so the cloth and the star can hang there.
-pub(super) const FLAG_TOP: f32 = R * 2.0;
+pub(super) const FLAG_TOP: f32 = R * 3.2;
 
 #[cfg(test)]
 mod tests {
@@ -373,6 +483,25 @@ mod tests {
         let low = points.iter().map(|point| point[0]).fold(f32::MAX, f32::min);
         let high = points.iter().map(|point| point[0]).fold(f32::MIN, f32::max);
         high - low
+    }
+
+    fn colors(mesh: &Mesh) -> Vec<[f32; 4]> {
+        let Some(VertexAttributeValues::Float32x4(colors)) = mesh.attribute(Mesh::ATTRIBUTE_COLOR)
+        else {
+            panic!("the mesh has no colours");
+        };
+        colors.clone()
+    }
+
+    /// The brightest solid colour in a mesh, as the light it sends out. Rim
+    /// vertices fade to nothing, so they are weighted by their own alpha.
+    fn brightest(mesh: &Mesh) -> f32 {
+        colors(mesh)
+            .iter()
+            .map(|[red, green, blue, alpha]| {
+                (0.2126 * red + 0.7152 * green + 0.0722 * blue) * alpha
+            })
+            .fold(0.0, f32::max)
     }
 
     fn height(mesh: &Mesh) -> f32 {
@@ -421,18 +550,102 @@ mod tests {
         }
     }
 
+    /// The flag is the point of the whole cartoon, so it has to be read from
+    /// across the room: taller than the astronaut, with a cloth on it.
+    #[test]
+    fn the_flag_is_tall_enough_to_see() {
+        let palette = Planet::generate(5).palette;
+        let flag = flag_mesh(&palette);
+        let cloth = cloth_mesh(&palette);
+        assert!(
+            height(&flag) > ASTRONAUT_RADIUS * 3.0,
+            "the pole is only {} tall",
+            height(&flag)
+        );
+        assert!(
+            width(&cloth) >= CLOTH_WIDTH,
+            "the cloth is only {} wide",
+            width(&cloth)
+        );
+    }
+
+    /// Whatever planet it lands on, the flag is brighter than the ground it
+    /// is planted in. A planet picks its own colours, so this is checked
+    /// across many of them.
+    #[test]
+    fn the_flag_stands_out_against_the_ground_it_is_planted_in() {
+        for seed in 0..500 {
+            let planet = Planet::generate(seed);
+            let ground = brightest(&ground_mesh(&planet));
+            let cloth = brightest(&cloth_mesh(&planet.palette));
+            let pole = brightest(&flag_mesh(&planet.palette));
+            assert!(
+                cloth > ground * 2.0,
+                "seed {seed}: cloth {cloth} against ground {ground}"
+            );
+            assert!(
+                pole > ground * 2.0,
+                "seed {seed}: pole {pole} against ground {ground}"
+            );
+        }
+    }
+
+    /// A rectangle reads as a rectangle. The cloth is cut away on its far
+    /// edge, which is what makes the shape a flag.
+    #[test]
+    fn the_cloth_is_cut_like_a_flag() {
+        let cloth = cloth_mesh(&Planet::generate(5).palette);
+        let points = points(&cloth);
+        let far = points.iter().map(|point| point[0]).fold(f32::MIN, f32::max);
+        let top = points.iter().map(|point| point[1]).fold(f32::MIN, f32::max);
+        let bottom = points.iter().map(|point| point[1]).fold(f32::MAX, f32::min);
+        let inside = points.iter().any(|point| {
+            point[0] > far * 0.5
+                && point[0] < far * 0.95
+                && point[1] > bottom + (top - bottom) * 0.15
+                && point[1] < top - (top - bottom) * 0.15
+        });
+        assert!(inside, "the far edge is a straight line");
+    }
+
+    /// The pack is a bag of stuff, not a box: there are parts above it and
+    /// parts standing out either side of it.
+    #[test]
+    fn the_pack_is_not_a_plain_box() {
+        let pack = pack_mesh(&Planet::generate(5).palette);
+        assert!(
+            height(&pack) > PACK_BODY.y,
+            "nothing stands above the body: {} against {}",
+            height(&pack),
+            PACK_BODY.y
+        );
+        assert!(
+            width(&pack) > PACK_BODY.x,
+            "nothing stands out either side: {} against {}",
+            width(&pack),
+            PACK_BODY.x
+        );
+        assert!(
+            width(&pack) <= PACK_REACH * 2.0,
+            "it reaches further than anything placing it expects"
+        );
+    }
+
     #[test]
     fn the_pack_towers_over_the_astronaut_and_the_flag_does_not() {
         let palette = Planet::generate(5).palette;
         let pack = pack_mesh(&palette);
         let flag = flag_mesh(&palette);
+        let cloth = cloth_mesh(&palette);
+        // The flag is the pole and what hangs off it, measured together.
+        let flag_width = width(&flag) + width(&cloth);
         assert!(
             height(&pack) >= ASTRONAUT_RADIUS * 3.0,
             "the pack is only {} tall",
             height(&pack)
         );
         // The joke is the bulk: the pack stands half again as tall as the
-        // flag and more than four times as wide.
+        // flag and three times as wide.
         assert!(
             height(&pack) > height(&flag) * 1.5,
             "{} against {}",
@@ -440,10 +653,9 @@ mod tests {
             height(&flag)
         );
         assert!(
-            width(&pack) > width(&flag) * 4.0,
-            "{} against {}",
-            width(&pack),
-            width(&flag)
+            width(&pack) > flag_width * 3.0,
+            "{} against {flag_width}",
+            width(&pack)
         );
     }
 

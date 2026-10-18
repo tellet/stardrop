@@ -252,6 +252,11 @@ const SKY_DEPTH: f32 = -510.0;
 const GROUND_DEPTH: f32 = -300.0;
 const WATER_DEPTH: f32 = -290.0;
 const PROP_DEPTH: f32 = -200.0;
+/// How far from the astronaut the pack lands, and how far the other way the
+/// flag goes in, both in astronaut radii: they stand on opposite sides, so
+/// neither hides the other.
+const PACK_RADII: f32 = -4.2;
+const PLANT_RADII: f32 = 1.6;
 const PACK_DEPTH: f32 = 8.0;
 const FLAG_DEPTH: f32 = 9.0;
 
@@ -461,9 +466,9 @@ fn open_the_scene(
     let radius = config.astronaut_radius;
     // The pack and the pole stand on the ground beneath each of them, which
     // on a rocky planet is nowhere near the height under the astronaut.
-    let pack = Vec2::new(landing_x + radius * 2.6, 0.0);
+    let pack = Vec2::new(landing_x + radius * PACK_RADII, 0.0);
     let pack = Vec2::new(pack.x, planet.height_at(pack.x));
-    let plant = Vec2::new(landing_x + radius * 1.4, 0.0);
+    let plant = Vec2::new(landing_x + radius * PLANT_RADII, 0.0);
     let plant = Vec2::new(plant.x, planet.height_at(plant.x));
     commands.spawn((
         EndingEntity,
@@ -499,11 +504,11 @@ fn open_the_scene(
             .spawn((
                 Sprite {
                     image: star.0.clone(),
-                    custom_size: Some(Vec2::splat(radius * 0.5)),
+                    custom_size: Some(Vec2::splat(radius * 0.55)),
                     color: color(palette.sky[0]),
                     ..default()
                 },
-                Transform::from_xyz(radius * 0.5, -radius * 0.3, 0.1),
+                Transform::from_xyz(radius * 0.55, -radius * 0.45, 0.1),
             ))
             .id();
         commands.entity(cloth).add_child(mark);
@@ -783,7 +788,9 @@ mod tests {
 
     use super::*;
     use crate::app_state::AppState;
-    use crate::level::ActiveLevel;
+    use crate::config::ASTRONAUT_RADIUS;
+    use crate::ending::art::{CLOTH_WIDTH, PACK_REACH};
+    use crate::level::{ActiveLevel, LEVEL_WIDTH};
     use crate::particles::ParticlesPlugin;
 
     /// A frame of the cartoon, in the test's own time.
@@ -1015,6 +1022,37 @@ mod tests {
         assert!(app.world().get_resource::<Showing>().is_none());
     }
 
+    /// The pack stands clear of the astronaut, the flag stands clear of the
+    /// pack, and wherever a planet puts the landing spot, the whole tableau
+    /// is still on a portrait screen.
+    #[test]
+    fn the_pack_and_the_flag_stand_clear_of_everything() {
+        let radius = ASTRONAUT_RADIUS;
+        let pack_near = PACK_RADII * radius + PACK_REACH;
+        assert!(
+            pack_near < -radius,
+            "the pack stands over the astronaut, up to {pack_near}"
+        );
+        let flag_near = PLANT_RADII * radius;
+        assert!(
+            flag_near > radius,
+            "the flag goes in at the astronaut's feet, at {flag_near}"
+        );
+        for seed in 0..2_000 {
+            let landing = Planet::generate(seed).landing_x;
+            let left = landing + PACK_RADII * radius - PACK_REACH;
+            let right = landing + PLANT_RADII * radius + CLOTH_WIDTH;
+            assert!(
+                left >= -LEVEL_WIDTH / 2.0,
+                "seed {seed}: the pack hangs off the screen at {left}"
+            );
+            assert!(
+                right <= LEVEL_WIDTH / 2.0,
+                "seed {seed}: the flag hangs off the screen at {right}"
+            );
+        }
+    }
+
     #[test]
     fn it_ends_at_the_main_menu_on_its_own() {
         let mut app = cartoon_app();
@@ -1160,7 +1198,7 @@ mod tests {
             )
         };
         assert!(
-            (feet - ground - crate::config::ASTRONAUT_RADIUS).abs() < 0.5,
+            (feet - ground - ASTRONAUT_RADIUS).abs() < 0.5,
             "feet at {feet} over ground at {ground}"
         );
         for _ in 0..frames(TOUCHDOWN) + 2 {

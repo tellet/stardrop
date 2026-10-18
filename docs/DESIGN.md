@@ -356,9 +356,9 @@ function. Progress inside a beat is eased, never linear (§5).
 | 0.00 | Descent | The astronaut drifts down from above the frame, leaning with `Tumble`, shedding a spark every 0.12 s. Props sway, steam vents breathe. |
 | 2.20 | Touchdown | Dust bursts in the ground's own colour, the suit squashes and recovers, whatever grows near the landing bends away from it, vents puff hard. |
 | 2.20–3.60 | Settle | The dust dies out. The astronaut straightens up and bobs once. |
-| 3.60 | The pack | It slides off their back and eases up to 3.5 r tall and 4.5 r wide, far larger than the astronaut. It thumps down with a ground puff. The size is the joke. |
-| 5.00 | The flag rises | A hatch opens and a flag lifts out: a 2 r pole with a 1 r cloth, comically small against the pack. |
-| 6.40 | Planting | They lean in and push the pole into the ground. A small puff, and the cloth unfurls and starts waving. |
+| 3.60 | The pack | It slides off their back, 4.2 r to their left, and eases up to a 4.6 by 4.2 r body with a handle, two feet and an aerial on it: 6 r wide and 6.1 r tall all told, far larger than the astronaut. It thumps down with a ground puff. The size is the joke, and the parts are what make it read as a bag of stuff rather than a box. |
+| 5.00 | The flag rises | A hatch opens and a flag lifts out: a 3.2 r pole, nearly white whatever the planet's colours are, with a 1.4 r cloth notched at the fly, bright against anything. Comically small against the pack, which still stands half again as tall and three times as wide. |
+| 6.40 | Planting | They carry it across and push the pole into the ground 1.6 r to their right, where nothing stands behind it. A small puff, and the cloth unfurls and starts waving. |
 | 7.40 | Hold | They stand beside it. The flag waves, one last sparkle. |
 | 8.50 | — | The fade to the main menu. |
 
@@ -411,10 +411,12 @@ PropKind   = Mushroom | GrapeCluster | Flower | Boulder | SteamVent | Reed
 
 - **The landing spot:** the sample nearest the middle of the screen whose
   slope is under 0.15, with no prop within 3 r of it. Looked for within 324
-  units of the middle first, then within 400, and if a planet of jagged rock
+  units of the middle first, then within 335, and if a planet of jagged rock
   offers nothing that gentle anywhere in reach, the flattest sample there is.
-  Three planets in a thousand land on something steeper than 0.15 (worst
-  measured 0.31 over 20,000 seeds), which beats landing off screen.
+  The wider reach is what it is because the pack and the flag have to fit on
+  screen beside the astronaut. Five planets in a thousand land on something
+  steeper than 0.15 (91 of 20,000 seeds, worst 0.33), which beats landing
+  off screen.
 - **Palette:** three hues from the seed under constraints: the ground is at
   least 0.2 darker than the sky, saturation never above 0.7, and props sit at
   the complementary hue ±30°, so no planet is ugly and no two look alike.
@@ -1093,7 +1095,8 @@ more sky.
 - **What it cost.** The `dist` binary goes from 47.91 MB to 48.08 MB (+167 KB). The scene is 16 to 30 entities, all geometry built once on entering the state and despawned on leaving it, with the dust, steam and sparkles coming from the existing spark pool, so nothing here can grow the world. Frame cost is unmeasured: the busiest-level budget test (0.112 ms of 1 ms) does not cover this screen.
 - **What a fresh review caught**, after every test passed: entering the cartoon did not free the level, so the beacon, every object and the astronaut who had just landed drew straight over the planet. The level is now freed on entering `Ending` (`free_the_level_on`, `src/level/mod.rs`), which also hides the old astronaut, restores the menu theme and brings back the menu pad. Four smaller things went with it: the pack and the pole took their height from the ground under the astronaut rather than the ground under themselves (up to 266 units out, a pack and a half in the air), the 0.15 slope rule was not actually implemented, the rewatch row was missing from the first main menu after launch because the level list is an asset that arrives later, and the astronaut stood still from the landing to the end.
 - **Watching it without finishing the game.** F3 in a `--features dev` build opens the cartoon from any screen, the way F1 and F2 open the other debug tools. Fourteen levels is too long a wait to see one change to the art, and the alternative was editing the save file. Nothing in a shipped build is bound to it.
-- **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no water ripple at the touchdown: the water is one static mesh, and rippling it means rebuilding geometry every frame, which Section 7.2 forbids. No golden-image check either: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag), and **nobody has watched it on a screen yet**.
+- **What the first watch changed.** Two things that no test could have told me: the flag was too small and too dull to be the point of the scene, and the pack read as a plain box. The pole went from 2 r to 3.2 r and turned nearly white (a planet's own colours can leave a coloured pole darker than the ground it stands in: on seed 3 it was), the cloth grew to 1.4 r, took a notch in its far edge and a fold along its bottom, and the pole gained a ball on top. The pack grew to 4.6 by 4.2 r and gained a handle, two feet, an aerial, a seam and a latched hatch, with both lamps moved to one side because symmetrical ones read as eyes. They also swapped sides: the pack now lands to the astronaut's left and the flag goes in to their right, so neither stands in front of the other. That costs 65 units of landing search (400 to 335), and the planets that land on a slope went from 3 in a thousand to 5.
+- **Left out.** No camera move (the playfield is fixed, Section 5), no new synth voices, no universal seed saved per player, and no water ripple at the touchdown: the water is one static mesh, and rippling it means rebuilding geometry every frame, which Section 7.2 forbids. No golden-image check either: the art is pinned by mesh tests (the ground reaches past both window edges, every prop has faces, the pack towers over the flag, the flag outshines the ground it stands in).
 
 ## Measurements (M8)
 

@@ -43,9 +43,10 @@ const MAX_WATER: f32 = 0.4;
 /// The landing spot is looked for this far either side of the middle.
 const LANDING_REACH: f32 = LEVEL_WIDTH * 0.3;
 /// And this far, if nothing gentle enough is any nearer. The pack stands
-/// 2.6 radii to the right of the astronaut and is 4.5 wide, so this is as far
-/// out as the whole scene still fits on a portrait screen.
-const WIDER_REACH: f32 = 400.0;
+/// 4.2 radii to the astronaut's left and reaches 3 radii either side of
+/// itself, so this is as far out as the whole scene still fits on a portrait
+/// screen (`the_pack_and_the_flag_stand_clear_of_everything`).
+const WIDER_REACH: f32 = 335.0;
 /// Prop sizes are written in astronaut radii, so they read as "twice as tall
 /// as the person" rather than as numbers.
 const R: f32 = ASTRONAUT_RADIUS;
