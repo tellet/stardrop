@@ -93,6 +93,8 @@ const EVERY_LAYER: bool = !cfg!(target_arch = "wasm32");
 #[derive(Resource, Default)]
 struct MusicBed {
     key: Option<Key>,
+    /// Which altitude's music is loaded, so it is only ever made once.
+    built: Option<Theme>,
     /// Kept so the sounds stay loaded while they play.
     sources: Vec<Handle<AudioSource>>,
     pad: Option<Handle<AudioInstance>>,
@@ -163,7 +165,11 @@ impl Plugin for GameAudioPlugin {
             .add_systems(
                 Update,
                 (
-                    start_building_the_bed.run_if(resource_changed::<CurrentTheme>),
+                    // Settings as well as the altitude: a player who turns the
+                    // sound on wants the music that was skipped while it was off.
+                    start_building_the_bed.run_if(
+                        resource_changed::<CurrentTheme>.or_else(resource_changed::<Settings>),
+                    ),
                     finish_building_the_bed.run_if(resource_exists::<BuildingBed>),
                     follow_the_fall,
                     mix.after(follow_the_fall),
@@ -256,15 +262,32 @@ fn instrument(kind: ObjectKind) -> synth::Sound {
 
 // --- The bed ---------------------------------------------------------------
 
-/// Starts building the music for a new altitude. It runs off the main thread:
-/// the loops take tens of milliseconds to work out, which would be a visible
-/// stutter at the start of a level.
+/// Whether the music for `theme` has to be made: not if it is already playing
+/// or on its way, and not while the sound is off, because silence costs
+/// nothing to synthesise. Raising the volume later asks again.
+#[must_use]
+fn bed_wanted(volume: u8, built: Option<Theme>, building: Option<Theme>, theme: Theme) -> bool {
+    volume > 0 && built != Some(theme) && building != Some(theme)
+}
+
+/// Starts building the music for a new altitude. On a desktop it runs off the
+/// main thread, because the loops take over a hundred milliseconds to work
+/// out, which would be a visible stutter at the start of a level. A browser
+/// has no threads to run it on, so it stutters there and the only real saving
+/// is not building music nobody is going to hear.
 fn start_building_the_bed(
     mut commands: Commands,
     theme: Res<CurrentTheme>,
+    settings: Res<Settings>,
+    bed: Res<MusicBed>,
     building: Option<Res<BuildingBed>>,
 ) {
-    if building.is_some_and(|building| building.theme == **theme) {
+    if !bed_wanted(
+        settings.master_volume,
+        bed.built,
+        building.map(|building| building.theme),
+        **theme,
+    ) {
         return;
     }
     let theme = **theme;
@@ -331,6 +354,7 @@ fn finish_building_the_bed(
             .handle(),
     );
     bed.sources = vec![pad, air];
+    bed.built = Some(building.theme);
     // The layers a browser does without: never built, so never mixed.
     let muffled = built
         .muffled
@@ -638,6 +662,44 @@ fn pop_when_a_bubble_lets_go(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn silence_is_never_synthesised() {
+        let theme = Theme::ALL[0];
+        assert!(
+            !bed_wanted(0, None, None, theme),
+            "a muted phone should not spend half a second making music"
+        );
+        assert!(
+            bed_wanted(100, None, None, theme),
+            "audible and nothing yet"
+        );
+    }
+
+    #[test]
+    fn a_bed_is_made_once() {
+        let [first, second] = [Theme::ALL[0], Theme::ALL[1]];
+        assert!(
+            !bed_wanted(100, Some(first), None, first),
+            "already playing"
+        );
+        assert!(
+            !bed_wanted(100, None, Some(first), first),
+            "already on its way"
+        );
+        assert!(
+            bed_wanted(100, Some(first), None, second),
+            "another altitude"
+        );
+    }
+
+    #[test]
+    fn turning_the_sound_on_makes_the_bed_it_skipped() {
+        let theme = Theme::ALL[0];
+        // What a player who raises the volume mid-level has: nothing built,
+        // because the build was skipped while they were muted.
+        assert!(bed_wanted(50, None, None, theme));
+    }
 
     /// Every beat that should make a sound has a voice the mixer has built,
     /// and the quiet ones have none.
