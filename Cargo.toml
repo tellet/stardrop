@@ -90,7 +90,7 @@ dirs = "=7.0.0"
 
 # A browser has one thread, a canvas and no filesystem. Gamepads would need a
 # backend `gilrs` does not have on the web, so the browser build is keyboard
-# and mouse.
+# only, which is every input the game reads anyway.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "=0.19.1", default-features = false, features = [
     "web",                   # Web platform glue: timers, the canvas, the event loop.

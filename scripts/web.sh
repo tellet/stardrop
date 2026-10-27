@@ -8,9 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # A wasm module keeps the file path of every panic site as plain data, which
-# `strip` does not touch, so an unremapped build publishes the paths of the
-# machine that built it. Rewrite them to names that say nothing about it.
-export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME/.cargo/registry/src=/crates --remap-path-prefix=$HOME/.rustup/toolchains=/rust --remap-path-prefix=$HOME=/home/builder"
+# `strip` does not touch, so an unremapped build publishes the home directory
+# of whoever built it. One prefix covers the lot: rustc applies the last
+# matching remap, and everything quoted sits under $HOME.
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/home/builder"
 
 echo "==> building for the browser (release)"
 cargo build --release --target wasm32-unknown-unknown
