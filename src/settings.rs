@@ -152,11 +152,48 @@ fn load_settings(folder: Res<SaveFolder>, mut settings: ResMut<Settings>) {
                     ..loaded
                 };
             }
-            Err(error) => warn!("settings unreadable ({error}); using the defaults"),
+            Err(error) => {
+                warn!("settings unreadable ({error}); using the defaults");
+                quiet_on_a_touch_screen(&mut settings);
+            }
         },
-        Ok(None) => {}
-        Err(error) => warn!("settings unreadable ({error}); using the defaults"),
+        Ok(None) => quiet_on_a_touch_screen(&mut settings),
+        Err(error) => {
+            warn!("settings unreadable ({error}); using the defaults");
+            quiet_on_a_touch_screen(&mut settings);
+        }
     }
+}
+
+/// A browser cannot give the mixer a thread of its own unless the page is
+/// served with the two cross-origin isolation headers, and GitHub Pages sends
+/// neither. So a phone fills its audio buffers between frames and the sound
+/// crackles, however little work the mixer is given. It starts silent there
+/// instead, and the settings screen turns it on for anyone who would rather
+/// have crackly music than none. Their choice is remembered like any other.
+///
+/// Only ever a first-visit default: a stored setting is never overruled.
+fn quiet_on_a_touch_screen(settings: &mut Settings) {
+    if !a_touch_screen() {
+        return;
+    }
+    settings.master_volume = 0;
+}
+
+/// Whether the main way of pointing at this screen is a finger. A laptop with
+/// a touch screen and a mouse answers no, which is what we want: it is only
+/// the devices with no other way in that sound bad.
+#[cfg(target_arch = "wasm32")]
+fn a_touch_screen() -> bool {
+    web_sys::window()
+        .and_then(|window| window.match_media("(pointer: coarse)").ok().flatten())
+        .is_some_and(|query| query.matches())
+}
+
+/// A desktop's sound is fine, so nothing is turned down.
+#[cfg(not(target_arch = "wasm32"))]
+const fn a_touch_screen() -> bool {
+    false
 }
 
 fn store_settings(folder: Res<SaveFolder>, settings: Res<Settings>) {

@@ -97,7 +97,11 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     "webgl2",                # WebGL 2 rather than WebGPU, which Safari only just got.
 ] }
 # The browser's own storage, where the save file goes instead of a folder.
-web-sys = { version = "=0.3.105", features = ["Window", "Storage"] }
+web-sys = { version = "=0.3.105", features = [
+    "Window",
+    "Storage",          # Where the save file goes.
+    "MediaQueryList",   # Asks whether this is a touch screen (see settings.rs).
+] }
 
 [dev-dependencies]
 # Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.

@@ -10,6 +10,11 @@
 | J | the field journal, from a menu or a paused level |
 | F1 | frame times |
 
+On a phone or tablet the game starts **silent**, because a browser cannot
+give the mixer a thread of its own on a page served this way and the sound
+crackles. Master volume in Settings turns it on, and the choice is
+remembered.
+
 On a touch screen, tap a menu row to choose it, **||** in a level's top right
 corner opens the pause menu, where starting over and leaving live, and
 **Back** in the top left corner does what Esc does. Both appear only once you
