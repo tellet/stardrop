@@ -24,6 +24,11 @@ const SCREEN_FADE_SECONDS: f32 = 0.28;
 /// The colour screens fade in from: the night sky, never black.
 const SCREEN_FADE_COLOR: Color = Color::srgb(0.02, 0.015, 0.06);
 
+/// The window the UI's pixel sizes were drawn for: the size the game opens at
+/// on the desktop (`INITIAL_WINDOW_SIZE` in lib.rs). A browser tab is usually
+/// smaller, so the UI is scaled to fit it.
+const UI_REFERENCE: Vec2 = Vec2::new(675.0, 1200.0);
+
 /// The text node that shows level problems.
 #[derive(Component)]
 struct ProblemText;
@@ -65,7 +70,23 @@ impl Plugin for UiPlugin {
                 OnEnter(LevelPhase::Ready),
                 (spawn_drop_hint, spawn_level_name),
             )
-            .add_systems(Update, fade_in_level_name);
+            .add_systems(Update, (fade_in_level_name, fit_ui_to_window));
+    }
+}
+
+/// How much to shrink the UI so it still fits a window smaller than the one it
+/// was drawn for. Never grows it: a bigger window gets the UI at its drawn
+/// size, with the camera showing more of the world around the playfield.
+#[must_use]
+fn ui_fit(window: Vec2) -> f32 {
+    (window / UI_REFERENCE).min_element().clamp(0.1, 1.0)
+}
+
+/// Keeps the UI inside whatever window the player (or the page) gives us.
+fn fit_ui_to_window(window: Single<&Window>, mut scale: ResMut<UiScale>) {
+    let fit = ui_fit(window.size());
+    if (scale.0 - fit).abs() > f32::EPSILON {
+        scale.0 = fit;
     }
 }
 
@@ -288,4 +309,28 @@ fn star_image() -> Image {
 
 fn prepare_star_art(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(StarArt(images.add(star_image())));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_ui_keeps_its_drawn_size_on_a_big_enough_window() {
+        assert!((ui_fit(UI_REFERENCE) - 1.0).abs() < 1e-6);
+        assert!((ui_fit(UI_REFERENCE * 2.0) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_ui_shrinks_with_a_small_window() {
+        // A browser panel 400x711: both sides are 59% of the drawn size.
+        assert!((ui_fit(Vec2::new(400.0, 711.0)) - 0.5925).abs() < 0.001);
+    }
+
+    #[test]
+    fn the_narrower_side_decides() {
+        // Tall and narrow: the width is what the menu rows would overflow.
+        assert!((ui_fit(Vec2::new(337.5, 1200.0)) - 0.5).abs() < 1e-6);
+        assert!((ui_fit(Vec2::new(675.0, 600.0)) - 0.5).abs() < 1e-6);
+    }
 }

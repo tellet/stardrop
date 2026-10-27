@@ -25,7 +25,6 @@ trace = ["bevy/trace_tracy"]
 bevy = { version = "=0.19.1", default-features = false, features = [
     # --- App core ---
     "std",                   # Use the standard library (we are a desktop game).
-    "multi_threaded",        # Run systems in parallel across CPU cores.
     "async_executor",        # Task pools used by asset loading and the scheduler.
     "bevy_asset",            # Loading assets (meshes, fonts, later levels and sounds).
     "bevy_log",              # `info!`/`warn!` logging instead of `println!`.
@@ -34,14 +33,9 @@ bevy = { version = "=0.19.1", default-features = false, features = [
     # --- Window & input ---
     "bevy_window",           # Window abstraction.
     "bevy_winit",            # Actual OS window + event loop.
-    "x11",                   # Linux X11 support...
-    "wayland",               # ...and native Wayland. Both on: one binary picks whichever
-                             # the desktop runs. Building needs libwayland-dev and
-                             # libxkbcommon-dev (docs/DESIGN.md M0-2).
     "keyboard",              # Keyboard input.
     "mouse",                 # Mouse input (menus).
     "gamepad",               # Gamepad input types.
-    "bevy_gilrs",            # Gamepad backend (gilrs); needs libudev on Linux.
     # --- 2D rendering ---
     "bevy_render",           # The renderer.
     "bevy_core_pipeline",    # Core 2D render pass.
@@ -69,8 +63,6 @@ bevy = { version = "=0.19.1", default-features = false, features = [
 # exact versions add no build time or binary size.
 ron = { version = "=0.12.2", default-features = false }   # Reads the RON level format.
 serde = { version = "=1.0.229", features = ["derive"] }    # Turns parsed text into our structs.
-# Finds the per-OS folder for the save file (docs/DESIGN.md M5-4).
-dirs = "=7.0.0"
 # Bakes `assets/` into the binary so the game ships as one file (M5-7).
 # Switched off by the `dev` feature, which keeps the folder and hot reload.
 bevy_embedded_assets = { version = "=0.16.0", default-features = false, features = [
@@ -80,6 +72,32 @@ bevy_embedded_assets = { version = "=0.16.0", default-features = false, features
 # (`synth.rs`). `ogg` is still on because the crate does not compile without
 # a decoder feature — its prelude re-exports a type that one provides.
 bevy_kira_audio = { version = "=0.26.0", default-features = false, features = ["ogg"] }
+
+# --- Per platform ---------------------------------------------------------
+
+# A desktop runs threads, talks to a window server and has a disk to save on.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bevy = { version = "=0.19.1", default-features = false, features = [
+    "multi_threaded",        # Run systems in parallel across CPU cores.
+    "x11",                   # Linux X11 support...
+    "wayland",               # ...and native Wayland. Both on: one binary picks whichever
+                             # the desktop runs. Building needs libwayland-dev and
+                             # libxkbcommon-dev (docs/DESIGN.md M0-2).
+    "bevy_gilrs",            # Gamepad backend (gilrs); needs libudev on Linux.
+] }
+# Finds the per-OS folder for the save file (docs/DESIGN.md M5-4).
+dirs = "=7.0.0"
+
+# A browser has one thread, a canvas and no filesystem. Gamepads would need a
+# backend `gilrs` does not have on the web, so the browser build is keyboard
+# and mouse.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy = { version = "=0.19.1", default-features = false, features = [
+    "web",                   # Web platform glue: timers, the canvas, the event loop.
+    "webgl2",                # WebGL 2 rather than WebGPU, which Safari only just got.
+] }
+# The browser's own storage, where the save file goes instead of a folder.
+web-sys = { version = "=0.3.105", features = ["Window", "Storage"] }
 
 [dev-dependencies]
 # Statistical micro-benchmarks for hot pure functions (Section 7.3). Never shipped.

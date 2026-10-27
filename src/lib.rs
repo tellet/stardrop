@@ -64,6 +64,12 @@ pub fn run() -> AppExit {
             title: "Stardrop".into(),
             resolution: WindowResolution::from(INITIAL_WINDOW_SIZE),
             position: WindowPosition::Centered(MonitorSelection::Primary),
+            // In a browser there is no window to open: the game draws into
+            // one canvas on the page, and follows the size the page gives it.
+            #[cfg(target_arch = "wasm32")]
+            canvas: Some("#stardrop".to_owned()),
+            #[cfg(target_arch = "wasm32")]
+            fit_canvas_to_parent: true,
             ..default()
         }),
         ..default()

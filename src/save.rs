@@ -6,9 +6,12 @@
 //! The previous save is kept as a backup, and a file that can't be read is
 //! moved aside rather than overwritten, so progress is never lost silently
 //! (Section 9, Milestone 5).
+//!
+//! All of that sits on three operations (read, write, rename a named file in
+//! the save folder), which the `files` module provides twice: real files on
+//! the desktop, the browser's own storage on the web.
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
@@ -21,7 +24,8 @@ use crate::level::{ActiveLevel, LevelCompleted, Levels, SelectedLevel};
 use crate::objects::{ObjectKind, ObjectTouched};
 use crate::scoring::Stars;
 
-/// Folder inside the OS's data directory.
+/// Folder inside the OS's data directory, and the prefix every key in a
+/// browser's storage starts with.
 const FOLDER: &str = "stardrop";
 const SAVE_FILE: &str = "save.ron";
 const BACKUP_FILE: &str = "save.backup.ron";
@@ -207,9 +211,125 @@ impl SaveData {
 
 /// Where the save file lives: the OS's data folder, e.g.
 /// `~/.local/share/stardrop/` on Linux. `None` if the OS won't tell us.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn save_folder() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join(FOLDER))
+}
+
+/// A browser has no folders: the save "folder" is the prefix every key in the
+/// browser's own storage starts with.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn save_folder() -> Option<PathBuf> {
+    Some(PathBuf::from(FOLDER))
+}
+
+/// The key one save file goes under in a browser's storage.
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    allow(dead_code, reason = "only the browser build stores files by key")
+)]
+#[must_use]
+fn storage_key(folder: &Path, name: &str) -> String {
+    format!("{}/{name}", folder.display())
+}
+
+/// Files in a folder, on a machine that has both.
+#[cfg(not(target_arch = "wasm32"))]
+mod files {
+    use std::fs;
+    use std::io::ErrorKind;
+    use std::path::Path;
+
+    /// `Ok(None)` when the file simply isn't there yet.
+    pub(super) fn read(folder: &Path, name: &str) -> Result<Option<String>, String> {
+        match fs::read_to_string(folder.join(name)) {
+            Ok(text) => Ok(Some(text)),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+
+    /// Creates the folder if this is the first write.
+    pub(super) fn write(folder: &Path, name: &str, text: &str) -> Result<(), String> {
+        fs::create_dir_all(folder).map_err(|error| format!("{}: {error}", folder.display()))?;
+        let path = folder.join(name);
+        fs::write(&path, text).map_err(|error| format!("{}: {error}", path.display()))
+    }
+
+    /// Moves `from` onto `to`. A missing `from` is no error: there was
+    /// nothing to move. Rename is atomic, so a reader sees one file or the
+    /// other, never half of either.
+    pub(super) fn rename(folder: &Path, from: &str, to: &str) -> Result<(), String> {
+        let target = folder.join(to);
+        match fs::rename(folder.join(from), &target) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("{}: {error}", target.display())),
+        }
+    }
+
+    /// Where to tell the player their progress is kept.
+    pub(super) fn describe(folder: &Path) -> String {
+        folder.display().to_string()
+    }
+}
+
+/// The browser's own storage, one key per file. It survives a reload and a
+/// closed tab; clearing the site's data wipes it.
+#[cfg(target_arch = "wasm32")]
+mod files {
+    use std::path::Path;
+
+    use super::storage_key;
+
+    /// Private browsing refuses storage altogether, and then the game plays
+    /// without remembering anything.
+    fn storage() -> Result<web_sys::Storage, String> {
+        web_sys::window()
+            .ok_or_else(|| "no browser window".to_owned())?
+            .local_storage()
+            .map_err(|_| "the browser refused its storage".to_owned())?
+            .ok_or_else(|| "this browser has no storage".to_owned())
+    }
+
+    pub(super) fn read(folder: &Path, name: &str) -> Result<Option<String>, String> {
+        storage()?
+            .get_item(&storage_key(folder, name))
+            .map_err(|_| format!("could not read {name}"))
+    }
+
+    /// An error here is usually the storage quota, a few megabytes, which a
+    /// save of a few kilobytes never reaches.
+    pub(super) fn write(folder: &Path, name: &str, text: &str) -> Result<(), String> {
+        storage()?
+            .set_item(&storage_key(folder, name), text)
+            .map_err(|_| format!("could not write {name}"))
+    }
+
+    /// Copies `from` onto `to` and drops `from`. A missing `from` is no
+    /// error: there was nothing to move.
+    pub(super) fn rename(folder: &Path, from: &str, to: &str) -> Result<(), String> {
+        let storage = storage()?;
+        let Some(text) = storage
+            .get_item(&storage_key(folder, from))
+            .map_err(|_| format!("could not read {from}"))?
+        else {
+            return Ok(());
+        };
+        storage
+            .set_item(&storage_key(folder, to), &text)
+            .map_err(|_| format!("could not write {to}"))?;
+        storage
+            .remove_item(&storage_key(folder, from))
+            .map_err(|_| format!("could not drop {from}"))
+    }
+
+    /// Where to tell the player their progress is kept.
+    pub(super) fn describe(_folder: &Path) -> String {
+        "the browser's storage".to_owned()
+    }
 }
 
 /// Loads the save file, falling back to the backup, then to a fresh start.
@@ -218,18 +338,17 @@ pub fn save_folder() -> Option<PathBuf> {
 /// instead of being overwritten, so nothing is lost silently.
 #[must_use]
 pub fn load(folder: &Path) -> SaveData {
-    match read_valid(&folder.join(SAVE_FILE)) {
+    match read_valid(folder, SAVE_FILE) {
         Ok(Some(data)) => return data,
         Ok(None) => {}
         Err(error) => {
             warn!("save file unreadable ({error}); trying the backup");
-            let broken = folder.join(BROKEN_FILE);
-            if let Err(error) = fs::rename(folder.join(SAVE_FILE), &broken) {
+            if let Err(error) = files::rename(folder, SAVE_FILE, BROKEN_FILE) {
                 warn!("could not set the unreadable save aside: {error}");
             }
         }
     }
-    match read_valid(&folder.join(BACKUP_FILE)) {
+    match read_valid(folder, BACKUP_FILE) {
         Ok(Some(data)) => {
             info!("recovered progress from the backup save");
             data
@@ -243,11 +362,9 @@ pub fn load(folder: &Path) -> SaveData {
 }
 
 /// `Ok(None)` when the file simply isn't there yet.
-fn read_valid(path: &Path) -> Result<Option<SaveData>, String> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.to_string()),
+fn read_valid(folder: &Path, name: &str) -> Result<Option<SaveData>, String> {
+    let Some(text) = files::read(folder, name)? else {
+        return Ok(None);
     };
     SaveData::parse(&text)
         .map(|data| Some(data.migrated()))
@@ -259,11 +376,7 @@ fn read_valid(path: &Path) -> Result<Option<SaveData>, String> {
 /// # Errors
 /// Returns a message if the file exists but can't be read.
 pub fn read_file(folder: &Path, name: &str) -> Result<Option<String>, String> {
-    match fs::read_to_string(folder.join(name)) {
-        Ok(text) => Ok(Some(text)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.to_string()),
-    }
+    files::read(folder, name)
 }
 
 /// Writes `text` to `name` in the save folder, atomically: into a temporary
@@ -272,11 +385,9 @@ pub fn read_file(folder: &Path, name: &str) -> Result<Option<String>, String> {
 /// # Errors
 /// Returns a message if the folder or file can't be written.
 pub fn write_file(folder: &Path, name: &str, text: &str) -> Result<(), String> {
-    fs::create_dir_all(folder).map_err(|error| format!("{}: {error}", folder.display()))?;
-    let temp = folder.join(format!("{name}.writing"));
-    fs::write(&temp, text).map_err(|error| format!("{}: {error}", temp.display()))?;
-    let target = folder.join(name);
-    fs::rename(&temp, &target).map_err(|error| format!("{}: {error}", target.display()))
+    let temp = format!("{name}.writing");
+    files::write(folder, &temp, text)?;
+    files::rename(folder, &temp, name)
 }
 
 /// Writes the save file atomically, keeping the previous one as a backup.
@@ -284,14 +395,11 @@ pub fn write_file(folder: &Path, name: &str, text: &str) -> Result<(), String> {
 /// # Errors
 /// Returns a message if the folder or file can't be written.
 pub fn store(folder: &Path, data: &SaveData) -> Result<(), String> {
-    fs::create_dir_all(folder).map_err(|error| format!("{}: {error}", folder.display()))?;
-    let temp = folder.join(TEMP_FILE);
-    let target = folder.join(SAVE_FILE);
-    fs::write(&temp, data.to_text()).map_err(|error| format!("{}: {error}", temp.display()))?;
-    // Keep the last good save; ignore the error when there isn't one yet.
-    let _ = fs::rename(&target, folder.join(BACKUP_FILE));
-    // Rename is atomic: readers see either the old file or the new one.
-    fs::rename(&temp, &target).map_err(|error| format!("{}: {error}", target.display()))
+    // Written beside the old save, so a failed write leaves it in place.
+    files::write(folder, TEMP_FILE, &data.to_text())?;
+    // Keep the last good save; there isn't one the first time.
+    let _ = files::rename(folder, SAVE_FILE, BACKUP_FILE);
+    files::rename(folder, TEMP_FILE, SAVE_FILE)
 }
 
 /// The player's progress, as loaded from (and written back to) disk.
@@ -311,7 +419,7 @@ impl Plugin for SavePlugin {
         let folder = save_folder();
         let progress = folder.as_deref().map(load).unwrap_or_default();
         match folder.as_deref() {
-            Some(folder) => info!("progress is saved in {}", folder.display()),
+            Some(folder) => info!("progress is saved in {}", files::describe(folder)),
             None => warn!("no data folder on this system: progress won't be saved"),
         }
         app.insert_resource(SaveFolder(folder))
@@ -370,6 +478,8 @@ fn write_progress(folder: Res<SaveFolder>, progress: Res<Progress>) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::scoring::{RunStats, StardustSet};
 
@@ -380,6 +490,16 @@ mod tests {
         let _ = fs::remove_dir_all(&folder);
         fs::create_dir_all(&folder).unwrap();
         folder
+    }
+
+    #[test]
+    fn a_browser_key_names_the_folder_and_the_file() {
+        let folder = PathBuf::from("stardrop");
+        assert_eq!(storage_key(&folder, SAVE_FILE), "stardrop/save.ron");
+        assert_eq!(
+            storage_key(&folder, "settings.ron"),
+            "stardrop/settings.ron"
+        );
     }
 
     fn landing(time: f32, collected: usize) -> (f32, usize, Stars) {

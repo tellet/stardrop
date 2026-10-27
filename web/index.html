@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stardrop</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #05070f;
+    color: #9ba3cb;
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  /* The playfield is 9:16. The frame is the biggest 9:16 box that fits the
+     page, centred, so the whole level shows and nothing scrolls. The game
+     scales its menus to whatever size that turns out to be. */
+  #frame {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    --height: min(100vh, 177vw);
+    --height: min(100dvh, 177dvw);
+    height: var(--height);
+    width: calc(var(--height) * 9 / 16);
+  }
+  /* Bevy and winit both write a size onto the canvas. `!important` keeps the
+     frame in charge; the game follows the size it's given. */
+  #stardrop {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    outline: none;
+    touch-action: none;
+  }
+  #waiting {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 1rem;
+  }
+  #waiting[hidden] { display: none; }
+  /* Only shown for ?size, to debug how the page and the canvas measure up. */
+  #size {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    padding: 4px 8px;
+    background: #000c;
+    color: #cfe;
+    font: 12px/1.4 ui-monospace, monospace;
+    white-space: pre;
+  }
+</style>
+</head>
+<body>
+  <div id="frame">
+    <canvas id="stardrop"></canvas>
+    <div id="waiting">Loading Stardrop. The first visit downloads the whole game.</div>
+  </div>
+  <script>
+    // A browser hands out a silent, suspended AudioContext until the player
+    // has touched the page, and the game only asks for sound once, while it
+    // loads. So keep every context the game makes and wake them all on the
+    // first key or click. This must run before stardrop.js, which reads
+    // AudioContext out of the global scope as it loads.
+    (() => {
+      const real = window.AudioContext || window.webkitAudioContext;
+      if (!real) return;
+      const contexts = new Set();
+      const watched = new Proxy(real, {
+        construct(target, args) {
+          const context = new target(...args);
+          contexts.add(context);
+          return context;
+        },
+      });
+      window.AudioContext = watched;
+      window.webkitAudioContext = watched;
+      const wake = () => {
+        for (const context of contexts) {
+          if (context.state === 'suspended') {
+            context.resume().catch(() => {});
+          }
+        }
+      };
+      for (const event of ['keydown', 'pointerdown', 'touchstart']) {
+        addEventListener(event, wake, { capture: true });
+      }
+    })();
+  </script>
+  <script>
+    if (location.search.includes('size')) {
+      const out = document.createElement('div');
+      out.id = 'size';
+      document.body.appendChild(out);
+      const canvas = document.getElementById('stardrop');
+      const frame = document.getElementById('frame');
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        return Math.round(r.width) + 'x' + Math.round(r.height);
+      };
+      const report = () => {
+        out.textContent = [
+          'page    ' + innerWidth + 'x' + innerHeight + ' dpr ' + devicePixelRatio,
+          'frame   ' + box(frame),
+          'canvas  ' + box(canvas) + ' css',
+          'buffer  ' + canvas.width + 'x' + canvas.height,
+          'style   ' + (canvas.getAttribute('style') || '(none)'),
+        ].join('\n');
+      };
+      addEventListener('resize', report);
+      setInterval(report, 500);
+      report();
+    }
+  </script>
+  <script type="module">
+    import init from './stardrop.js';
+    const waiting = document.getElementById('waiting');
+    init()
+      .then(() => { waiting.hidden = true; })
+      .catch((error) => {
+        // Winit ends its setup by throwing, which is how it hands the page
+        // back its own event loop. Anything else is a real failure.
+        if (error && String(error).includes('Using exceptions for control flow')) {
+          waiting.hidden = true;
+          return;
+        }
+        waiting.textContent = 'Stardrop could not start: ' + error;
+        console.error(error);
+      });
+  </script>
+</body>
+</html>

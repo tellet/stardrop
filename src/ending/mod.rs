@@ -429,10 +429,14 @@ fn open_it_for_a_look(
 // --- Building the scene -----------------------------------------------------
 
 /// A seed nobody can predict: every watch is a planet nobody has seen.
-fn fresh_seed() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0x5354_4152_4452_4F50, |since| since.subsec_nanos().into())
+///
+/// Taken from how long the game has been running rather than from the wall
+/// clock, which a browser does not have. Two watches are never the same
+/// number of nanoseconds apart.
+fn fresh_seed(running: core::time::Duration) -> u64 {
+    let nanos = u64::try_from(running.as_nanos()).unwrap_or(u64::MAX);
+    // Mix, so that two watches a whole second apart are not near-neighbours.
+    nanos.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0x5354_4152_4452_4F50
 }
 
 #[expect(
@@ -444,8 +448,9 @@ fn open_the_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     config: Res<GameConfig>,
+    running: Res<Time<Real>>,
 ) {
-    let planet = Planet::generate(fresh_seed());
+    let planet = Planet::generate(fresh_seed(running.elapsed()));
     let palette = planet.palette;
     // One material for the lot: every colour is in the vertices.
     let tint = materials.add(ColorMaterial::from_color(Color::WHITE));

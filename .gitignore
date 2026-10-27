@@ -6,3 +6,8 @@ package/
 /stardrop-*.zip
 /stardrop-*.tar.gz
 /package/
+
+# The browser build's output. `web/index.html` is source; the rest is built
+# by ./scripts/web.sh.
+/web/stardrop.js
+/web/stardrop_bg.wasm
