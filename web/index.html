@@ -28,11 +28,17 @@
     width: calc(var(--height) * 9 / 16);
   }
   /* Bevy and winit both write a size onto the canvas. `!important` keeps the
-     frame in charge; the game follows the size it's given. */
+     frame in charge; the game follows the size it's given.
+
+     On a dense screen the canvas is sized below the frame and scaled back up,
+     so the device draws fewer pixels than it has. `--render` and `--zoom` are
+     set in the script below; both stay 1 on an ordinary screen. */
   #stardrop {
     display: block;
-    width: 100% !important;
-    height: 100% !important;
+    width: calc(100% * var(--render, 1)) !important;
+    height: calc(100% * var(--render, 1)) !important;
+    transform: scale(var(--zoom, 1));
+    transform-origin: top left;
     outline: none;
     touch-action: none;
   }
@@ -63,6 +69,26 @@
     <canvas id="stardrop"></canvas>
     <div id="waiting">Loading Stardrop. The first visit downloads the whole game.</div>
   </div>
+  <script>
+    // A phone with three device pixels per CSS pixel draws nine times what a
+    // plain screen does, and the first thing to go is the lead time the audio
+    // needs to queue its next buffer: the music breaks up and the fall judders.
+    // Cap how many pixels the game renders and let the browser scale the
+    // result up. `?dpr=` overrides the cap for measuring; `?dpr=99` turns it
+    // off. The canvas keeps its own coordinate space under a transform, so
+    // taps still land where they are made.
+    (() => {
+      const asked = Number(new URLSearchParams(location.search).get('dpr'));
+      const cap = Number.isFinite(asked) && asked > 0 ? asked : 1.5;
+      const density = devicePixelRatio || 1;
+      const render = Math.min(1, cap / density);
+      if (render < 1) {
+        const root = document.documentElement.style;
+        root.setProperty('--render', String(render));
+        root.setProperty('--zoom', String(1 / render));
+      }
+    })();
+  </script>
   <script>
     // A browser hands out a silent, suspended AudioContext until the player
     // has touched the page, and the game only asks for sound once, while it
@@ -105,13 +131,36 @@
         const r = el.getBoundingClientRect();
         return Math.round(r.width) + 'x' + Math.round(r.height);
       };
+      // Frames as the browser actually delivers them, which is the number
+      // that says whether the device can keep up.
+      let frames = 0;
+      let worst = 0;
+      let since = performance.now();
+      let last = since;
+      let rate = '...';
+      const tick = (now) => {
+        worst = Math.max(worst, now - last);
+        last = now;
+        frames += 1;
+        if (now - since >= 1000) {
+          rate = Math.round((frames * 1000) / (now - since)) + ' fps, worst ' +
+            Math.round(worst) + ' ms';
+          frames = 0;
+          worst = 0;
+          since = now;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      const style = getComputedStyle(document.documentElement);
       const report = () => {
         out.textContent = [
           'page    ' + innerWidth + 'x' + innerHeight + ' dpr ' + devicePixelRatio,
           'frame   ' + box(frame),
           'canvas  ' + box(canvas) + ' css',
           'buffer  ' + canvas.width + 'x' + canvas.height,
-          'style   ' + (canvas.getAttribute('style') || '(none)'),
+          'render  ' + (style.getPropertyValue('--render').trim() || '1'),
+          'frames  ' + rate,
         ].join('\n');
       };
       addEventListener('resize', report);

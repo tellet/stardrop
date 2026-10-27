@@ -66,6 +66,13 @@ The build script rewrites `$HOME` out of the module. A wasm module keeps the
 file path of every panic site as plain data, which `strip` does not touch, so
 an unremapped build publishes the home directory of whoever built it.
 
+The page takes two debug knobs in its URL. `?size` shows the page, frame,
+canvas, buffer and render scale, with the frame rate the browser is really
+delivering and the slowest frame in the last second. `?dpr=` overrides how
+many pixels the game renders: the default caps it at 1.5 device pixels per
+CSS pixel, `?dpr=99` renders every pixel the screen has, and `?dpr=1` renders
+the fewest. Nothing is capped on an ordinary desktop screen.
+
 Clippy does not cover this build by default. Check it with:
 
 ```
