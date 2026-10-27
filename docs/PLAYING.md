@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Left / Right, A / D, or a gamepad stick | steer, and the first press starts the fall |
+| Left / Right, A / D, or a gamepad stick | steer, and the first press starts the fall (no gamepad in a browser) |
 | R | start the attempt again |
 | Esc | pause, and go back from any screen |
 | Enter / Space | choose |
@@ -23,6 +23,11 @@ Completing a level unlocks the next one.
 
 Progress and settings are saved to your OS data folder
 (`~/.local/share/stardrop/` on Linux). The game never writes anywhere else.
+
+In a browser they go into the browser's own storage for the site you are
+playing on. They survive a reload and a closed tab, and clearing the site's
+data erases them. Storage belongs to one site, so progress made on one
+address is not there on another, and a private window keeps nothing at all.
 
 ## Running a build someone sent you
 

@@ -23,6 +23,17 @@ sudo apt install libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
 cargo run --release
 ```
 
+## In a browser
+
+```
+./scripts/web.sh
+python3 -m http.server --directory web 8080
+```
+
+The same game, compiled to WebAssembly into `web/` and served as static
+files. Keyboard only, and progress lives in the browser's own storage instead
+of a folder. Tagging a version publishes it to GitHub Pages.
+
 ## Licence
 
 MIT, in [LICENSE](LICENSE). The one asset that came from anywhere else is the

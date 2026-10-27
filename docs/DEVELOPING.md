@@ -33,6 +33,56 @@ place things, never change how they behave. [LEVELS.md](LEVELS.md) is the
 format. A level dropped into an `assets/levels/` folder beside the binary is
 picked up without rebuilding.
 
+## The browser version
+
+```
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.128
+./scripts/web.sh
+python3 -m http.server --directory web 8080
+```
+
+`scripts/web.sh` builds the release wasm, runs `wasm-bindgen` over it into
+`web/` and prints both sizes: 38.0 MB of module, 8.9 MB over the wire. The
+`wasm-bindgen-cli` version has to match the `wasm-bindgen` crate the build
+links against, or the glue and the module disagree about their interface.
+`web/index.html` is the only source file in that folder; the other two are
+built and git-ignored.
+
+The browser build differs in four ways, all of them in the code:
+
+- **The page owns the canvas's size** and the game follows it. Window sizing
+  is desktop-only (`window_size` in `src/settings.rs`), and the UI scales to
+  whatever size the page gives (`ui_fit` in `src/ui.rs`).
+- **Progress goes into the browser's storage**, through the same three
+  operations as a file (`files` in `src/save.rs`).
+- **No gamepad.** `gilrs` has no web backend, so `bevy_gilrs` is a
+  desktop-only dependency.
+- **Sound waits for a key.** A browser hands out a silent audio device until
+  the player has touched the page, and `web/index.html` wakes it on the first
+  key.
+
+The build script rewrites `$HOME` out of the module. A wasm module keeps the
+file path of every panic site as plain data, which `strip` does not touch, so
+an unremapped build publishes the home directory of whoever built it.
+
+Clippy does not cover this build by default. Check it with:
+
+```
+cargo clippy --target wasm32-unknown-unknown
+```
+
+## Publishing to the browser
+
+Tagging a version also deploys the browser build to GitHub Pages
+(`.github/workflows/pages.yml`), or run that workflow by hand. It compiles
+the module on the runner and hands `web/` straight to Pages, so no build
+output is ever committed. One switch has to be thrown by hand, once:
+Settings, Pages, Build and deployment, Source: GitHub Actions.
+
+Pages on a free account only serves a public repository. Making this
+repository private takes the site down with it.
+
 ## Packaging
 
 ```
