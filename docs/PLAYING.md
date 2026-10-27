@@ -3,11 +3,16 @@
 | | |
 |---|---|
 | Left / Right, A / D, or a gamepad stick | steer, and the first press starts the fall (no gamepad in a browser) |
+| Hold the left or right half of the screen | the same, by thumb. Both halves at once cancel out, like both keys |
 | R | start the attempt again |
 | Esc | pause, and go back from any screen |
 | Enter / Space | choose |
 | J | the field journal, from a menu or a paused level |
 | F1 | frame times |
+
+On a touch screen, tap a menu row to choose it, and the **||** in the top
+corner of a level opens the pause menu, which is where starting over and
+leaving live. It appears only once you have touched the screen.
 
 ## The three stars
 

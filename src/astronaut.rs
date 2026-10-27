@@ -1,11 +1,12 @@
 //! The astronaut: spawning it and turning player input into steering.
 
 use bevy::input::gamepad::{AxisSettings, GamepadSettings};
+use bevy::input::touch::Touch;
 use bevy::prelude::*;
 
 use crate::config::GameConfig;
 use crate::level::{ActiveLevel, LevelPhase};
-use crate::physics::movement::AirInput;
+use crate::physics::movement::{AirInput, touch_sides};
 use crate::physics::{AirControl, Motion};
 use crate::settings::Settings;
 use crate::soft_mesh::unit_disc;
@@ -311,14 +312,18 @@ fn configure_stick_dead_zone(mut new_pads: Query<&mut GamepadSettings, Added<Gam
     }
 }
 
-/// Samples keyboard and the first connected gamepad into [`AirControl`].
+/// Samples keyboard, touch and the first connected gamepad into [`AirControl`].
 fn read_air_control(
     keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
+    window: Option<Single<&Window>>,
     gamepads: Query<&Gamepad>,
     mut control: ResMut<AirControl>,
 ) {
-    let left = keys.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
-    let right = keys.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
+    let width = window.map_or(0.0, |window| window.width());
+    let (touch_left, touch_right) = touch_sides(touches.iter().map(Touch::position), width);
+    let left = keys.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) || touch_left;
+    let right = keys.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) || touch_right;
     let stick_x = gamepads.iter().next().map_or(0.0, |pad| pad.left_stick().x);
     let input = AirInput::from_controls(left, right, stick_x);
     // Only write when it changes, so change detection stays meaningful.

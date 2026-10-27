@@ -450,6 +450,9 @@ pub(crate) mod tests {
             .init_asset::<ColorMaterial>()
             .init_resource::<crate::settings::Settings>()
             .init_resource::<ButtonInput<KeyCode>>()
+            // The keyboard and the touch screen a real app gets from Bevy's
+            // input plugin, which `MinimalPlugins` leaves out.
+            .init_resource::<Touches>()
             .init_state::<AppState>()
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
                 16,

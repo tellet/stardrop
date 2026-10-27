@@ -170,6 +170,24 @@ impl Focus {
     }
 }
 
+/// How wide the pause button is, and how far it sits from the corner. Larger
+/// than Apple's 44-point minimum, because `UiScale` shrinks it on a phone.
+const PAUSE_SIZE: f32 = 56.0;
+const PAUSE_EDGE: f32 = 10.0;
+const PAUSE_GLYPH: f32 = 26.0;
+/// Dim: it is the one thing on screen while falling.
+const PAUSE_COLOR: Color = Color::srgba(0.85, 0.85, 1.0, 0.45);
+
+/// The button that opens the pause menu with a thumb.
+#[derive(Component)]
+struct PauseTouch;
+
+/// Whether this player has ever touched the screen. Nothing static belongs on
+/// screen while falling, so the pause button appears only for the players who
+/// have no Esc key to press.
+#[derive(Resource, Debug, Default)]
+struct TouchedOnce(bool);
+
 /// The menu screens.
 pub(crate) struct MenuPlugin;
 
@@ -177,6 +195,7 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         keep_the_main_menu_current(app);
         app.init_resource::<Focus>()
+            .init_resource::<TouchedOnce>()
             .add_systems(OnEnter(AppState::MainMenu), spawn_main_menu)
             .add_systems(OnEnter(AppState::LevelSelect), spawn_level_select)
             .add_systems(OnEnter(AppState::Paused), spawn_pause_menu)
@@ -197,7 +216,16 @@ impl Plugin for MenuPlugin {
                 )
                     .run_if(not(in_state(AppState::Playing))),
             )
-            .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)));
+            .add_systems(Update, notice_a_touch)
+            .add_systems(OnEnter(AppState::Playing), pause_button_for_touch)
+            .add_systems(
+                Update,
+                (
+                    pause_on_escape,
+                    pause_button_for_touch.run_if(resource_changed::<TouchedOnce>),
+                )
+                    .run_if(in_state(AppState::Playing)),
+            );
     }
 }
 
@@ -838,16 +866,59 @@ fn go_back(
     }
 }
 
-/// Esc during play opens the pause menu.
+fn notice_a_touch(touches: Res<Touches>, mut touched: ResMut<TouchedOnce>) {
+    if !touched.0 && touches.iter().next().is_some() {
+        touched.0 = true;
+    }
+}
+
+/// Gives a touch player the one door into the pause menu, where starting the
+/// level again and leaving it live. Nothing is spawned for anyone else.
+fn pause_button_for_touch(
+    mut commands: Commands,
+    touched: Res<TouchedOnce>,
+    existing: Query<(), With<PauseTouch>>,
+) {
+    if !touched.0 || !existing.is_empty() {
+        return;
+    }
+    commands
+        .spawn((
+            PauseTouch,
+            DespawnOnExit(AppState::Playing),
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(PAUSE_EDGE),
+                right: Val::Px(PAUSE_EDGE),
+                width: Val::Px(PAUSE_SIZE),
+                height: Val::Px(PAUSE_SIZE),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("||"),
+                TextFont::from_font_size(PAUSE_GLYPH),
+                TextColor(PAUSE_COLOR),
+            ));
+        });
+}
+
+/// Esc during play opens the pause menu, and so does the touch button.
 fn pause_on_escape(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
+    taps: Query<&Interaction, With<PauseTouch>>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     let pause = keys.just_pressed(KeyCode::Escape)
         || gamepads
             .iter()
-            .any(|pad| pad.just_pressed(GamepadButton::Start));
+            .any(|pad| pad.just_pressed(GamepadButton::Start))
+        || taps.iter().any(|tap| matches!(tap, Interaction::Pressed));
     if pause {
         next_state.set(AppState::Paused);
     }

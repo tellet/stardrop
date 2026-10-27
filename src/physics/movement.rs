@@ -84,6 +84,17 @@ impl AirInput {
     }
 }
 
+/// Which sides of the screen are being touched, as the two booleans
+/// [`AirInput::from_controls`] takes. A thumb anywhere on a side steers that
+/// way, so it can rest low on the screen and cover less of the level.
+#[must_use]
+pub fn touch_sides(positions: impl Iterator<Item = Vec2>, width: f32) -> (bool, bool) {
+    let middle = width / 2.0;
+    positions.fold((false, false), |(left, right), touch| {
+        (left || touch.x < middle, right || touch.x >= middle)
+    })
+}
+
 /// Where the astronaut's *center* may go sideways (level edges minus its radius).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Walls {
@@ -745,5 +756,35 @@ pub(crate) mod tests {
         };
         let held = run_from(near_wall.captured(CAPTURE), AirInput::RIGHT, 2.0);
         assert!(held.position.x <= WALLS.right + 1e-3, "{held:?}");
+    }
+
+    #[test]
+    fn a_touch_steers_towards_its_own_side_of_the_screen() {
+        let left = [Vec2::new(10.0, 500.0)];
+        let right = [Vec2::new(390.0, 90.0)];
+        assert_eq!(touch_sides(left.into_iter(), 400.0), (true, false));
+        assert_eq!(touch_sides(right.into_iter(), 400.0), (false, true));
+    }
+
+    #[test]
+    fn two_thumbs_cancel_each_other_out() {
+        let both = [Vec2::new(10.0, 500.0), Vec2::new(390.0, 500.0)];
+        let (left, right) = touch_sides(both.into_iter(), 400.0);
+        assert_eq!(
+            AirInput::from_controls(left, right, 0.0),
+            AirInput::NONE,
+            "the same as holding both keys"
+        );
+    }
+
+    #[test]
+    fn no_touch_steers_nowhere() {
+        assert_eq!(touch_sides(std::iter::empty(), 400.0), (false, false));
+    }
+
+    #[test]
+    fn the_middle_of_the_screen_belongs_to_the_right() {
+        let middle = [Vec2::new(200.0, 500.0)];
+        assert_eq!(touch_sides(middle.into_iter(), 400.0), (false, true));
     }
 }
