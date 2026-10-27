@@ -77,8 +77,19 @@ struct UiChannel;
 #[derive(Resource, Default)]
 struct Voices(HashMap<synth::Sound, Handle<AudioSource>>);
 
-/// The three loops that make up the music, the ambience loop, and the key
-/// they're all in.
+/// Whether the music runs all of its layers. A browser mixes every loop on
+/// the one thread it has, even a loop sitting at silence, and four at once
+/// crackle on a phone: a 46 ms buffer has to be filled between frames, and
+/// the audio cannot move to a thread of its own on a page served without the
+/// cross-origin isolation headers GitHub Pages will not send.
+///
+/// So a browser gets the pad and the air alone. The pad carries the menus as
+/// well as the fall, the deeper layer never thickens the music as the fall
+/// goes on, and pausing no longer takes the top off it.
+const EVERY_LAYER: bool = !cfg!(target_arch = "wasm32");
+
+/// The three loops that make up the music (one of them in a browser), the
+/// ambience loop, and the key they're all in.
 #[derive(Resource, Default)]
 struct MusicBed {
     key: Option<Key>,
@@ -103,12 +114,13 @@ struct BuildingBed {
     task: Task<BuiltBed>,
 }
 
-/// The samples a background build produced.
+/// The samples a background build produced. The two optional layers are only
+/// built where they are mixed (see [`EVERY_LAYER`]).
 struct BuiltBed {
     key: Key,
     pad: Vec<f32>,
-    muffled: Vec<f32>,
-    deeper: Vec<f32>,
+    muffled: Option<Vec<f32>>,
+    deeper: Option<Vec<f32>>,
     air: Vec<f32>,
 }
 
@@ -268,8 +280,8 @@ fn start_building_the_bed(
         BuiltBed {
             key,
             pad: synth::bed(Bed::Pad, key.root_hz, air, false),
-            muffled: synth::bed(Bed::Pad, key.root_hz, air, true),
-            deeper: synth::bed(Bed::Deeper, key.root_hz, air, false),
+            muffled: EVERY_LAYER.then(|| synth::bed(Bed::Pad, key.root_hz, air, true)),
+            deeper: EVERY_LAYER.then(|| synth::bed(Bed::Deeper, key.root_hz, air, false)),
             air: synth::bed(Bed::Ambience, key.root_hz, air, false),
         }
     });
@@ -298,10 +310,8 @@ fn finish_building_the_bed(
     }
 
     let pad = sources.add(as_source(&built.pad));
-    let muffled = sources.add(as_source(&built.muffled));
-    let deeper = sources.add(as_source(&built.deeper));
     let air = sources.add(as_source(&built.air));
-    // All four start together and run forever, so moving between them is
+    // Every layer starts together and runs forever, so moving between them is
     // only ever a change of volume.
     let start = |channel: &AudioChannel<MusicChannel>, source: &Handle<AudioSource>| {
         channel
@@ -312,17 +322,28 @@ fn finish_building_the_bed(
             .handle()
     };
     bed.pad = Some(start(&music, &pad));
-    bed.muffled = Some(start(&music, &muffled));
-    bed.deeper = Some(start(&music, &deeper));
     bed.air = Some(
         ambience
             .play(air.clone())
             .looped()
-            .fade_in(fade)
+            .fade_in(fade.clone())
             .with_volume(Decibels::SILENCE)
             .handle(),
     );
-    bed.sources = vec![pad, muffled, deeper, air];
+    bed.sources = vec![pad, air];
+    // The layers a browser does without: never built, so never mixed.
+    let muffled = built
+        .muffled
+        .as_deref()
+        .map(|samples| sources.add(as_source(samples)));
+    let deeper = built
+        .deeper
+        .as_deref()
+        .map(|samples| sources.add(as_source(samples)));
+    bed.muffled = muffled.as_ref().map(|source| start(&music, source));
+    bed.deeper = deeper.as_ref().map(|source| start(&music, source));
+    bed.sources.extend(muffled);
+    bed.sources.extend(deeper);
     bed.key = Some(built.key);
     commands.remove_resource::<BuildingBed>();
 }
@@ -387,7 +408,8 @@ fn mix(
         (MENU_PAD * duck, 0.0)
     };
     let levels = [
-        (&bed.pad, if paused { 0.0 } else { pad }),
+        // Without the muffled layer the pad plays in the menus itself.
+        (&bed.pad, if paused && EVERY_LAYER { 0.0 } else { pad }),
         (&bed.muffled, if paused { duck } else { 0.0 }),
         (&bed.deeper, if paused { 0.0 } else { bed.depth * duck }),
         (&bed.air, if paused { air * 0.5 } else { air }),
@@ -413,6 +435,10 @@ fn muffle_while_paused(
     bed: Res<MusicBed>,
     mut instances: ResMut<Assets<AudioInstance>>,
 ) {
+    if !EVERY_LAYER {
+        // Nothing to swap to: the pad plays through the pause as it is.
+        return;
+    }
     let paused = *state.get() != AppState::Playing;
     let fade = AudioTween::new(PAUSE_FADE, AudioEasing::Linear);
     for (handle, wanted) in [(&bed.pad, !paused), (&bed.muffled, paused)] {
