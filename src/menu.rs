@@ -182,6 +182,10 @@ const PAUSE_COLOR: Color = Color::srgba(0.85, 0.85, 1.0, 0.45);
 #[derive(Component)]
 struct PauseTouch;
 
+/// The button that goes back a screen with a thumb, where Esc would.
+#[derive(Component)]
+struct BackTouch;
+
 /// Whether this player has ever touched the screen. Nothing static belongs on
 /// screen while falling, so the pause button appears only for the players who
 /// have no Esc key to press.
@@ -213,6 +217,8 @@ impl Plugin for MenuPlugin {
                     (move_focus, hover_focus, show_focus, slide_focus).chain(),
                     activate,
                     go_back,
+                    back_button_for_touch
+                        .run_if(state_changed::<AppState>.or_else(resource_changed::<TouchedOnce>)),
                 )
                     .run_if(not(in_state(AppState::Playing))),
             )
@@ -848,16 +854,55 @@ fn back_from(state: AppState) -> Option<(AppState, &'static str)> {
     }
 }
 
+/// Gives a touch player the key they haven't got. Every screen Esc leaves
+/// gets one, in the corner the pause button doesn't use.
+fn back_button_for_touch(
+    mut commands: Commands,
+    touched: Res<TouchedOnce>,
+    state: Res<State<AppState>>,
+    existing: Query<(), With<BackTouch>>,
+) {
+    let here = *state.get();
+    if !touched.0 || !existing.is_empty() || back_from(here).is_none() {
+        return;
+    }
+    commands
+        .spawn((
+            BackTouch,
+            DespawnOnExit(here),
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(PAUSE_EDGE),
+                left: Val::Px(PAUSE_EDGE),
+                height: Val::Px(PAUSE_SIZE),
+                padding: UiRect::horizontal(Val::Px(PAUSE_EDGE)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Back"),
+                TextFont::from_font_size(PAUSE_GLYPH),
+                TextColor(PAUSE_COLOR),
+            ));
+        });
+}
+
 fn go_back(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
+    taps: Query<&Interaction, With<BackTouch>>,
     state: Res<State<AppState>>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     let back = keys.just_pressed(KeyCode::Escape)
         || gamepads
             .iter()
-            .any(|pad| pad.just_pressed(GamepadButton::East));
+            .any(|pad| pad.just_pressed(GamepadButton::East))
+        || taps.iter().any(|tap| matches!(tap, Interaction::Pressed));
     if !back {
         return;
     }

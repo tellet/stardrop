@@ -10,9 +10,10 @@
 | J | the field journal, from a menu or a paused level |
 | F1 | frame times |
 
-On a touch screen, tap a menu row to choose it, and the **||** in the top
-corner of a level opens the pause menu, which is where starting over and
-leaving live. It appears only once you have touched the screen.
+On a touch screen, tap a menu row to choose it, **||** in a level's top right
+corner opens the pause menu, where starting over and leaving live, and
+**Back** in the top left corner does what Esc does. Both appear only once you
+have touched the screen.
 
 ## The three stars
 
